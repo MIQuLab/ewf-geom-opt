@@ -1,6 +1,6 @@
 # Z-vector / Lagrangian embedding gradient for EWF
 
-This folder implements the **rigorous fix**:
+This project implements the **rigorous fix** to EWF geometry optimization:
 a Lagrangian / Z-vector formulation of the EWF nuclear gradient that adds
 the **response of the assembled density to geometry** — the term the plain
 `rdm_t` gradient omits, which makes the energy minimum and the gradient
