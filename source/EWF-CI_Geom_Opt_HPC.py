@@ -178,15 +178,23 @@ def load_config(path):
     #                   symmetrisation are applied before rotation to the global
     #                   MO basis.  Global 1-/2-RDMs via CCSD rdm with l = t.
     #
-    #   "ci"          : CI-coefficient route — applies the fragment projector
-    #                   at the CISD level (to c2 directly, before T2 = c2/c0
-    #                   − T1⊗T1 is formed), matching Vayesta's
-    #                   RCISD_WaveFunction.project(proj).restore(proj.T) +
-    #                   symmetrize_c2 + as_ccsd() pipeline exactly.  The
-    #                   original version projected the already-converted T2,
-    #                   which subtracted only (P·T1)⊗T1 instead of the correct
-    #                   (P·T1)⊗(P·T1).  For SCI the CISD extraction discards
-    #                   triples/quadruples, so 'rdm_t' is more accurate.
+    #   "ci_revision" : CI-coefficient route, revised ordering — assembles
+    #                   the GLOBAL C1/C2 first, converts once.  Each
+    #                   fragment's intermediate-normalised CI coefficients
+    #                   (C1 = c1/c0, C2 = c2/c0) are projected on the first
+    #                   occupied index, symmetrised, rotated, and tiled
+    #                   into global C1/C2 (a purely LINEAR operation, so
+    #                   the single-index fragment projection avoids double
+    #                   counting exactly).  Only then is the CISD→CCSD
+    #                   conversion performed, once, globally:
+    #                     T1 = C1_glob,  T2 = C2_glob − T1⊗T1.
+    #                   This fixes the per-fragment conversion of the old
+    #                   'ci' route, whose disconnected subtraction
+    #                   Σ_x (P_x·T1)⊗(P_x·T1) missed all cross-fragment
+    #                   (x≠y) products of the exact (Σ_x P_x·T1)⊗(Σ_y P_y·T1).
+    #                   For SCI the CISD extraction still discards
+    #                   triples/quadruples, so 'rdm_t' remains more accurate
+    #                   for aggressive SCI thresholds.
     #
     #   "democratic"  : Original four-index democratic projection of the
     #                   per-fragment 2-RDM cumulant.  Kept as a fall-back /
@@ -210,12 +218,17 @@ def load_config(path):
     #                   (see Projected-lambda_README.md).
     ewf.setdefault("assembly", "rdm_t")
     asm = str(ewf["assembly"]).lower()
-    if asm not in ("ci", "democratic", "rdm_t", "rdm_t_lambda",
+    if asm == "ci":
+        raise ValueError(
+            "ewf.assembly='ci' has been renamed to 'ci_revision' (the route "
+            "now assembles the global C1/C2 first and performs a single "
+            "global CISD->CCSD conversion).  Update your config.")
+    if asm not in ("ci_revision", "democratic", "rdm_t", "rdm_t_lambda",
                    "projected_lambda"):
         raise ValueError(
             f"Unsupported ewf.assembly={ewf['assembly']!r}; expected "
-            f"'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'ci', or "
-            f"'democratic'.")
+            f"'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'ci_revision', "
+            f"or 'democratic'.")
     ewf["assembly"] = asm
     solver = str(ewf["solver"]).upper()
     if solver not in ("FCI", "SCI"):
@@ -828,11 +841,11 @@ def run_fci_worker(frag_idx, cfg):
         h5.create_dataset("t1", data=t1x)
         h5.create_dataset("t2", data=t2x)
         h5.attrs["c0"] = float(c0)
-        # Raw CISD amplitudes (before T1⊗T1 disconnected part is removed).
-        # Required by the fixed 'ci' assembly route, which applies the fragment
-        # projector at the CISD level (matching Vayesta's pwf pipeline) rather
-        # than projecting the already-converted T-amplitudes.  Also used by the
-        # 'rdm_t' route as a fallback check.
+        # Raw CISD coefficients (before T1⊗T1 disconnected part is removed).
+        # Required by the 'ci_revision' assembly route, which projects and
+        # tiles the intermediate-normalised C1/C2 into a global C1/C2 and only
+        # then performs a single global CISD->CCSD conversion.  Also used by
+        # the 'rdm_t' route as a fallback check.
         h5.create_dataset("c1", data=c1)
         h5.create_dataset("c2", data=c2)
     print(f"[fci frag={frag_idx}] Wrote RDM file {rdm_h5}")
@@ -915,35 +928,45 @@ class _MockCC:
 
 
 def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
-    """CI-amplitude ('global wave function') assembly route.
+    """CI-coefficient assembly route, revised ordering (``ci_revision``):
+    assemble the GLOBAL C1/C2 first, convert to T-amplitudes once.
 
-    Matches Vayesta's ``get_global_t2_rhf`` / ``make_rdm2_ccsd_global_wf``
-    pipeline exactly.  The key correction over the original implementation is
-    that the fragment projector is applied at the **CISD level** (to the raw
-    c1/c2 coefficients) rather than to the already-converted T-amplitudes.
-    The projected c2 is then symmetrised before the CISD→CCSD conversion,
-    mirroring Vayesta's ``RCISD_WaveFunction.project(proj).restore(proj.T)``
-    followed by ``symmetrize_c2`` and ``as_ccsd()``.
+    This mirrors the double-counting avoidance of Vayesta's projected
+    amplitude-energy example (``62-external-solver-amplitude-energy.py``):
+    the fragment projector is applied to the intermediate-normalised CI
+    coefficients (C1 = c1/c0, C2 = c2/c0), and the per-fragment
+    contributions are tiled into one global C1/C2.  Projection +
+    rotation + summation are all LINEAR in the CI coefficients, so the
+    single-occupied-index fragment projection counts every excitation
+    exactly once (Σ_x P_x = 1 over the occupied space for a complete
+    atomic fragmentation) — no double counting, by construction.
 
-    Why the order matters
-    ---------------------
-    When T1 amplitudes are non-negligible the original order
-    ``P @ T2 = P @ (c2/c0 − T1⊗T1)`` subtracts ``(P·T1)⊗T1`` (only the
-    first T1 is projected).  The correct Vayesta order first projects and
-    symmetrises c2, then derives T2 via ``c2_sym/c0 − (P·T1)⊗(P·T1)``
-    so that *both* T1 factors carry the projection.  The c2 symmetrisation
-    also restores the pair-permutation symmetry broken by the single-index
-    projection.
+    Only after the global C1/C2 are assembled is the CISD→CCSD
+    conversion performed, once, with the GLOBAL amplitudes::
+
+        T1 = C1_glob
+        T2 = C2_glob − T1⊗T1
+
+    Why the ordering matters
+    ------------------------
+    The previous 'ci' route converted per fragment
+    (``t2x = P_x·C2/c0 − (P_x·T1)⊗(P_x·T1)``) and then tiled the T2.
+    The C2 part tiles exactly, but the disconnected part summed to
+    Σ_x (P_x·T1)⊗(P_x·T1), which misses every cross-fragment (x≠y)
+    product of the exact (Σ_x P_x·T1)⊗(Σ_y P_y·T1).  Converting once,
+    globally, uses the full global T1 in the disconnected subtraction,
+    so those cross terms are included.  The quadratic term never meets
+    the projector, and the linear tiling stays exact.
 
     For each fragment x:
-       1. Read the raw CISD amplitudes c0, c1, c2 from the rdm_h5 file.
+       1. Read the raw CISD coefficients c0, c1, c2 from the rdm_h5 file
+          and intermediate-normalise: C1 = c1/c0, C2 = c2/c0.
        2. Build the occupied-only fragment projector
           P^x_oo = (c_oo_x.T S c_frag)(c_frag.T S c_oo_x).
-       3. Project c1 and c2 on the first occupied index via P^x_oo.
-       4. Symmetrise projected c2: c2_sym = (P·c2 + (P·c2)^T)/2.
-       5. Convert to CCSD amplitudes: T1 = c1_p/c0,
-          T2 = c2_sym/c0 − T1⊗T1.
-       6. Rotate to global MO basis and accumulate.
+       3. Project C1 and C2 on the first occupied index via P^x_oo.
+       4. Symmetrise projected C2: C2_sym = (P·C2 + (P·C2)^T)/2.
+       5. Rotate to the global MO basis and accumulate into C1/C2_glob.
+    Then once, globally: T1 = C1_glob, T2 = C2_glob − T1⊗T1.
 
     Returns
     -------
@@ -959,8 +982,8 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
     mo_coeff_vir = mo_coeff[:, nocc_global:]
     nvir_global = mo_coeff.shape[1] - nocc_global
 
-    t1_global = np.zeros((nocc_global, nvir_global))
-    t2_global = np.zeros(
+    c1_global = np.zeros((nocc_global, nvir_global))
+    c2_global = np.zeros(
         (nocc_global, nocc_global, nvir_global, nvir_global))
     energies = []
     names = []
@@ -983,37 +1006,46 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
             names.append(str(h5.attrs["name"]))
 
         if abs(c0) < 1.0e-2:
-            print(f"[assembly/ci] WARNING: |c0|={abs(c0):.4e} for "
-                  f"'{names[-1]}' — CI→CCSD conversion may be unreliable.")
+            print(f"[assembly/ci_revision] WARNING: |c0|={abs(c0):.4e} for "
+                  f"'{names[-1]}' — intermediate normalisation (division by "
+                  f"c0) may be unreliable.")
 
-        # Step 1: occupied-only fragment projector (same as before).
+        # Step 1: intermediate normalisation (Vayesta's as_cisd(c0=1.0)).
+        c1n = c1 / c0
+        c2n = c2 / c0
+
+        # Step 2: occupied-only fragment projector.
         s_cf_occ = c_oo_x.T @ ovlp @ c_frag         # (nocc_x, nfrag)
         px_oo    = s_cf_occ @ s_cf_occ.T             # (nocc_x, nocc_x)
 
-        # Step 2: project c1 and c2 at the CISD level — mirrors Vayesta's
+        # Step 3: project C1 and C2 at the CISD level — mirrors Vayesta's
         # RCISD_WaveFunction.project(proj) which calls project_c1/project_c2.
-        c1_p = np.dot(px_oo, c1)                             # (nocc_x, nvir_x)
-        c2_p = np.einsum("xi,ijab->xjab", px_oo, c2)        # (nocc_x, nocc_x, nvir_x, nvir_x)
+        c1_p = np.dot(px_oo, c1n)                            # (nocc_x, nvir_x)
+        c2_p = np.einsum("xi,ijab->xjab", px_oo, c2n)       # (nocc_x, nocc_x, nvir_x, nvir_x)
 
-        # Step 3: symmetrise the projected c2 — mirrors Vayesta's
+        # Step 4: symmetrise the projected C2 — mirrors Vayesta's
         # RCISD_WaveFunction.restore(proj.T) which applies proj.T then
         # calls symmetrize_c2 = (c2 + c2.transpose(1,0,3,2))/2.
-        # net effect: c2_sym[i,j,a,b] = (px@c2[i,j,a,b] + px@c2[j,i,b,a])/2
         c2_p = 0.5 * (c2_p + c2_p.transpose(1, 0, 3, 2))
 
-        # Step 4: CISD → CCSD T-amplitudes from projected amplitudes.
-        t1x_p = c1_p / c0
-        t2x_p = c2_p / c0 - np.einsum("ia,jb->ijab", t1x_p, t1x_p)
-
-        # Step 5: rotate cluster → global MO basis and accumulate.
+        # Step 5: rotate cluster → global MO basis and accumulate the
+        # (linear) CI coefficients — NOT yet T-amplitudes.
         ro = mo_coeff_occ.T @ ovlp @ c_oo_x
         rv = mo_coeff_vir.T @ ovlp @ c_vv_x
 
-        t1_global += np.einsum("Ii,Aa,ia->IA",            ro, rv, t1x_p)
-        t2_global += np.einsum("Ii,Jj,Aa,Bb,ijab->IJAB",  ro, ro, rv, rv, t2x_p)
+        c1_global += np.einsum("Ii,Aa,ia->IA",            ro, rv, c1_p)
+        c2_global += np.einsum("Ii,Jj,Aa,Bb,ijab->IJAB",  ro, ro, rv, rv, c2_p)
 
-    # Final T2 symmetrisation (restores (i,j,a,b)<->(j,i,b,a) after sum).
-    t2_global = 0.5 * (t2_global + t2_global.transpose(1, 0, 3, 2))
+    # Final C2 symmetrisation (restores (i,j,a,b)<->(j,i,b,a) after sum).
+    c2_global = 0.5 * (c2_global + c2_global.transpose(1, 0, 3, 2))
+
+    # Single global CISD → CCSD conversion (global wavefunction in
+    # intermediate normalisation, C0 = 1).  The disconnected T1⊗T1 is
+    # subtracted with the GLOBAL T1, so cross-fragment products are
+    # included — the fix over the per-fragment conversion of the old
+    # 'ci' route.
+    t1_global = c1_global
+    t2_global = c2_global - np.einsum("ia,jb->ijab", t1_global, t1_global)
 
     mock_cc = _MockCC(mo_coeff, mo_occ=mf.mo_occ, mol=mol,
                       max_memory=getattr(mf, "max_memory", 4000))
@@ -1036,12 +1068,14 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
 def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
     """RDM-derived T-amplitude assembly — recommended for SCI.
 
-    Root cause of the larger SCI deviation in the plain 'ci' route
+    Root cause of the larger SCI deviation in the CI-coefficient
+    ('ci_revision') route
     -------------------------------------------------------------------
-    ``assemble_global_rdms_from_civec`` extracts T-amplitudes from the FCI/SCI
+    ``assemble_global_rdms_from_civec`` extracts amplitudes from the FCI/SCI
     CI vector via the chain::
 
-        SCI civec → CISD (c0, c1, c2) → T1 = c1/c0,  T2 = c2/c0 − T1⊗T1
+        SCI civec → CISD (c0, c1, c2) → C1 = c1/c0,  C2 = c2/c0
+        (tiled globally, then T1 = C1_glob, T2 = C2_glob − T1⊗T1)
 
     PySCF's ``ci.cisd.from_fcivec`` reads only the single- and double-
     excitation components of the CI vector.  All triple and higher excitations
@@ -1066,9 +1100,9 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
       triples/quadruples retained in SCI)
 
     The fragment projection (first occupied index only, same projector as the
-    'ci' route) and c2-level symmetrisation are then applied to these effective
-    amplitudes before they are rotated to the global MO basis and assembled
-    into the global T1 / T2.  Global 1-/2-RDMs are built from the assembled
+    'ci_revision' route) and c2-level symmetrisation are then applied to these
+    effective amplitudes before they are rotated to the global MO basis and
+    assembled into the global T1 / T2.  Global 1-/2-RDMs are built from the assembled
     (T1_eff, T2_eff) via PySCF's CCSD RDM machinery with l = t.
 
     Parameters
@@ -1139,7 +1173,8 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
 
         t1x_p = np.dot(px_oo, t1x_eff)                          # (nocc_x, nvir_x)
         t2x_p = np.einsum("xi,ijab->xjab", px_oo, t2x_eff)     # (nocc_x, nocc_x, nvir_x, nvir_x)
-        # Symmetrise: mirrors the c2-level symmetrisation in the 'ci' route.
+        # Symmetrise: mirrors the c2-level symmetrisation in the
+        # 'ci_revision' route.
         t2x_p = 0.5 * (t2x_p + t2x_p.transpose(1, 0, 3, 2))
 
         # --- Rotate to global MO basis and accumulate.
@@ -1175,7 +1210,8 @@ def assemble_global_rdms_projected_lambda(rdm_files, mol, mf, ovlp,
 
     Mirrors ``vayesta.ewf.rdm.make_rdm{1,2}_ccsd_proj_lambda``: the global
     density matrices are built as a sum of **single-cluster** contributions,
-    *not* by forming one global wave function (the 'ci' / 'rdm_t' routes) and
+    *not* by forming one global wave function (the 'ci_revision' / 'rdm_t'
+    routes) and
     *not* by the four-index democratic projection (the 'democratic' route).
 
     For each fragment x::
@@ -1456,9 +1492,10 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_projected_lambda(
                 rdm_files, mol, mf, ovlp, nocc_global))
-    elif assembly == "ci":
-        print(f"[{tag}] Assembly route: CI-amplitude global wave function "
-              f"(c2 projected at CISD level; mirrors Vayesta pipeline)")
+    elif assembly == "ci_revision":
+        print(f"[{tag}] Assembly route: CI-coefficient global wave function, "
+              f"revised ordering (global C1/C2 assembled first; single "
+              f"global CISD→CCSD conversion)")
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_from_civec(
                 rdm_files, mol, mf, ovlp, nocc_global))
@@ -1471,7 +1508,8 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     else:
         raise ValueError(
             f"Unknown ewf.assembly mode: {assembly!r} (expected 'rdm_t', "
-            "'rdm_t_lambda', 'projected_lambda', 'ci', or 'democratic')")
+            "'rdm_t_lambda', 'projected_lambda', 'ci_revision', or "
+            "'democratic')")
 
     method_label = method_label_for_cfg(cfg)
     multi_solver = cfg["ewf"].get("multi_solver", {}).get("enabled", False)

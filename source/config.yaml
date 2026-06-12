@@ -47,7 +47,12 @@ ewf:
   #   projected_lambda -- single-cluster RDM sum (Vayesta default 2-RDM);
   #                       energy/accuracy comparison point, not a gradient fix
   #                       (see Projected-lambda_README.md).
-  #   ci / democratic  -- see 1_Explore_Usage_of_CI_Coeff.
+  #   ci_revision      -- CI-coefficient route, revised ordering: global
+  #                       C1/C2 assembled first (linear tiling, exact
+  #                       double-counting avoidance), then one global
+  #                       CISD->CCSD conversion (T2 = C2 - T1xT1 with the
+  #                       global T1).  Replaces the former 'ci' mode.
+  #   democratic       -- legacy four-index democratic projection.
   assembly: rdm_t_lambda
 
 calculation:
@@ -73,7 +78,7 @@ slurm:
 
 geomopt:
   enabled: true
-  prefix: ewf_zvec_geomopt
+  prefix: ewf_geomopt
   step_subdir_fmt: "step_{step:03d}"
   geometric:
     maxiter: 100
@@ -81,4 +86,8 @@ geomopt:
     # With Stage-1 (amplitude-response only) the gradient floor is reduced
     # but the bath/projector geometric response is still omitted, so keep a
     # realistic gradient threshold until Stages 2-3 land.
-    convergence_set: GAU
+    convergence_energy: 1.0e-3   # Eh
+    convergence_grms:   5.0e-3   # Eh / Bohr
+    convergence_gmax:   5.0e-3   # Eh / Bohr
+    convergence_drms:   1.2e-2   # Angstrom
+    convergence_dmax:   1.8e-2   # Angstrom
