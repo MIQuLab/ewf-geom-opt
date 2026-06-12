@@ -22,8 +22,24 @@ ewf:
 
   # Tight SCI so the selected determinant set is (nearly) geometry
   # independent -- removes the determinant-selection discontinuity.
+  #
+  # ``solver`` is used for every fragment ONLY when multi_solver.enabled is
+  # false below.  In multi-solver mode it is ignored in favour of the
+  # per-fragment, size-based selection.
   solver: SCI
   sci_select_cutoff: 1.0e-4
+
+  # Per-fragment solver selection.  When enabled, the cluster solver is
+  # chosen from the number of orbitals in each EWF cluster (nocc + nvir):
+  #     norb >  norb_threshold  ->  high_accuracy_solver  (default FCI)
+  #     norb <= norb_threshold  ->  approximate_solver    (default SCI)
+  # i.e. larger clusters get the high-accuracy solver, smaller ones the
+  # cheaper approximate solver.  SCI clusters still use sci_select_cutoff.
+  multi_solver:
+    enabled: true
+    norb_threshold: 13
+    high_accuracy_solver: FCI
+    approximate_solver: SCI
 
   # Stage-1 Lagrangian assembly: rdm_t amplitudes + CCSD Λ-relaxed density.
   #   rdm_t_lambda     -- amplitude-response (Z-vector) relaxed global density.

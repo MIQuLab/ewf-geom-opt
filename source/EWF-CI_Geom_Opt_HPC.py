@@ -138,6 +138,33 @@ def load_config(path):
     ewf.setdefault("solver", "FCI")
     ewf.setdefault("sci_select_cutoff", 1.0e-4)
     # ------------------------------------------------------------------
+    # Per-fragment ("multi-solver") solver selection.
+    #
+    # When ``multi_solver.enabled`` is true the cluster solver is chosen
+    # *per fragment* from the number of orbitals in that fragment's EWF
+    # cluster (``Cluster.norb`` = nocc + nvir active orbitals):
+    #
+    #     norb >  norb_threshold  ->  high_accuracy_solver  (default FCI)
+    #     norb <= norb_threshold  ->  approximate_solver    (default SCI)
+    #
+    # i.e. clusters *larger* than the threshold are treated with the
+    # high-accuracy solver and clusters at or below it with the cheaper
+    # approximate solver.  When disabled (default), every fragment uses
+    # the single ``ewf.solver`` exactly as before.
+    ms = ewf.setdefault("multi_solver", {})
+    ms.setdefault("enabled", False)
+    ms.setdefault("norb_threshold", 13)
+    ms.setdefault("high_accuracy_solver", "FCI")
+    ms.setdefault("approximate_solver", "SCI")
+    ms["enabled"] = bool(ms["enabled"])
+    ms["norb_threshold"] = int(ms["norb_threshold"])
+    for key in ("high_accuracy_solver", "approximate_solver"):
+        ms[key] = str(ms[key]).upper()
+        if ms[key] not in ("FCI", "SCI"):
+            raise ValueError(
+                f"Unsupported ewf.multi_solver.{key}={ms[key]!r}; "
+                f"expected 'FCI' or 'SCI'.")
+    # ------------------------------------------------------------------
     # Assembly mode for the global EWF density matrix:
     #
     #   "rdm_t"       : RDM-derived T-amplitude route (DEFAULT, recommended
@@ -374,13 +401,47 @@ def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
     return e, np.asarray(dm1), np.asarray(dm2), civec
 
 
-def solve_cluster(cluster, cfg):
-    """Dispatch to FCI or SCI per ``cfg['ewf']['solver']``.
+def choose_solver_for_cluster(norb, cfg):
+    """Return the cluster solver name (``'FCI'`` or ``'SCI'``) for a cluster
+    with ``norb`` total active orbitals.
+
+    With ``ewf.multi_solver.enabled`` the choice is made per fragment from
+    the cluster size: clusters *larger* than ``norb_threshold`` use the
+    high-accuracy solver, clusters at or below it use the approximate one
+    (see :func:`load_config`).  Otherwise every fragment uses the single
+    ``ewf.solver``.
+    """
+    ewf = cfg["ewf"]
+    ms = ewf.get("multi_solver", {})
+    if not ms.get("enabled", False):
+        return ewf["solver"]
+    if norb > int(ms["norb_threshold"]):
+        return ms["high_accuracy_solver"]
+    return ms["approximate_solver"]
+
+
+def method_label_for_cfg(cfg):
+    """Human-readable method label, e.g. ``EWF-FCI`` or, in multi-solver
+    mode, ``EWF-FCI/SCI`` (high-accuracy / approximate)."""
+    ewf = cfg["ewf"]
+    ms = ewf.get("multi_solver", {})
+    if ms.get("enabled", False):
+        return f"EWF-{ms['high_accuracy_solver']}/{ms['approximate_solver']}"
+    return f"EWF-{ewf['solver']}"
+
+
+def solve_cluster(cluster, cfg, solver=None):
+    """Dispatch to FCI or SCI for one cluster.
+
+    ``solver`` selects the cluster solver explicitly; when ``None`` it is
+    resolved from the cluster size via :func:`choose_solver_for_cluster`
+    (which honours ``ewf.multi_solver``).
 
     Returns ``(E, dm1, dm2, civec)`` -- see
     :func:`solve_cluster_fci`/:func:`solve_cluster_sci` for details.
     """
-    solver = cfg["ewf"]["solver"]
+    if solver is None:
+        solver = choose_solver_for_cluster(cluster.norb, cfg)
     if solver == "FCI":
         return solve_cluster_fci(
             cluster, conv_tol=float(cfg["calculation"]["fci_conv_tol"]))
@@ -420,16 +481,21 @@ def stage_workdir(workdir, stage):
 def _stage_label(stage, cfg):
     """Filename-friendly label for ``stage``.
 
-    The DUMP stage is always labelled ``"dump"``.  The cluster-solver
-    stage uses the actual solver name from ``cfg['ewf']['solver']``
-    (lowercased), so filenames in ``jobs/jobs_ci_calculations/`` carry
-    ``fci`` or ``sci`` in their names instead of a generic ``fci``
-    placeholder.  This keeps the on-disk artefacts self-describing
-    when switching solvers.
+    The DUMP stage is always labelled ``"dump"``.  In single-solver mode
+    the cluster-solver stage uses the actual solver name from
+    ``cfg['ewf']['solver']`` (lowercased), so filenames in
+    ``jobs/jobs_ci_calculations/`` carry ``fci`` or ``sci`` instead of a
+    generic placeholder.  In multi-solver mode the per-fragment solver is
+    not known until the cluster is built, so the generic label ``"solve"``
+    is used.  The label must not depend on the cluster size, because
+    :func:`status_file_path` is called (to wipe stale status files) before
+    the DUMP stage has produced any ``cluster_<i>.h5``.
     """
     if stage == "dump":
         return "dump"
     if stage == "fci":
+        if cfg["ewf"].get("multi_solver", {}).get("enabled", False):
+            return "solve"
         return str(cfg["ewf"]["solver"]).lower()
     raise ValueError(f"Unknown stage: {stage!r}")
 
@@ -683,7 +749,6 @@ def run_fci_worker(frag_idx, cfg):
 
     threshold = float(cfg["ewf"]["bath_threshold"])
     fci_conv_tol = float(cfg["calculation"]["fci_conv_tol"])
-    solver = cfg["ewf"]["solver"]
     sci_cutoff = float(cfg["ewf"]["sci_select_cutoff"])
 
     with h5py.File(cluster_h5, "r") as h5:
@@ -695,13 +760,17 @@ def run_fci_worker(frag_idx, cfg):
         cluster = Cluster(keys[0], h5[keys[0]])
     print(f"[fci frag={frag_idx}] Loaded {cluster}")
 
+    # Resolve the solver for THIS cluster from its size (multi-solver mode)
+    # or from the single ``ewf.solver`` (single-solver mode).
+    solver = choose_solver_for_cluster(cluster.norb, cfg)
+
     if solver == "FCI":
-        print(f"[fci frag={frag_idx}] Solving cluster with FCI "
-              f"(conv_tol={fci_conv_tol})")
+        print(f"[fci frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
+              f"with FCI (conv_tol={fci_conv_tol})")
     else:
-        print(f"[fci frag={frag_idx}] Solving cluster with SCI "
-              f"(conv_tol={fci_conv_tol}, select_cutoff={sci_cutoff})")
-    e_cls, dm1x, dm2x, civec = solve_cluster(cluster, cfg)
+        print(f"[fci frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
+              f"with SCI (conv_tol={fci_conv_tol}, select_cutoff={sci_cutoff})")
+    e_cls, dm1x, dm2x, civec = solve_cluster(cluster, cfg, solver=solver)
     print(f"[fci frag={frag_idx}] E_cluster ({solver}) = {e_cls:.10f} Ha")
 
     # ------------------------------------------------------------------
@@ -1404,12 +1473,27 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
             f"Unknown ewf.assembly mode: {assembly!r} (expected 'rdm_t', "
             "'rdm_t_lambda', 'projected_lambda', 'ci', or 'democratic')")
 
-    solver = cfg["ewf"]["solver"]
-    method_label = f"EWF-{solver}"
+    method_label = method_label_for_cfg(cfg)
+    multi_solver = cfg["ewf"].get("multi_solver", {}).get("enabled", False)
 
-    print(f"[{tag}] Per-cluster {solver} energies (heff + eris):")
+    # Per-fragment solver actually used (recorded by the solve stage).  In
+    # multi-solver mode this varies with cluster size, so annotate each
+    # cluster's energy line with its solver + orbital count.
+    per_frag_solver = {}
+    if multi_solver:
+        for path in rdm_files:
+            with h5py.File(path, "r") as h5:
+                per_frag_solver[str(h5.attrs["name"])] = (
+                    str(h5.attrs["solver"]), int(h5.attrs["norb"]))
+
+    print(f"[{tag}] Per-cluster energies (heff + eris):")
     for name, e in zip(cluster_names, cluster_energies):
-        print(f"   {name:>20s}  E_cluster = {e:.10f} Ha")
+        if name in per_frag_solver:
+            sv, norb = per_frag_solver[name]
+            print(f"   {name:>20s}  E_cluster = {e:.10f} Ha  "
+                  f"[{sv}, norb={norb}]")
+        else:
+            print(f"   {name:>20s}  E_cluster = {e:.10f} Ha")
     print(f"[{tag}] Global 1-RDM shape         : {dm1.shape}")
     print(f"[{tag}] Global 2-RDM cumulant shape: {dm2_cumulant.shape}")
     print(f"[{tag}] Tr(dm1) = {np.trace(dm1):.6f} "
@@ -1435,7 +1519,7 @@ def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False):
     """
     mol, mf, e_ewf, de_ewf = _run_ewf_cycle(
         cfg, config_path, script_path, no_slurm=no_slurm, tag="driver")
-    method_label = f"EWF-{cfg['ewf']['solver']}"
+    method_label = method_label_for_cfg(cfg)
     print(f"\n{method_label} Nuclear Gradient (Hartree/Bohr):")
     print(de_ewf)
     print(f"\n  Max |grad| : {np.max(np.abs(de_ewf)):.4e} Eh/Bohr")
@@ -1571,8 +1655,15 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
     elements = [g[0] for g in geo]
     init_xyz = np.array([g[1] for g in geo], dtype=float)  # Angstrom
 
+    ms = cfg["ewf"].get("multi_solver", {})
+    if ms.get("enabled", False):
+        solver_desc = (
+            f"multi-solver (norb>{ms['norb_threshold']} -> "
+            f"{ms['high_accuracy_solver']}, else {ms['approximate_solver']})")
+    else:
+        solver_desc = cfg["ewf"]["solver"]
     print(f"[geomopt] {len(elements)} atoms, basis={cfg['calculation']['basis']}, "
-          f"solver={cfg['ewf']['solver']}")
+          f"solver={solver_desc}")
     print(f"[geomopt] Working directory : {base_workdir}")
     step_subdir_fmt = cfg["geomopt"]["step_subdir_fmt"]
     print(f"[geomopt] Per-step subfolder: {step_subdir_fmt}")
