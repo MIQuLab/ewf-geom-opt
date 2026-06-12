@@ -219,9 +219,11 @@ Each optimization step writes its geometry, derived per-step config, and fragmen
 ### Worker modes (invoked by the generated batch scripts)
 
 ```bash
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump --frag-idx <i>   # integrals/cluster dump
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode fci  --frag-idx <i>   # cluster solve
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                    # integrals/cluster dump
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI] # cluster solve
 ```
+
+`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI or SCI runs is decided per fragment (`--mode fci` is accepted as a legacy alias for the same stage). In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
 
 ---
 

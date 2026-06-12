@@ -54,7 +54,7 @@ ewf:
   #                       CISD->CCSD conversion (T2 = C2 - T1xT1 with the
   #                       global T1).  Replaces the former 'ci' mode.
   #   democratic       -- legacy four-index democratic projection.
-  assembly: rdm_t_lambda
+  assembly: rdm_t
 
 calculation:
   geometry_file: propylene.txt
