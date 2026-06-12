@@ -10,10 +10,10 @@ The central contribution of this project is a pair of density-assembly routes �
 
 | Path | Contents |
 |---|---|
-| [`source/`](source/) | Driver, gradient code, Λ-relaxation module, config, test geometry, Slurm script |
-| [`examples/`](examples/) | Example outputs for the propylene test case |
+| [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, config, test geometry, Slurm script |
+| [`Examples/`](Examples/) | Example outputs for the propylene test case |
+| [`Reference_Geom_Opt/`](Reference_Geom_Opt/) | Reference unfragmented CCSD(T) geometry optimization (Jupyter notebook) — the benchmark the EWF results are compared against |
 | [`Geom_Comparison_Tool/`](Geom_Comparison_Tool/) | RMSD / max-deviation comparison of optimized geometries (Kabsch alignment) |
-| `*_README.md` | Deep-dive notes: assembly-route source maps, density-response theory, Vayesta option survey |
 
 ### Source files
 
@@ -147,7 +147,7 @@ The optimization energy remains the density functional `ewf_energy_from_rdms(γ)
 
 ### Configuration
 
-All settings live in [`source/config.yaml`](source/config.yaml):
+All settings live in [`Source/config.yaml`](Source/config.yaml):
 
 ```yaml
 ewf:
@@ -202,10 +202,11 @@ python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode fci  --frag-idx <i>   # clus
 
 ---
 
-## Examples and geometry comparison
+## Examples, reference, and geometry comparison
 
-- **[`examples/`](examples/)** — example outputs for the propylene test case (driver logs, per-step energies/gradients, optimized geometries).
-- **[`Geom_Comparison_Tool/`](Geom_Comparison_Tool/)** — compares optimized geometries against a reference structure: Kabsch (SVD) alignment removes rigid-body translation/rotation, then RMSD, maximum atomic deviation, and per-atom deviation tables are reported, with a ranked summary and an optional bar chart. Includes propylene geometries optimized with `rdm_t` and `rdm_t_lambda` alongside a CCSD(T) reference:
+- **[`Examples/`](Examples/)** — example outputs for the propylene test case (driver logs, per-step energies/gradients, optimized geometries).
+- **[`Reference_Geom_Opt/`](Reference_Geom_Opt/)** — reference **unfragmented CCSD(T) geometry optimization** of propylene (`geom-opt.ipynb`), run with the same basis and starting structure as the EWF calculations. Because no fragmentation or embedding is involved, the geometry optimized here serves as the benchmark for the EWF simulations: it is the `propylene_ccsd_t.txt` reference used in the comparison below.
+- **[`Geom_Comparison_Tool/`](Geom_Comparison_Tool/)** — compares optimized geometries against a reference structure: Kabsch (SVD) alignment removes rigid-body translation/rotation, then RMSD, maximum atomic deviation, and per-atom deviation tables are reported, with a ranked summary and an optional bar chart. Includes propylene geometries optimized with `rdm_t` and `rdm_t_lambda` alongside the CCSD(T) reference from `Reference_Geom_Opt/`:
 
   ```bash
   cd Geom_Comparison_Tool
@@ -213,15 +214,3 @@ python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode fci  --frag-idx <i>   # clus
   ```
 
   See [`Geom_Comparison_Tool/README.md`](Geom_Comparison_Tool/README.md) for formats and the notebook workflow.
-
----
-
-## Further reading (in-repo notes)
-
-| Document | Contents |
-|---|---|
-| [`density_response_README.md`](density_response_README.md) | Full derivation and discussion of the density-response term summarized above |
-| [`ci_assembly_vayesta_README.md`](ci_assembly_vayesta_README.md) | Source map of Vayesta's `ci` (global-wavefunction) assembly pipeline |
-| [`rdm_t_assembly_vayesta_README.md`](rdm_t_assembly_vayesta_README.md) | Where `rdm_t` reuses Vayesta machinery and where it is novel |
-| [`Projected-lambda_README.md`](Projected-lambda_README.md) | The projected-lambda route as an energy/accuracy comparison point |
-| [`Vayesta_Options_README.md`](Vayesta_Options_README.md) | Survey of all Vayesta density-matrix and energy assembly routes |
