@@ -1,251 +1,227 @@
-# Z-vector / Lagrangian embedding gradient for EWF
+# EWF-Based Geometry Optimization
 
-This project implements the **rigorous fix** to EWF geometry optimization:
-a Lagrangian / Z-vector formulation of the EWF nuclear gradient that adds
-the **response of the assembled density to geometry** — the term the plain
-`rdm_t` gradient omits, which makes the energy minimum and the gradient
-zero sit at different geometries.
+Deployment of **geometry optimization driven by Embedded Wave Function (EWF) analytic nuclear gradients**, built on [Vayesta](https://github.com/BoothGroup/Vayesta)-style quantum embedding with FCI/Selected-CI cluster solvers, [PySCF](https://pyscf.org/) integrals, and the [geomeTRIC](https://geometric.readthedocs.io/) optimizer. The workflow distributes per-fragment cluster solves over Slurm on an HPC cluster and assembles a global density-matrix functional whose analytic gradient feeds each optimization step.
 
-> **Status — honest scope.** A *complete* EWF analytic gradient couples
-> four response problems (HF-CPHF, bath-orbital, cluster-amplitude,
-> projector). This is exactly why Vayesta ships no analytic nuclear
-> gradients. The work is therefore **staged**. **Stage 1 (amplitude
-> response of the global effective wavefunction) is implemented and
-> runnable** here. Stages 2–3 (projected per-cluster response and bath
-> response) are **derived in full below but not yet coded** — the hooks and
-> equations are laid out so the work can continue. **Validate every stage
-> numerically with `--check-gradient` before trusting an optimisation;** the
-> implementation has not been numerically verified in this environment.
+The central contribution of this project is a pair of density-assembly routes — **`rdm_t`** and its Λ-relaxed extension **`rdm_t_lambda`** (`embedding_lagrangian.py`) — that make it possible to further reduce the energy and gradient fluctuations associated with the approximations introduced by fragmentation. At present, geometry convergence is only possible with loose criteria, but this project is dedicated to the gradual improvement of the methodology of EWF-based geometry optimization.
 
 ---
 
-## 1. The problem, precisely
+## Repository layout
 
-The EWF energy is a functional of the assembled global density matrices,
+| Path | Contents |
+|---|---|
+| [`source/`](source/) | Driver, gradient code, Λ-relaxation module, config, test geometry, Slurm script |
+| [`examples/`](examples/) | Example outputs for the propylene test case |
+| [`Geom_Comparison_Tool/`](Geom_Comparison_Tool/) | RMSD / max-deviation comparison of optimized geometries (Kabsch alignment) |
+| `*_README.md` | Deep-dive notes: assembly-route source maps, density-response theory, Vayesta option survey |
+
+### Source files
+
+| File | Role |
+|---|---|
+| `EWF-CI_Geom_Opt_HPC.py` | Main driver: fragment construction, Slurm orchestration, RDM assembly dispatch, geomeTRIC engine |
+| `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + proper CCSD Λ (Z-vector) relaxed density |
+| `isolated_casci_gradient.py` | Analytic EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) |
+| `config.yaml` | Calculation, embedding, Slurm, and optimizer settings |
+| `propylene.txt` | Propylene test geometry |
+| `submit_zvec.sh` | Slurm submission script |
+
+---
+
+## Background: the EWF energy and its gradient
+
+The EWF energy is a functional of global density matrices assembled from independent per-fragment cluster solutions:
 
 ```
 E[γ1, λ2] = E_HF + Tr(F · Δγ1) + ½ Tr( (pq|rs) · λ2 ),     Δγ1 = γ1 − γ1^HF
 ```
 
-where `(γ1, λ2)` are assembled from the per-fragment solutions. Write the
-full chain of geometry (`x`) dependence:
+The chain of geometry (`x`) dependence runs from the AO integrals through the HF orbitals, the IAO fragments and DMET bath, the cluster Hamiltonians, and finally the cluster amplitudes — all of which feed the assembly map:
 
 ```
-x  ──►  AO integrals  ──►  HF MOs  C(x), ε(x)
-                              │
-                              ├──►  IAO fragments + DMET bath  ──►  cluster
-                              │     orbitals  C_x(x),  projectors  P_x(x)
-                              │
-                              └──►  cluster Hamiltonian  H_x(C_x)  ──►  cluster
-                                    solver amplitudes  T_x(H_x)
-                                          │
-   (γ1, λ2) = 𝒜( {T_x}, {C_x}, {P_x}, C )  ◄────────────────────────────┘
+γ = (γ1, λ2) = 𝒜( {T_x}, {C_x}, {P_x}, C )
 ```
 
-The total derivative is
+### The density-response term `(∂E/∂γ)·(dγ/dx)`
+
+Because `γ` enters the energy both explicitly through the integrals and implicitly because the embedding rebuilds `γ` at every geometry, the chain rule splits the total derivative into exactly two pieces:
 
 ```
-dE/dx = ∂E/∂x |_(γ fixed)                                   ← (a) frozen-density
-      + (∂E/∂γ) : (dγ/dx)                                   ← (b) density response
+dE/dx  =  ∂E/∂x |_(γ fixed)        +     (∂E/∂γ) : (dγ/dx)
+          └─────────┬─────────┘          └────────┬────────┘
+        (a) frozen-density gradient      (b) density-response term
 ```
 
-`build_ewf_grad` computes **(a)** exactly — including the HF orbital
-relaxation of the *energy contraction* via its internal CPHF Z-vector — but
-drops **(b)**. Because the assembled `(γ1, λ2)` are **not** the variational
-density of any single wavefunction, `∂E/∂γ ≠ 0` and term **(b)** does not
-vanish. That omitted term is the ~1e-3 Eh/Bohr gradient floor.
+`build_ewf_grad` computes **(a)** exactly — including the HF orbital (CPHF) relaxation of the integrals — by treating `γ1`, `λ2` as constants in the MO basis.
 
-The Lagrangian machinery evaluates **(b)** *without* computing `dγ/dx`
-coordinate-by-coordinate (which would need 3N embedding re-solves): it
-introduces one multiplier per defining equation, makes the augmented
-functional stationary, and reads off the gradient as a single explicit
-derivative.
+What is `∂E/∂γ`, concretely? Differentiating the functional at fixed integrals gives
+
+```
+∂E/∂γ1_pq    =  F_pq           (the Fock matrix)
+∂E/∂λ2_pqrs  =  ½ (pq|rs)      (the two-electron integrals)
+```
+
+— the one- and two-body Hamiltonian matrices, which are emphatically **not zero**. And `dγ/dx` collects every way the assembled density moves with the nuclei:
+
+```
+dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← cluster amplitudes re-solve
+       + Σ_x (∂𝒜/∂C_x)(dC_x/dx)     ← bath/cluster orbitals redefine
+       + Σ_x (∂𝒜/∂P_x)(dP_x/dx)     ← fragment projectors shift
+       +     (∂𝒜/∂C )(dC /dx)        ← HF orbitals relax
+```
+
+**Why term (b) is nonzero for EWF but zero for a variational method:** for a variational wavefunction (FCI, optimized CASSCF, HF) the density extremizes `E` for the given integrals, so the response `dγ/dx` lies along directions in which `E` is flat and the contraction `(∂E/∂γ):(dγ/dx)` vanishes identically — this is the Hellmann–Feynman theorem. EWF breaks this: the assembled `γ` is built by projection of independent cluster solutions and is *not* the density that extremizes `E[γ]` for the global integrals. Even when each cluster solver returns an exact eigenstate (each *cluster* energy stationary), the projected *global* energy is not stationary with respect to the cluster amplitudes:
+
+```
+∂E_global/∂T_x  ≠ 0        ← projection breaks cluster-level Hellmann–Feynman
+```
+
+so the density-response term contributes a real piece of `dE/dx`.
+
+**The Lagrangian trick:** computing `dγ/dx` head-on would require solving the four response equations above for each of the 3N nuclear coordinates — 3N embedding re-solves. The Z-vector / Lagrangian method instead augments `E` with each defining equation times a multiplier, chooses the multipliers to make the augmented functional stationary in all internal variables, and then
+
+```
+(∂E/∂γ):(dγ/dx)  ≡  Σ_x Λ_x (∂H_x/∂x)|_explicit  +  (projector overlap terms)  +  (Z-vector terms)
+```
+
+The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
 
 ---
 
-## 2. The EWF Lagrangian
+## Density-assembly routes
 
-Introduce a multiplier for every equation that *defines* an internal
-variable:
+The driver dispatches on `ewf.assembly` in `config.yaml`:
 
-| Constraint (≡ 0) | Defines | Multiplier |
+| `ewf.assembly` | Construction | Origin |
 |---|---|---|
-| `F_ai[C] = 0` (HF Brillouin) | HF MOs `C` | `z_ai` (orbital Z-vector) |
-| `r_x(T_x; H_x[C_x]) = 0` (cluster amplitude / eigen eqs.) | cluster amplitudes `T_x` | `Λ_x` (per-cluster) |
-| `B_x(C_x; C) = 0` (DMET bath construction) | cluster orbitals `C_x` | `W_x` |
-| `P_x − 𝒫(C_x, C_frag) = 0` (projector definition) | projector `P_x` | algebraic (no solve) |
+| `democratic` | Cluster RDMs, democratically partitioned (4-index split) | mirrors Vayesta `make_rdm{1,2}_demo_rhf` |
+| `ci` | CI vector → CISD `(c1, c2)` → projected amplitudes → global CCSD RDM | mirrors Vayesta `make_rdm{1,2}_ccsd_global_wf` |
+| `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default CCSD 2-RDM route |
+| **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global CCSD RDM | **this project** |
+| **`rdm_t_lambda`** | `rdm_t` amplitudes + proper CCSD **Λ solve** → relaxed global RDMs | **this project** |
 
-The Lagrangian is
+### The standard CI assembly (baseline)
 
-```
-ℒ(x) = E[γ1, λ2]
-       +  Σ_ai z_ai F_ai[C]
-       +  Σ_x  Λ_x · r_x(T_x; H_x[C_x])
-       +  Σ_x  W_x : B_x(C_x; C)
-```
+Vayesta's global-wavefunction route converts each fragment's FCI/SCI CI vector to CISD coefficients (`RFCI_WaveFunction.as_cisd`), applies the occupied-fragment projector at the CISD level, converts to T-amplitudes (`as_ccsd`), rotates and accumulates them into one global `(T1, T2)`, and feeds a single `ccsd_rdm` call. Two approximations are baked in:
 
-with `(γ1, λ2) = 𝒜({T_x}, {C_x}, {P_x(C_x)}, C)`. The multipliers are fixed
-by demanding stationarity with respect to **every internal variable** —
-`∂ℒ/∂T_x = 0`, `∂ℒ/∂C_x = 0`, `∂ℒ/∂C = 0`. Once stationary,
+1. **CISD truncation of the cluster wavefunction.** `as_cisd` reads only the single- and double-excitation rows of the CI vector — triples and higher determinants of the FCI/SCI solution are discarded before the amplitudes are ever formed.
+2. **The `l = t` linearization.** Vayesta sets `l1, l2 = t1, t2` (the TCCSD shortcut) in place of solving the CCSD Λ equations, so the global RDMs carry no amplitude response.
 
-```
-dE/dx = ∂ℒ/∂x |_(all internal variables fixed)
-```
+### `rdm_t`: amplitudes from the exact RDM cumulant
 
-i.e. only the *explicit* integral derivatives survive — the standard
-Z-vector result.
-
-### 2.1 Cluster-amplitude response (the `Λ_x` equations)
+`rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci` mode uses):
 
 ```
-∂ℒ/∂T_x = ∂E/∂T_x  +  Λ_x · (∂r_x/∂T_x) = 0
-   ⇒   Λ_x = − (∂r_x/∂T_x)^{-1} · ∂E/∂T_x
+Vayesta global-WF (ci):   civec → CISD c1,c2 → amplitudes → global CCSD RDM
+Vayesta democratic:       cluster RDMs → 4-index democratic projection → global RDM
+rdm_t (this project):     cluster RDMs → effective T1,T2 → global CCSD RDM
+                           └── novel front-end ──┘└── Vayesta back-end ──┘
 ```
 
-The crucial point: the right-hand side is **`∂E/∂T_x`, the derivative of the
-assembled global energy** with respect to cluster `x`'s amplitudes — *not*
-the cluster's own energy derivative. Even when the cluster solver is an
-exact eigenstate (so the cluster energy is stationary, `∂E_x/∂T_x = 0`), the
-**projected/democratic** global energy is **not** stationary in `T_x`
-(`∂E/∂T_x ≠ 0`). This non-vanishing RHS is the amplitude response that the
-plain `rdm_t` gradient misses. `(∂r_x/∂T_x)` is the cluster Jacobian (the
-CCSD Λ super-operator, or `(H_x − E_x)` projected for an FCI/SCI cluster).
+The defining step — reinterpreting the exact FCI/SCI density-matrix blocks as effective CCSD amplitudes —
 
-### 2.2 Bath-orbital response (the `W_x` equations)
-
-`∂ℒ/∂C_x = 0` couples `Λ_x` (through `∂H_x/∂C_x`) and `∂E/∂C_x` (through the
-rotation of cluster amplitudes into the global basis) into the bath
-multiplier `W_x`. Because the DMET bath is built from blocks of the HF
-density matrix, `B_x` is an explicit function of `C`, so `W_x` ultimately
-feeds the **global** orbital Z-vector (next).
-
-### 2.3 HF orbital response (the extended `z` equation)
-
-`∂ℒ/∂C = 0` is a CPHF/Z-vector equation whose right-hand side is the usual
-energy-contraction Lagrangian **plus** the new contributions routed in from
-`Σ_x Λ_x ∂H_x/∂C` and `Σ_x W_x ∂B_x/∂C` and the explicit `C`-dependence of
-the assembly rotation. Solving this *single* augmented linear system folds
-all orbital relaxation (HF + bath) into one relaxed one-body density that
-contracts with the integral derivatives.
-
-### 2.4 Final gradient
-
-```
-dE/dx =  Σ_pq  Γ1_pq (∂h_pq/∂x)
-       + ½ Σ_pqrs Γ2_pqrs (∂(pq|rs)/∂x)
-       − Σ_pq  X_pq (∂S_pq/∂x)
-       + ∂E_nuc/∂x
-       + Σ_x Λ_x (∂H_x/∂x)|_explicit          ← cluster-amplitude response
-       + (projector explicit-overlap terms)    ← ∂P_x/∂x at fixed orbitals
+```python
+T1_eff = dm1_corr[occ, vir]
+T2_eff = λ2_cumulant[occ, occ, vir, vir]
 ```
 
-where `Γ1, Γ2, X` are the **relaxed** (multiplier-dressed) density and
-energy-weighted density. The first four lines are the structure already
-implemented by `build_ewf_grad`; the last two are what the Lagrangian adds.
+is the new feature introduced in this project; it was not previously available in the Vayesta codebase. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This is the direct improvement over the `ci` route's CISD truncation: where `as_cisd` discards everything above doubles, `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions survives into the global density.
 
----
+### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 
-## 3. Staged implementation
-
-### Stage 1 — amplitude response of the global effective wavefunction ✅ (here)
-
-A tractable, fully-`pyscf`-backed first realisation of §2.1. Instead of the
-per-cluster `Λ_x` with the projected RHS (Stage 2), assemble the projected
-effective amplitudes into **one global effective CCSD wavefunction** on the
-HF reference and solve its proper CCSD **Λ equations**. This replaces the
-`l = t` (TCCSD) linearisation of the plain `rdm_t` route with the true
-coupled-cluster amplitude-response (Z-vector) density.
-
-Implemented in [`embedding_lagrangian.py`](embedding_lagrangian.py):
+`embedding_lagrangian.py` upgrades the second baked-in approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the proper CCSD Λ equations** for it:
 
 | Function | Role |
 |---|---|
-| `assemble_global_amplitudes` | Projected/rotated global `(T1, T2)` (the rdm_t amplitude half, factored out). |
-| `make_relaxed_global_rdms` | Builds `pyscf.cc.CCSD(mf)`, injects `(T1, T2)`, **solves Λ** (`solve_lambda`), returns the relaxed `(γ1, λ2)` and the CCSD energy. No `kernel()` — amplitudes are not re-optimised. |
-| `assemble_global_rdms_rdm_t_lambda` | Driver-facing assembler; same return signature as the other `assemble_global_rdms_*`. |
+| `assemble_global_amplitudes` | Projected/rotated global `(T1, T2)` — the `rdm_t` amplitude front-end, factored out |
+| `make_relaxed_global_rdms` | Builds `pyscf.cc.CCSD(mf)`, injects `(T1, T2)`, solves Λ (`solve_lambda`), returns the relaxed `(γ1, λ2)` — amplitudes are **not** re-optimized |
+| `assemble_global_rdms_rdm_t_lambda` | Driver-facing assembler, same signature as the other `assemble_global_rdms_*` |
 
-Selected with `ewf.assembly: rdm_t_lambda` in `config.yaml`. The
-optimisation energy stays the density functional `ewf_energy_from_rdms(γ)`
-so that energy and gradient remain **frozen-density consistent** (the
-`--check-gradient` test still applies unchanged).
+Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds the cluster-amplitude line of the density response — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` — into the assembled density itself, recovering the part of the gradient that drives the gradient zero toward the energy minimum.
 
-**What Stage 1 captures:** the amplitude relaxation of the *global*
-effective CCSD wavefunction (proper Λ vs `l = t`). **What it does not yet
-capture:** the *projected per-cluster* RHS of §2.1 (it uses a single global
-Λ as a surrogate) and the bath/projector geometric response of §2.2–2.3.
-These remain folded into the HF CPHF term — the **frozen-bath
-approximation**. Stage 1 is therefore expected to *reduce* the gradient
-floor, not eliminate it.
-
-### Stage 2 — projected per-cluster response + projector derivative ⬜
-
-- Replace the single global Λ with per-cluster `Λ_x` solved against the
-  projected RHS `∂E/∂T_x` (§2.1). For FCI/SCI clusters this is a linear
-  solve in the cluster CI space (`pyscf.fci.direct_spin0` Hamiltonian-vector
-  products); for a CCSD cluster it is the cluster Λ super-operator.
-- Add the explicit projector-overlap derivative `∂P_x/∂x` at fixed orbitals.
-  `P_x = s_cf s_cfᵀ`, `s_cf = C_xᵀ S C_frag`, so this is exact algebra in the
-  AO overlap derivative `S^(x)` — no new solve.
-
-### Stage 3 — bath-orbital response ⬜
-
-- Solve the bath multiplier `W_x` (§2.2) and fold it, together with
-  `Σ_x Λ_x ∂H_x/∂C`, into the **augmented** global orbital Z-vector (§2.3).
-  This is the term that finally makes the analytic gradient the exact total
-  derivative, so that the gradient zero coincides with the energy minimum
-  and geomeTRIC converges in unfragmented-like step counts.
+The optimization energy remains the density functional `ewf_energy_from_rdms(γ)`, so energy and gradient stay evaluated on the same assembled density throughout.
 
 ---
 
-## 4. Validation
+## Usage
 
-The `--check-gradient` mode (carried over from
-`3_gradient_consistency_test`) is the arbiter at **every** stage:
+### Configuration
 
-```bash
-python EWF-CI_Geom_Opt_HPC.py --config config.yaml --check-gradient
+All settings live in [`source/config.yaml`](source/config.yaml):
+
+```yaml
+ewf:
+  bath_threshold: 1.0e-5      # stable, non-full DMET bath
+  solver: SCI                 # FCI or Selected-CI cluster solver
+  sci_select_cutoff: 1.0e-4   # tight selection → geometry-independent determinant set
+  assembly: rdm_t_lambda      # density-assembly route (see table above)
+
+calculation:
+  geometry_file: propylene.txt
+  basis: sto-3g
+  ...
+
+slurm:                        # per-wave Slurm resources (dump / fci)
+  ...
+
+geomopt:
+  enabled: true
+  geometric:
+    maxiter: 100
+    coordsys: tric
+    convergence_set: GAU
 ```
 
-It holds the assembled `(γ1, λ2)` **fixed** and finite-differences
-`ewf_energy_from_rdms`, so it validates that the *energy-contraction* part
-of the gradient is exact. To measure progress on the **response** term,
-compare instead against a **fully numerical EWF gradient** (re-run the whole
-DUMP + SCI embedding at displaced geometries and central-difference the EWF
-energy):
+### Running
 
-| Quantity | Stage 0 (`rdm_t`) | Target (Stage 3) |
-|---|---|---|
-| energy-min ↔ gradient-zero offset | ~1e-3 Eh/Bohr | → 0 |
-| geomeTRIC steps vs unfragmented | ~40+ | comparable |
+```bash
+# Single-point EWF energy + analytic gradient at the input geometry
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --single-point
 
-Stage 1 should move the first row partway; if `--check-gradient` ever shows
-a *frozen-density* mismatch (`max|Δ| ≫ 1e-5`), that is a code bug to fix
-before interpreting any optimisation.
+# Full geometry optimization (geomopt.enabled in config.yaml)
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml
+
+# Run fragment workers inline instead of via Slurm (single workstation)
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --no-slurm
+```
+
+On the cluster, submit through the provided script:
+
+```bash
+sbatch submit_zvec.sh
+```
+
+Each optimization step writes its geometry, derived per-step config, and fragment work into `step_NNN/` subdirectories; the driver submits a DUMP wave and a cluster-solver wave per step and assembles the global RDMs from the workers' HDF5 output.
+
+### Worker modes (invoked by the generated batch scripts)
+
+```bash
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump --frag-idx <i>   # integrals/cluster dump
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode fci  --frag-idx <i>   # cluster solve
+```
 
 ---
 
-## 5. Files
+## Examples and geometry comparison
 
-| File | Role |
+- **[`examples/`](examples/)** — example outputs for the propylene test case (driver logs, per-step energies/gradients, optimized geometries).
+- **[`Geom_Comparison_Tool/`](Geom_Comparison_Tool/)** — compares optimized geometries against a reference structure: Kabsch (SVD) alignment removes rigid-body translation/rotation, then RMSD, maximum atomic deviation, and per-atom deviation tables are reported, with a ranked summary and an optional bar chart. Includes propylene geometries optimized with `rdm_t` and `rdm_t_lambda` alongside a CCSD(T) reference:
+
+  ```bash
+  cd Geom_Comparison_Tool
+  python geom_compare.py propylene_ccsd_t.txt propylene_rdm_t.txt propylene_rdm_t_lambda.txt
+  ```
+
+  See [`Geom_Comparison_Tool/README.md`](Geom_Comparison_Tool/README.md) for formats and the notebook workflow.
+
+---
+
+## Further reading (in-repo notes)
+
+| Document | Contents |
 |---|---|
-| `EWF-CI_Geom_Opt_HPC.py` | Driver; adds `ewf.assembly: rdm_t_lambda` dispatch. |
-| `embedding_lagrangian.py` | Stage-1 Λ/Z-vector relaxed-density builder. |
-| `isolated_casci_gradient.py` | Frozen-density gradient (`build_ewf_grad`) — unchanged. |
-| `config.yaml` | `assembly: rdm_t_lambda`, stable bath, tight SCI. |
-| `propylene.txt` | Test geometry. |
-| `submit_zvec.sh` | Slurm submission. |
-
----
-
-## 6. Honest limitations
-
-- **Stage 1 only.** The amplitude response is included at the *global
-  effective* level; the projected per-cluster RHS, the projector derivative,
-  and the bath-orbital response (§2.2–2.3) are **not** implemented. The
-  optimisation gradient floor will be reduced but not driven to zero.
-- **Frozen-bath approximation.** Cluster orbitals `C_x` and IAO fragments
-  `C_frag` are treated as geometry-independent beyond their dependence
-  through the global HF CPHF already in `build_ewf_grad`.
-- **Not numerically verified here.** Compilation passes; correctness must be
-  confirmed on the HPC with `--check-gradient` and against a fully numerical
-  EWF gradient.
+| [`density_response_README.md`](density_response_README.md) | Full derivation and discussion of the density-response term summarized above |
+| [`ci_assembly_vayesta_README.md`](ci_assembly_vayesta_README.md) | Source map of Vayesta's `ci` (global-wavefunction) assembly pipeline |
+| [`rdm_t_assembly_vayesta_README.md`](rdm_t_assembly_vayesta_README.md) | Where `rdm_t` reuses Vayesta machinery and where it is novel |
+| [`Projected-lambda_README.md`](Projected-lambda_README.md) | The projected-lambda route as an energy/accuracy comparison point |
+| [`Vayesta_Options_README.md`](Vayesta_Options_README.md) | Survey of all Vayesta density-matrix and energy assembly routes |

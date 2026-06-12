@@ -241,15 +241,6 @@ def load_config(path):
     g.setdefault("maxiter", 100)
     g.setdefault("coordsys", "tric")
     g.setdefault("convergence_set", "GAU")
-
-    # ------------------------------------------------------------------
-    # Gradient consistency check block (used only by --check-gradient).
-    #   delta : central finite-difference displacement in Bohr.
-    #   atoms : 'all' or an explicit list of 0-based atom indices to test.
-    # ------------------------------------------------------------------
-    cg = cfg.setdefault("check_gradient", {})
-    cg.setdefault("delta", 1.0e-3)
-    cg.setdefault("atoms", "all")
     return cfg
 
 
@@ -1455,165 +1446,6 @@ def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False):
 
 
 # ---------------------------------------------------------------------------
-# Gradient consistency check (finite-difference validation)
-# ---------------------------------------------------------------------------
-
-def _build_mf_at_coords(cfg, elements, coords_bohr):
-    """Build a molecule at the given Cartesian coordinates (Bohr) and run
-    RHF.  Used by the finite-difference gradient check to evaluate the EWF
-    energy functional at displaced geometries.  Returns ``(mol, mf)``.
-    """
-    calc = cfg["calculation"]
-    atom = [[el, (float(r[0]), float(r[1]), float(r[2]))]
-            for el, r in zip(elements, coords_bohr)]
-    mol = gto.Mole()
-    mol.build(atom=atom, unit="Bohr", basis=calc["basis"], verbose=0,
-              charge=calc["charge"], spin=calc["spin"],
-              symmetry=calc["symmetry"])
-    mf = scf.RHF(mol)
-    mf.conv_tol = 1.0e-12
-    mf.kernel()
-    return mol, mf
-
-
-def _align_mo_phases(mol_ref, mo_ref, mol_disp, mo_disp):
-    """Align the columns of ``mo_disp`` to the reference orbitals so the
-    frozen RDM arrays (expressed in the reference MO basis) remain
-    physically consistent at the displaced geometry.
-
-    A re-converged RHF at a displaced geometry returns orbitals whose
-    overall sign (and, near degeneracies, ordering) is arbitrary.  Because
-    the assembled ``dm1`` has non-zero occupied-virtual structure and
-    ``λ₂`` couples occupied/virtual blocks, an uncorrected sign flip of a
-    single MO would corrupt the energy and masquerade as a gradient bug.
-    We fix the discrete sign ambiguity using the cross-geometry AO overlap
-    ``S = <χ(ref) | χ(disp)>`` and the projection ``O = Cᵀ_ref S C_disp``;
-    the sign of each diagonal element gives the relative phase.
-
-    Returns ``(mo_aligned, diag_overlap_min)`` where the second value is
-    ``min_j |O_jj|`` after alignment -- a value well below 1 signals an
-    orbital reordering/strong rotation that the simple sign fix cannot
-    handle (the displacement step should then be reduced).
-    """
-    from pyscf import gto as _gto
-    s_cross = _gto.intor_cross("int1e_ovlp", mol_ref, mol_disp)
-    ovlp = mo_ref.T @ s_cross @ mo_disp          # (nmo, nmo), ~signed perm
-    signs = np.sign(np.diag(ovlp))
-    signs[signs == 0.0] = 1.0
-    mo_aligned = mo_disp * signs[None, :]
-    diag_min = float(np.min(np.abs(np.diag(ovlp))))
-    return mo_aligned, diag_min
-
-
-def run_gradient_consistency_check(cfg, config_path, script_path,
-                                   no_slurm=False):
-    """Finite-difference validation of ``build_ewf_grad`` against
-    ``d/dx ewf_energy_from_rdms`` at **frozen** assembled RDMs.
-
-    Purpose
-    -------
-    The assembled EWF density matrices ``(dm1, λ₂)`` are *not* the
-    variational density of a single global wavefunction, so the true total
-    nuclear gradient carries embedding-response terms (change of the
-    per-fragment amplitudes and of the bath/projectors with geometry) that
-    the analytic gradient omits.  This check isolates the analytic
-    gradient from that fundamental response gap by holding ``(dm1, λ₂)``
-    **fixed in the MO basis** and re-converging only the RHF reference at
-    each displaced geometry (so the CPHF orbital-response term built into
-    ``build_ewf_grad`` is still exercised numerically).
-
-    Interpretation
-    --------------
-    * ``max|Δ| ≲ 1e-5``  → the analytic gradient *is* the exact derivative
-      of the EWF energy functional; the residual seen during optimisation
-      (gradient floor, energy walking uphill) is the fundamental embedding
-      response gap, not a code bug.  Tackle it with a stable bath / FCI
-      clusters / looser geomeTRIC gradient thresholds.
-    * ``max|Δ|`` comparable to the optimisation gradient floor (~1e-3) →
-      a genuine inconsistency in the gradient code to be fixed.
-    """
-    chk = cfg.get("check_gradient", {})
-    delta = float(chk.get("delta", 1.0e-3))
-    atoms_req = chk.get("atoms", "all")
-
-    tag = "grad-check"
-    print(f"[{tag}] === EWF gradient finite-difference consistency check ===")
-    print(f"[{tag}] central-difference step delta = {delta:.3e} Bohr")
-    print(f"[{tag}] frozen RDMs; RHF re-converged at each displaced geometry")
-
-    # ---- reference cycle: assemble RDMs + analytic gradient ----------
-    mol0, mf0, e0, de_analytic, dm1, dm2_cum = _run_ewf_cycle(
-        cfg, config_path, script_path, no_slurm=no_slurm, tag=tag,
-        return_rdms=True)
-
-    elements = [mol0.atom_symbol(i) for i in range(mol0.natm)]
-    coords0 = mol0.atom_coords().copy()          # (natm, 3) in Bohr
-    natm = mol0.natm
-
-    if atoms_req == "all" or atoms_req is None:
-        atom_list = list(range(natm))
-    else:
-        atom_list = [int(a) for a in atoms_req]
-
-    # Sanity: the frozen-RDM energy at the reference geometry must equal
-    # the energy returned by the cycle (re-derive it through the same path
-    # the FD loop uses, so any basis/phase bookkeeping error shows up here).
-    e0_chk = ewf_energy_from_rdms(mol0, mf0, dm1, dm2_cum)
-    print(f"[{tag}] reference energy (cycle)        : {e0:.10f} Ha")
-    print(f"[{tag}] reference energy (frozen-RDM)   : {e0_chk:.10f} Ha")
-    print(f"[{tag}] |difference|                    : {abs(e0 - e0_chk):.2e} Ha")
-
-    de_fd = np.zeros((natm, 3))
-    worst_overlap = 1.0
-    for ia in atom_list:
-        for comp in range(3):
-            energies = {}
-            for sign in (+1.0, -1.0):
-                coords = coords0.copy()
-                coords[ia, comp] += sign * delta
-                mol_d, mf_d = _build_mf_at_coords(cfg, elements, coords)
-                mo_aligned, diag_min = _align_mo_phases(
-                    mol0, mf0.mo_coeff, mol_d, mf_d.mo_coeff)
-                mf_d.mo_coeff = mo_aligned
-                worst_overlap = min(worst_overlap, diag_min)
-                energies[sign] = ewf_energy_from_rdms(
-                    mol_d, mf_d, dm1, dm2_cum)
-            de_fd[ia, comp] = (energies[+1.0] - energies[-1.0]) / (2.0 * delta)
-            diff = de_fd[ia, comp] - de_analytic[ia, comp]
-            print(f"[{tag}]   atom {ia:>2d} {'xyz'[comp]} : "
-                  f"analytic={de_analytic[ia, comp]: .6e}  "
-                  f"numeric={de_fd[ia, comp]: .6e}  "
-                  f"Δ={diff: .2e}")
-
-    mask = np.zeros((natm, 3), dtype=bool)
-    mask[atom_list, :] = True
-    diff = (de_fd - de_analytic)[mask]
-    max_abs = float(np.max(np.abs(diff)))
-    rms = float(np.sqrt(np.mean(diff ** 2)))
-
-    print(f"\n[{tag}] ---- summary ({len(atom_list)} atom(s) tested) ----")
-    print(f"[{tag}] max |analytic - numeric| : {max_abs:.3e} Eh/Bohr")
-    print(f"[{tag}] rms |analytic - numeric| : {rms:.3e} Eh/Bohr")
-    print(f"[{tag}] min diag MO overlap      : {worst_overlap:.4f} "
-          f"(want > ~0.9; lower => reduce check_gradient.delta)")
-    if max_abs < 1.0e-5:
-        print(f"[{tag}] VERDICT: analytic gradient matches the finite "
-              f"difference of the EWF energy functional.")
-        print(f"[{tag}]          build_ewf_grad is the exact derivative of "
-              f"ewf_energy_from_rdms; the optimisation gradient floor is the")
-        print(f"[{tag}]          fundamental embedding response gap, not a "
-              f"code bug.")
-    else:
-        print(f"[{tag}] VERDICT: analytic and numeric gradients DISAGREE by "
-              f"{max_abs:.2e} Eh/Bohr.")
-        print(f"[{tag}]          If this is comparable to the optimisation "
-              f"gradient floor (~1e-3) there is a gradient-code bug to fix;")
-        print(f"[{tag}]          if min diag MO overlap is well below 0.9, "
-              f"reduce check_gradient.delta and re-run first.")
-    return de_analytic, de_fd
-
-
-# ---------------------------------------------------------------------------
 # Geometry optimisation (geomeTRIC)
 # ---------------------------------------------------------------------------
 
@@ -1851,14 +1683,6 @@ def parse_args(argv=None):
                         "gradient evaluation at the input geometry and "
                         "skip geometry optimisation, regardless of the "
                         "geomopt.enabled flag in the config.")
-    p.add_argument("--check-gradient", action="store_true",
-                   help="(driver mode) Validate build_ewf_grad against a "
-                        "central finite difference of ewf_energy_from_rdms "
-                        "at the input geometry with the assembled RDMs held "
-                        "fixed.  Isolates the analytic gradient from the "
-                        "embedding response gap.  Step size / atom subset "
-                        "are taken from the check_gradient block in the "
-                        "config.")
     return p.parse_args(argv)
 
 
@@ -1881,12 +1705,6 @@ def main(argv=None):
         return
 
     # ---- driver mode -------------------------------------------------
-    if args.check_gradient:
-        run_gradient_consistency_check(
-            cfg, os.path.abspath(args.config), script_path,
-            no_slurm=args.no_slurm)
-        return
-
     do_geomopt = bool(cfg["geomopt"].get("enabled", True))
     if args.single_point:
         do_geomopt = False

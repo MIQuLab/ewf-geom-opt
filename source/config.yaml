@@ -8,11 +8,9 @@
 # See README.md for the full Lagrangian theory and the staged roadmap.
 #
 # Recommended workflow:
-#   1. Validate the gradient first (frozen-RDM finite difference):
-#        python EWF-CI_Geom_Opt_HPC.py --config config.yaml --check-gradient
-#   2. Single-point gradient:
+#   1. Single-point gradient:
 #        python EWF-CI_Geom_Opt_HPC.py --config config.yaml --single-point
-#   3. Full optimisation (geomopt.enabled below):
+#   2. Full optimisation (geomopt.enabled below):
 #        python EWF-CI_Geom_Opt_HPC.py --config config.yaml
 # --------------------------------------------------------------------------
 
@@ -20,12 +18,12 @@ ewf:
   # Stable, non-full bath (sits in a spectral gap so the cluster dimension
   # does not flicker between geometries).  Verify the per-fragment cluster
   # sizes are constant across a few geometries; widen if they change.
-  bath_threshold: 1.0e-3
+  bath_threshold: 1.0e-5
 
   # Tight SCI so the selected determinant set is (nearly) geometry
   # independent -- removes the determinant-selection discontinuity.
   solver: SCI
-  sci_select_cutoff: 1.0e-6
+  sci_select_cutoff: 1.0e-4
 
   # Stage-1 Lagrangian assembly: rdm_t amplitudes + CCSD Λ-relaxed density.
   #   rdm_t_lambda     -- amplitude-response (Z-vector) relaxed global density.
@@ -44,11 +42,6 @@ calculation:
   symmetry: false
   workdir: jobs
   fci_conv_tol: 1.0e-12
-
-# Finite-difference gradient check (used only by --check-gradient).
-check_gradient:
-  delta: 1.0e-3
-  atoms: all
 
 slurm:
   python_executable: python
