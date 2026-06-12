@@ -144,13 +144,14 @@ def load_config(path):
     # *per fragment* from the number of orbitals in that fragment's EWF
     # cluster (``Cluster.norb`` = nocc + nvir active orbitals):
     #
-    #     norb >  norb_threshold  ->  high_accuracy_solver  (default FCI)
-    #     norb <= norb_threshold  ->  approximate_solver    (default SCI)
+    #     norb <  norb_threshold  ->  high_accuracy_solver  (default FCI)
+    #     norb >= norb_threshold  ->  approximate_solver    (default SCI)
     #
-    # i.e. clusters *larger* than the threshold are treated with the
-    # high-accuracy solver and clusters at or below it with the cheaper
-    # approximate solver.  When disabled (default), every fragment uses
-    # the single ``ewf.solver`` exactly as before.
+    # i.e. clusters *smaller* than the threshold are cheap enough for the
+    # high-accuracy solver (FCI cost grows exponentially with the cluster
+    # dimension), while larger clusters fall back to the approximate
+    # solver.  When disabled (default), every fragment uses the single
+    # ``ewf.solver`` exactly as before.
     ms = ewf.setdefault("multi_solver", {})
     ms.setdefault("enabled", False)
     ms.setdefault("norb_threshold", 13)
@@ -419,16 +420,17 @@ def choose_solver_for_cluster(norb, cfg):
     with ``norb`` total active orbitals.
 
     With ``ewf.multi_solver.enabled`` the choice is made per fragment from
-    the cluster size: clusters *larger* than ``norb_threshold`` use the
-    high-accuracy solver, clusters at or below it use the approximate one
-    (see :func:`load_config`).  Otherwise every fragment uses the single
-    ``ewf.solver``.
+    the cluster size: clusters *smaller* than ``norb_threshold`` are cheap
+    enough for the high-accuracy solver (FCI scales exponentially with the
+    cluster dimension), while clusters at or above it fall back to the
+    approximate solver (see :func:`load_config`).  Otherwise every fragment
+    uses the single ``ewf.solver``.
     """
     ewf = cfg["ewf"]
     ms = ewf.get("multi_solver", {})
     if not ms.get("enabled", False):
         return ewf["solver"]
-    if norb > int(ms["norb_threshold"]):
+    if norb < int(ms["norb_threshold"]):
         return ms["high_accuracy_solver"]
     return ms["approximate_solver"]
 
@@ -1696,7 +1698,7 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
     ms = cfg["ewf"].get("multi_solver", {})
     if ms.get("enabled", False):
         solver_desc = (
-            f"multi-solver (norb>{ms['norb_threshold']} -> "
+            f"multi-solver (norb<{ms['norb_threshold']} -> "
             f"{ms['high_accuracy_solver']}, else {ms['approximate_solver']})")
     else:
         solver_desc = cfg["ewf"]["solver"]

@@ -31,10 +31,11 @@ ewf:
 
   # Per-fragment solver selection.  When enabled, the cluster solver is
   # chosen from the number of orbitals in each EWF cluster (nocc + nvir):
-  #     norb >  norb_threshold  ->  high_accuracy_solver  (default FCI)
-  #     norb <= norb_threshold  ->  approximate_solver    (default SCI)
-  # i.e. larger clusters get the high-accuracy solver, smaller ones the
-  # cheaper approximate solver.  SCI clusters still use sci_select_cutoff.
+  #     norb <  norb_threshold  ->  high_accuracy_solver  (default FCI)
+  #     norb >= norb_threshold  ->  approximate_solver    (default SCI)
+  # i.e. small clusters are cheap enough for exact FCI, while large
+  # clusters fall back to the approximate (truncated) solver.  SCI
+  # clusters still use sci_select_cutoff.
   multi_solver:
     enabled: true
     norb_threshold: 13

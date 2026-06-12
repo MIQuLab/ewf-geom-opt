@@ -163,8 +163,8 @@ ewf:
   multi_solver:               # per-fragment solver selection (see below)
     enabled: true
     norb_threshold: 13        # cluster-size cutoff (total active orbitals)
-    high_accuracy_solver: FCI # used when norb >  norb_threshold
-    approximate_solver: SCI   # used when norb <= norb_threshold
+    high_accuracy_solver: FCI # used when norb <  norb_threshold
+    approximate_solver: SCI   # used when norb >= norb_threshold
 
 calculation:
   geometry_file: propylene.txt
@@ -187,11 +187,11 @@ geomopt:
 Different fragments produce EWF clusters of very different sizes, and the optimal cluster solver depends on that size: Selected-CI (SCI) keeps large clusters tractable by truncating the determinant space, whereas full CI (FCI) delivers the exact cluster solution but scales exponentially with the cluster dimension. The `ewf.multi_solver` block lets a single run mix both, choosing the solver **per fragment** from the number of orbitals in that fragment's EWF cluster (`norb` = occupied + virtual active orbitals, the total cluster dimension):
 
 ```
-norb >  norb_threshold   →   high_accuracy_solver   (default FCI)
-norb <= norb_threshold   →   approximate_solver     (default SCI)
+norb <  norb_threshold   →   high_accuracy_solver   (default FCI)
+norb >= norb_threshold   →   approximate_solver     (default SCI)
 ```
 
-With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with more than 13 active orbitals are solved with FCI and clusters with 13 or fewer with SCI. Both solver fields accept `FCI` or `SCI`, and SCI clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
+With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Both solver fields accept `FCI` or `SCI`, and SCI clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
 
 Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the driver then falls back to single-solver mode and applies `ewf.solver` to every fragment, exactly as before. Existing configs without a `multi_solver` block default to this behavior, so they are unaffected.
 
