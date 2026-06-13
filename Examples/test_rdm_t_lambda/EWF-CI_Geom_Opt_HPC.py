@@ -67,8 +67,7 @@ these yourself)::
         --mode solve --frag-idx 0 [--solver FCI|SCI]
 
 (``--mode solve`` names the cluster-solve *stage*; whether FCI or SCI
-runs is decided per fragment.  ``--mode fci`` is accepted as a legacy
-alias for the same stage.)
+runs is decided per fragment.)
 """
 
 import argparse
@@ -183,20 +182,18 @@ def load_config(path):
     #                   symmetrisation are applied before rotation to the global
     #                   MO basis.  Global 1-/2-RDMs via CCSD rdm with l = t.
     #
-    #   "ci_revision" : CI-coefficient route, revised ordering — assembles
-    #                   the GLOBAL C1/C2 first, converts once.  Each
-    #                   fragment's intermediate-normalised CI coefficients
+    #   "ci"          : CI-coefficient route — assembles the GLOBAL C1/C2
+    #                   first, converts once.  Each fragment's
+    #                   intermediate-normalised CI coefficients
     #                   (C1 = c1/c0, C2 = c2/c0) are projected on the first
     #                   occupied index, symmetrised, rotated, and tiled
     #                   into global C1/C2 (a purely LINEAR operation, so
     #                   the single-index fragment projection avoids double
     #                   counting exactly).  Only then is the CISD→CCSD
     #                   conversion performed, once, globally:
-    #                     T1 = C1_glob,  T2 = C2_glob − T1⊗T1.
-    #                   This fixes the per-fragment conversion of the old
-    #                   'ci' route, whose disconnected subtraction
-    #                   Σ_x (P_x·T1)⊗(P_x·T1) missed all cross-fragment
-    #                   (x≠y) products of the exact (Σ_x P_x·T1)⊗(Σ_y P_y·T1).
+    #                     T1 = C1_glob,  T2 = C2_glob − T1⊗T1,
+    #                   so the disconnected T1⊗T1 subtraction uses the
+    #                   global T1 and keeps all cross-fragment products.
     #                   For SCI the CISD extraction still discards
     #                   triples/quadruples, so 'rdm_t' remains more accurate
     #                   for aggressive SCI thresholds.
@@ -223,16 +220,11 @@ def load_config(path):
     #                   (see Projected-lambda_README.md).
     ewf.setdefault("assembly", "rdm_t")
     asm = str(ewf["assembly"]).lower()
-    if asm == "ci":
-        raise ValueError(
-            "ewf.assembly='ci' has been renamed to 'ci_revision' (the route "
-            "now assembles the global C1/C2 first and performs a single "
-            "global CISD->CCSD conversion).  Update your config.")
-    if asm not in ("ci_revision", "democratic", "rdm_t", "rdm_t_lambda",
+    if asm not in ("ci", "democratic", "rdm_t", "rdm_t_lambda",
                    "projected_lambda"):
         raise ValueError(
             f"Unsupported ewf.assembly={ewf['assembly']!r}; expected "
-            f"'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'ci_revision', "
+            f"'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'ci', "
             f"or 'democratic'.")
     ewf["assembly"] = asm
     solver = str(ewf["solver"]).upper()
@@ -260,13 +252,9 @@ def load_config(path):
     sl = cfg.setdefault("slurm", {})
     sl.setdefault("python_executable", sys.executable or "python")
     sl.setdefault("poll_interval", 15)
-    # Per-stage resource blocks.  If only the legacy ``fragment`` block
-    # is present we use it as the default for both stages so existing
-    # configs keep working.
-    legacy = sl.get("fragment", {}) or {}
-    sl.setdefault("dump", dict(legacy))
-    sl.setdefault("fci", dict(legacy))
-    sl.setdefault("fragment", legacy)
+    # Per-stage Slurm resource blocks (one per wave).
+    sl.setdefault("dump", {})
+    sl.setdefault("fci", {})
 
     # ------------------------------------------------------------------
     # geomeTRIC geometry-optimisation block
@@ -557,10 +545,10 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
         status_file_path(workdir, frag_idx, stage, cfg))
     job_name = f"ewf_{tag}"
 
-    # NOTE: the worker mode is called 'solve' ('fci' is a legacy alias for
-    # the same stage) -- it names the SOLVE STAGE, not the solver.  Which
-    # solver (FCI or SCI) runs is decided per fragment below / inside the
-    # worker.
+    # NOTE: the internal stage id ``"fci"`` is historical; the worker mode
+    # it maps to is ``solve`` -- it names the SOLVE STAGE, not the solver.
+    # Which solver (FCI or SCI) runs is decided per fragment below / inside
+    # the worker.
     worker_mode = "solve" if stage == "fci" else stage
     solver_arg = ""
     solver_comment = ""
@@ -905,10 +893,10 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.create_dataset("t2", data=t2x)
         h5.attrs["c0"] = float(c0)
         # Raw CISD coefficients (before T1⊗T1 disconnected part is removed).
-        # Required by the 'ci_revision' assembly route, which projects and
-        # tiles the intermediate-normalised C1/C2 into a global C1/C2 and only
-        # then performs a single global CISD->CCSD conversion.  Also used by
-        # the 'rdm_t' route as a fallback check.
+        # Required by the 'ci' assembly route, which projects and tiles the
+        # intermediate-normalised C1/C2 into a global C1/C2 and only then
+        # performs a single global CISD->CCSD conversion.  Also used by the
+        # 'rdm_t' route as a fallback check.
         h5.create_dataset("c1", data=c1)
         h5.create_dataset("c2", data=c2)
     print(f"[solve frag={frag_idx}] Wrote RDM file {rdm_h5}")
@@ -991,8 +979,8 @@ class _MockCC:
 
 
 def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
-    """CI-coefficient assembly route, revised ordering (``ci_revision``):
-    assemble the GLOBAL C1/C2 first, convert to T-amplitudes once.
+    """CI-coefficient assembly route (``ci``): assemble the GLOBAL C1/C2
+    first, convert to T-amplitudes once.
 
     This mirrors the double-counting avoidance of Vayesta's projected
     amplitude-energy example (``62-external-solver-amplitude-energy.py``):
@@ -1012,13 +1000,14 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
 
     Why the ordering matters
     ------------------------
-    The previous 'ci' route converted per fragment
-    (``t2x = P_x·C2/c0 − (P_x·T1)⊗(P_x·T1)``) and then tiled the T2.
-    The C2 part tiles exactly, but the disconnected part summed to
-    Σ_x (P_x·T1)⊗(P_x·T1), which misses every cross-fragment (x≠y)
-    product of the exact (Σ_x P_x·T1)⊗(Σ_y P_y·T1).  Converting once,
-    globally, uses the full global T1 in the disconnected subtraction,
-    so those cross terms are included.  The quadratic term never meets
+    A per-fragment conversion ordering — converting each fragment
+    (``t2x = P_x·C2/c0 − (P_x·T1)⊗(P_x·T1)``) and then tiling the T2 —
+    would be wrong: the C2 part tiles exactly, but the disconnected part
+    sums to Σ_x (P_x·T1)⊗(P_x·T1), which misses every cross-fragment
+    (x≠y) product of the exact (Σ_x P_x·T1)⊗(Σ_y P_y·T1).  Converting
+    once, globally, uses the full global T1 in the disconnected
+    subtraction, so those cross terms are included.  The quadratic term
+    never meets
     the projector, and the linear tiling stays exact.
 
     For each fragment x:
@@ -1069,7 +1058,7 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
             names.append(str(h5.attrs["name"]))
 
         if abs(c0) < 1.0e-2:
-            print(f"[assembly/ci_revision] WARNING: |c0|={abs(c0):.4e} for "
+            print(f"[assembly/ci] WARNING: |c0|={abs(c0):.4e} for "
                   f"'{names[-1]}' — intermediate normalisation (division by "
                   f"c0) may be unreliable.")
 
@@ -1132,7 +1121,7 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
     """RDM-derived T-amplitude assembly — recommended for SCI.
 
     Root cause of the larger SCI deviation in the CI-coefficient
-    ('ci_revision') route
+    ('ci') route
     -------------------------------------------------------------------
     ``assemble_global_rdms_from_civec`` extracts amplitudes from the FCI/SCI
     CI vector via the chain::
@@ -1163,7 +1152,7 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
       triples/quadruples retained in SCI)
 
     The fragment projection (first occupied index only, same projector as the
-    'ci_revision' route) and c2-level symmetrisation are then applied to these
+    'ci' route) and c2-level symmetrisation are then applied to these
     effective amplitudes before they are rotated to the global MO basis and
     assembled into the global T1 / T2.  Global 1-/2-RDMs are built from the assembled
     (T1_eff, T2_eff) via PySCF's CCSD RDM machinery with l = t.
@@ -1236,8 +1225,7 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
 
         t1x_p = np.dot(px_oo, t1x_eff)                          # (nocc_x, nvir_x)
         t2x_p = np.einsum("xi,ijab->xjab", px_oo, t2x_eff)     # (nocc_x, nocc_x, nvir_x, nvir_x)
-        # Symmetrise: mirrors the c2-level symmetrisation in the
-        # 'ci_revision' route.
+        # Symmetrise: mirrors the c2-level symmetrisation in the 'ci' route.
         t2x_p = 0.5 * (t2x_p + t2x_p.transpose(1, 0, 3, 2))
 
         # --- Rotate to global MO basis and accumulate.
@@ -1273,8 +1261,7 @@ def assemble_global_rdms_projected_lambda(rdm_files, mol, mf, ovlp,
 
     Mirrors ``vayesta.ewf.rdm.make_rdm{1,2}_ccsd_proj_lambda``: the global
     density matrices are built as a sum of **single-cluster** contributions,
-    *not* by forming one global wave function (the 'ci_revision' / 'rdm_t'
-    routes) and
+    *not* by forming one global wave function (the 'ci' / 'rdm_t' routes) and
     *not* by the four-index democratic projection (the 'democratic' route).
 
     For each fragment x::
@@ -1556,10 +1543,10 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_projected_lambda(
                 rdm_files, mol, mf, ovlp, nocc_global))
-    elif assembly == "ci_revision":
-        print(f"[{tag}] Assembly route: CI-coefficient global wave function, "
-              f"revised ordering (global C1/C2 assembled first; single "
-              f"global CISD→CCSD conversion)")
+    elif assembly == "ci":
+        print(f"[{tag}] Assembly route: CI-coefficient global wave function "
+              f"(global C1/C2 assembled first; single global CISD→CCSD "
+              f"conversion)")
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_from_civec(
                 rdm_files, mol, mf, ovlp, nocc_global))
@@ -1572,7 +1559,7 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     else:
         raise ValueError(
             f"Unknown ewf.assembly mode: {assembly!r} (expected 'rdm_t', "
-            "'rdm_t_lambda', 'projected_lambda', 'ci_revision', or "
+            "'rdm_t_lambda', 'projected_lambda', 'ci', or "
             "'democratic')")
 
     method_label = method_label_for_cfg(cfg)
@@ -1856,7 +1843,7 @@ def parse_args(argv=None):
     p.add_argument("--config", default="config.yaml",
                    help="Path to YAML config (default: config.yaml).")
     p.add_argument("--mode",
-                   choices=["driver", "dump", "solve", "fci", "fragment"],
+                   choices=["driver", "dump", "solve"],
                    default="driver",
                    help="`driver` orchestrates the geometry optimisation "
                         "(default; runs single-point if geomopt.enabled is "
@@ -1865,9 +1852,7 @@ def parse_args(argv=None):
                         "workers (invoked by the generated batch scripts). "
                         "NOTE: `solve` names the cluster-solve STAGE, not "
                         "a solver -- whether FCI or SCI runs is decided "
-                        "per fragment (`fci` is a legacy alias for this "
-                        "stage); `fragment` (legacy) runs DUMP + solve "
-                        "back-to-back for a single fragment in one process.")
+                        "per fragment.")
     p.add_argument("--frag-idx", type=int, default=None,
                    help="Fragment index (required for worker modes).")
     p.add_argument("--solver", default=None, choices=["FCI", "SCI"],
@@ -1893,17 +1878,13 @@ def main(argv=None):
     cfg = load_config(args.config)
     script_path = os.path.abspath(__file__)
 
-    if args.mode in ("dump", "solve", "fci", "fragment"):
+    if args.mode in ("dump", "solve"):
         if args.frag_idx is None:
             raise SystemExit(
                 f"--frag-idx is required in {args.mode} mode")
         if args.mode == "dump":
             run_dump_worker(args.frag_idx, cfg)
-        elif args.mode in ("solve", "fci"):  # 'fci' = legacy alias
-            run_fci_worker(args.frag_idx, cfg,
-                           solver_override=args.solver)
-        else:  # legacy combined worker
-            run_dump_worker(args.frag_idx, cfg)
+        else:  # solve
             run_fci_worker(args.frag_idx, cfg,
                            solver_override=args.solver)
         return

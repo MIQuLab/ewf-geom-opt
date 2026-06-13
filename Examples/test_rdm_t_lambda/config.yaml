@@ -48,11 +48,10 @@ ewf:
   #   projected_lambda -- single-cluster RDM sum (Vayesta default 2-RDM);
   #                       energy/accuracy comparison point, not a gradient fix
   #                       (see Projected-lambda_README.md).
-  #   ci_revision      -- CI-coefficient route, revised ordering: global
-  #                       C1/C2 assembled first (linear tiling, exact
-  #                       double-counting avoidance), then one global
-  #                       CISD->CCSD conversion (T2 = C2 - T1xT1 with the
-  #                       global T1).  Replaces the former 'ci' mode.
+  #   ci               -- CI-coefficient route: global C1/C2 assembled
+  #                       first (linear tiling, exact double-counting
+  #                       avoidance), then one global CISD->CCSD conversion
+  #                       (T2 = C2 - T1xT1 with the global T1).
   #   democratic       -- legacy four-index democratic projection.
   assembly: rdm_t_lambda
 
