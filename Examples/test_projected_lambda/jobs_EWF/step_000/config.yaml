@@ -1,0 +1,42 @@
+ewf:
+  bath_threshold: 1.0e-05
+  solver: SCI
+  sci_select_cutoff: 0.0001
+  multi_solver:
+    enabled: true
+    norb_threshold: 13
+    high_accuracy_solver: FCI
+    approximate_solver: SCI
+  assembly: projected_lambda
+calculation:
+  geometry_file: /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/2_test_multi_solver/test_projected_lambda/jobs_EWF/step_000/geometry.txt
+  basis: sto-3g
+  charge: 0
+  spin: 0
+  symmetry: false
+  workdir: /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/2_test_multi_solver/test_projected_lambda/jobs_EWF/step_000
+  fci_conv_tol: 1.0e-12
+slurm:
+  python_executable: python
+  poll_interval: 15
+  dump:
+    partition: xtreme
+    ntasks: 2
+    mem: 10G
+  fci:
+    partition: xtreme
+    ntasks: 8
+    mem: 100G
+geomopt:
+  enabled: true
+  prefix: ewf_geomopt
+  step_subdir_fmt: step_{step:03d}
+  geometric:
+    maxiter: 100
+    coordsys: tric
+    convergence_energy: 0.001
+    convergence_grms: 0.005
+    convergence_gmax: 0.005
+    convergence_drms: 0.012
+    convergence_dmax: 0.018
+    convergence_set: GAU

@@ -1,0 +1,238 @@
+geometric-optimize called with the following command line:
+EWF-CI_Geom_Opt_HPC.py --config config.yaml
+
+                                        [91m())))))))))))))))/[0m                     
+                                    [91m())))))))))))))))))))))))),[0m                
+                                [91m*)))))))))))))))))))))))))))))))))[0m             
+                        [94m#,[0m    [91m()))))))))/[0m                [91m.)))))))))),[0m          
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m.))))))))*[0m        
+                      [94m*%%%%%%,[0m  [91m))[0m              [93m..[0m              [91m,))))))).[0m      
+                        [94m*%%%%%%,[0m         [93m***************/.[0m        [91m.)))))))[0m     
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m/*********************.[0m       [91m)))))))[0m    
+              [94m.%%%%%%#[0m      [94m*%%%%%%,[0m  [93m*******/,[0m     [93m**********,[0m      [91m.))))))[0m   
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**[0m              [93m********[0m      [91m.))))))[0m  
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m,******[0m      [91m/)))))[0m  
+        [94m%%%%%%[0m      [94m.%%%%%%#[0m      [94m*%%%%%%,[0m    [92m,/////.[0m       [93m******[0m      [91m))))))[0m 
+      [94m#%[0m      [94m%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////,[0m      [93m*****/[0m     [91m,)))))[0m 
+    [94m#%%[0m  [94m%%%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+  [94m#%%%%.[0m      [94m%%%%%#[0m      [94m/%%%%%%*[0m      [94m#%%%%%%[0m   [92m/////)[0m     [93m******[0m      [91m))))),[0m
+    [94m#%%%%##%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+      [94m##[0m     [94m%%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////.[0m      [93m*****/[0m     [91m,)))))[0m 
+        [94m#%%%%#[0m      [94m/%%%%%%/[0m      [94m(%%%%%%[0m      [92m/)/)//[0m       [93m******[0m      [91m))))))[0m 
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m*******[0m      [91m))))))[0m  
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**.[0m             [93m/*******[0m      [91m.))))))[0m  
+              [94m*%%%%%%/[0m      [94m(%%%%%%[0m   [93m********/*..,*/*********[0m       [91m*))))))[0m   
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m*********************/[0m        [91m)))))))[0m    
+                        [94m*%%%%%%,[0m         [93m,**************/[0m         [91m,))))))/[0m     
+                      [94m(%%%%%%[0m   [91m()[0m                              [91m))))))))[0m       
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m,)))))))),[0m        
+                        [94m#,[0m    [91m())))))))))[0m                [91m,)))))))))).[0m          
+                                 [91m()))))))))))))))))))))))))))))))/[0m             
+                                    [91m())))))))))))))))))))))))).[0m                
+                                         [91m())))))))))))))),[0m                     
+
+-=# [1;94m geomeTRIC started. Version: 1.1.1 [0m #=-
+Current date and time: 2026-06-12 15:00:22
+#========================================================#
+#| [92m    Arguments passed to driver run_optimizer():     [0m |#
+#========================================================#
+convergence_dmax          0.018 
+convergence_drms          0.012 
+convergence_energy        0.001 
+convergence_gmax          0.005 
+convergence_grms          0.005 
+convergence_set           GAU 
+coordsys                  tric 
+customengine              <__main__.EwfCiEngine object at 0x155554390820> 
+input                     /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/2_test_multi_solver/test_ci_revised/jobs_EWF/ewf_geomopt.xyz 
+logIni                    /home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/geometric/config/log.ini 
+maxiter                   100 
+prefix                    /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/2_test_multi_solver/test_ci_revised/jobs_EWF/ewf_geomopt 
+----------------------------------------------------------
+Custom engine selected.
+Bonds will be generated from interatomic distances less than 1.20 times sum of covalent radii
+27 internal coordinates being used (instead of 27 Cartesians)
+Internal coordinate system (atoms numbered from 1):
+Distance 1-2
+Distance 1-4
+Distance 1-5
+Distance 1-6
+Distance 2-3
+Distance 2-7
+Distance 3-8
+Distance 3-9
+Angle 2-1-4
+Angle 2-1-5
+Angle 2-1-6
+Angle 4-1-5
+Angle 4-1-6
+Angle 5-1-6
+Angle 1-2-7
+Angle 3-2-7
+Angle 2-3-9
+Angle 8-3-9
+Out-of-Plane 2-1-3-7
+Out-of-Plane 3-2-8-9
+Dihedral 4-1-2-3
+Dihedral 4-1-2-7
+Dihedral 5-1-2-3
+Dihedral 5-1-2-7
+Dihedral 6-1-2-3
+Dihedral 6-1-2-7
+Dihedral 1-2-3-8
+Dihedral 1-2-3-9
+Dihedral 7-2-3-8
+Dihedral 7-2-3-9
+Translation-X 1-9
+Translation-Y 1-9
+Translation-Z 1-9
+Rotation-A 1-9
+Rotation-B 1-9
+Rotation-C 1-9
+<class 'geometric.internal.Distance'> : 8
+<class 'geometric.internal.Angle'> : 10
+<class 'geometric.internal.OutOfPlane'> : 2
+<class 'geometric.internal.Dihedral'> : 10
+<class 'geometric.internal.TranslationX'> : 1
+<class 'geometric.internal.TranslationY'> : 1
+<class 'geometric.internal.TranslationZ'> : 1
+<class 'geometric.internal.RotationA'> : 1
+<class 'geometric.internal.RotationB'> : 1
+<class 'geometric.internal.RotationC'> : 1
+> ===== Optimization Info: ====
+> Job type: Energy minimization
+> Maximum number of optimization cycles: 100
+> Initial / maximum trust radius (Angstrom): 0.100 / 0.300
+> Convergence Criteria:
+> Will converge when all 5 criteria are reached:
+>  |Delta-E| < 1.00e-03
+>  RMS-Grad  < 5.00e-03
+>  Max-Grad  < 5.00e-03
+>  RMS-Disp  < 1.20e-02
+>  Max-Disp  < 1.80e-02
+> === End Optimization Info ===
+INITIALIZING EWF================Initial E(mean-field)=    -115.58714202 HaCalculated E(HF)=         -115.58714202 HaDifference dE=              +0.00000000 Ha ( -0.0%)n(AO)=   21  n(MO)=   21  n(linear dep.)=    0Parameters of EWF:Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+    'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+    'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+    'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+    'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+    'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+    'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+    'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+    'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+    'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+    'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+    None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+    'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+    'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+    None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+    'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+    2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+    'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+    ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+    project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+    calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+    nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)Time for EWF setup: 0.1 sIAO Fragmentation-----------------IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)IAO CACHE MISS: iao_cache.h5 not foundIAO: building IAOs from scratch (cache miss).n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= TrueStep    0 : Gradient = 4.474e-02/5.148e-02 (rms/max) Energy = -115.8555233849
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.58307e-01 2.58467e-01 3.99459e-01
+INITIALIZING EWF================Initial E(mean-field)=    -115.65496480 HaCalculated E(HF)=         -115.65496480 HaDifference dE=              +0.00000000 Ha ( -0.0%)n(AO)=   21  n(MO)=   21  n(linear dep.)=    0Parameters of EWF:Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+    'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+    'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+    'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+    'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+    'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+    'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+    'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+    'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+    'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+    'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+    None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+    'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+    'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+    None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+    'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+    2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+    'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+    ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+    project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+    calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+    nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)Time for EWF setup: 0.0 sIAO Fragmentation-----------------IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)IAO CACHE MISS: molecule fingerprint mismatchIAO: building IAOs from scratch (cache miss).n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= TrueStep    1 : Displace = [0m1.008e-01[0m/[0m1.334e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad = [92m3.933e-03[0m/[0m5.252e-03[0m (rms/max) E (change) = -115.8877589857 ([0m-3.224e-02[0m) Quality = [0m0.877[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.58373e-01 3.06585e-01 4.34579e-01
+INITIALIZING EWF================Initial E(mean-field)=    -115.65215777 HaCalculated E(HF)=         -115.65215777 HaDifference dE=              +0.00000000 Ha ( -0.0%)n(AO)=   21  n(MO)=   21  n(linear dep.)=    0Parameters of EWF:Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+    'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+    'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+    'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+    'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+    'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+    'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+    'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+    'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+    'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+    'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+    None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+    'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+    'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+    None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+    'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+    2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+    'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+    ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+    project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+    calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+    nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)Time for EWF setup: 0.0 sIAO Fragmentation-----------------IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)IAO CACHE MISS: molecule fingerprint mismatchIAO: building IAOs from scratch (cache miss).n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= TrueStep    2 : Displace = [0m1.356e-02[0m/[0m3.166e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad = [92m2.125e-03[0m/[92m4.705e-03[0m (rms/max) E (change) = -115.8878630583 ([92m-1.041e-04[0m) Quality = [0m0.329[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.58198e-01 3.03838e-01 5.43147e-01
+INITIALIZING EWF================Initial E(mean-field)=    -115.65229871 HaCalculated E(HF)=         -115.65229871 HaDifference dE=              +0.00000000 Ha ( -0.0%)n(AO)=   21  n(MO)=   21  n(linear dep.)=    0Parameters of EWF:Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+    'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+    'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+    'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+    'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+    'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+    'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+    'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+    'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+    'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+    'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+    None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+    'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+    'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+    None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+    'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+    2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+    'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+    ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+    project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+    calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+    nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)Time for EWF setup: 0.0 sIAO Fragmentation-----------------IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)IAO CACHE MISS: molecule fingerprint mismatchIAO: building IAOs from scratch (cache miss).n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= TrueStep    3 : Displace = [92m8.437e-03[0m/[0m1.895e-02[0m (rms/max) Trust = 1.414e-01 (=) Grad = [92m1.355e-03[0m/[92m2.424e-03[0m (rms/max) E (change) = -115.8878872582 ([92m-2.420e-05[0m) Quality = [0m0.349[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.93802e-01 3.94134e-01 4.98895e-01
+INITIALIZING EWF================Initial E(mean-field)=    -115.65307107 HaCalculated E(HF)=         -115.65307107 HaDifference dE=              +0.00000000 Ha ( -0.0%)n(AO)=   21  n(MO)=   21  n(linear dep.)=    0Parameters of EWF:Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+    'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+    'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+    'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+    'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+    'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+    'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+    'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+    'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+    'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+    'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+    None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+    'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+    'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+    None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+    'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+    2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+    'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+    ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+    project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+    calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+    nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)Time for EWF setup: 0.0 sIAO Fragmentation-----------------IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)IAO CACHE MISS: molecule fingerprint mismatchIAO: building IAOs from scratch (cache miss).n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= TrueStep    4 : Displace = [92m7.876e-03[0m/[92m1.193e-02[0m (rms/max) Trust = 1.414e-01 (=) Grad = [92m8.626e-04[0m/[92m1.969e-03[0m (rms/max) E (change) = -115.8879399225 ([92m-5.266e-05[0m) Quality = [0m1.227[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.93802e-01 3.94134e-01 4.98895e-01
+Converged! =D
+
+    #==========================================================================#
+    #| If this code has benefited your research, please support us by citing: |#
+    #|                                                                        |#
+    #| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+    #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+    #| http://dx.doi.org/10.1063/1.4952956                                    |#
+    #==========================================================================#
+    Time elapsed since start of run_optimizer: 12494.196 seconds

@@ -29,9 +29,9 @@ ENV/
 *.swp
 
 # Scientific / HPC run artifacts
-*.log
-*.out
-*.err
+#*.log
+#*.out
+#*.err
 *.chk
 *.h5
 *.hdf5
