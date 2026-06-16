@@ -61,7 +61,7 @@ ewf:
   #                       avoidance), then one global CISD->CCSD conversion
   #                       (T2 = C2 - T1xT1 with the global T1).
   #   democratic       -- legacy four-index democratic projection.
-  assembly: rdm_t_lambda
+  assembly: ci
 
 calculation:
   geometry_file: propylene.txt

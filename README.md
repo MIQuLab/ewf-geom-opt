@@ -156,7 +156,7 @@ All settings live in [`Source/config.yaml`](Source/config.yaml):
 ```yaml
 ewf:
   bath_threshold: 1.0e-5      # stable, non-full DMET bath
-  solver: SCI                 # FCI, SCI, or SBD cluster solver (single-solver mode)
+  solver: SCI                 # FCI, SCI, or SCI_SBD cluster solver (single-solver mode)
   sci_select_cutoff: 1.0e-4   # tight selection → geometry-independent determinant set
   assembly: rdm_t_lambda      # density-assembly route (see table above)
 
@@ -164,7 +164,7 @@ ewf:
     enabled: true
     norb_threshold: 13        # cluster-size cutoff (total active orbitals)
     high_accuracy_solver: FCI # used when norb <  norb_threshold
-    approximate_solver: SCI   # used when norb >= norb_threshold  (FCI/SCI/SBD)
+    approximate_solver: SCI   # used when norb >= norb_threshold  (FCI/SCI/SCI_SBD)
 
 calculation:
   geometry_file: propylene.txt
@@ -174,7 +174,7 @@ calculation:
 slurm:                        # per-wave Slurm resources (dump / fci)
   ...
 
-sbd:                          # only used when a cluster solver is SBD (see below)
+sbd:                          # only used when a cluster solver is SCI_SBD (see below)
   ...
 
 geomopt:
@@ -194,15 +194,15 @@ norb <  norb_threshold   →   high_accuracy_solver   (default FCI)
 norb >= norb_threshold   →   approximate_solver     (default SCI)
 ```
 
-With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, or `SBD` (see below), and SCI/SBD clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
+With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, or `SCI_SBD` (see below), and SCI/SCI_SBD clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
 
 Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the driver then falls back to single-solver mode and applies `ewf.solver` to every fragment, exactly as before. Existing configs without a `multi_solver` block default to this behavior, so they are unaffected.
 
-### SBD as a cluster solver (`SBD`)
+### `SCI_SBD`: SCI growth with the SBD eigensolver
 
-In addition to FCI and SCI, any solver role (`ewf.solver`, or either `multi_solver` role) may be set to **`SBD`** — the external [Selected-Basis-Diagonalization](SBD-in-PySCF-SCI-Exploration/README.md) eigensolver. SBD keeps PySCF's Selected-CI determinant-growth machinery (`kernel_float_space` → `enlarge_space`) and replaces **only** the per-iteration diagonalization with the SBD MPI binary, via `external_sci.ExternalEigSelectedCI` (bundled in `Source/`). It is intended for large clusters whose `na × nb` selected space is too big for stock Davidson but tractable for SBD's MPI-distributed tensor-product-basis engine — e.g. `approximate_solver: SBD` for the clusters above `norb_threshold`.
+In addition to FCI and SCI, any solver role (`ewf.solver`, or either `multi_solver` role) may be set to **`SCI_SBD`** — PySCF's Selected-CI subspace growth with the external [Selected-Basis-Diagonalization (SBD)](SBD-in-PySCF-SCI-Exploration/README.md) binary as the per-cycle eigensolver. It keeps PySCF's determinant-growth machinery (`kernel_float_space` → `enlarge_space`) and replaces **only** the per-iteration diagonalization with the SBD MPI binary, via `external_sci.ExternalEigSelectedCI` (bundled in `Source/`). It is intended for large clusters whose `na × nb` selected space is too big for stock Davidson but tractable for SBD's MPI-distributed tensor-product-basis engine — e.g. `approximate_solver: SCI_SBD` for the clusters above `norb_threshold`. The name carries the **subspace-growth scheme** (SCI) explicitly, so future workflows that pair the SBD eigensolver with a *different* growth strategy can coexist under their own `*_SBD` names.
 
-SBD is an external binary driven through files, and it submits **one Slurm job per SCI growth cycle** (resources from the `sbd.slurm` block), blocking until each finishes. This nests inside the per-fragment `solve` job, so when SBD is in play the `slurm.fci` resources only need to cover orchestration/waiting while the heavy compute is sized via `sbd.slurm`. Selecting SBD therefore **requires** an `sbd:` block in `config.yaml` (executable paths, `proc_type`, performance options, and the per-cycle `sbd.slurm` resources) plus Slurm and the compiled SBD binary; the driver raises a clear error if `SBD` is selected without it. The SBD-specific options, file-transfer mechanics, and correctness notes (e.g. `ecore` bookkeeping, alpha/beta column orientation) are documented in [`SBD-in-PySCF-SCI-Exploration/README.md`](SBD-in-PySCF-SCI-Exploration/README.md).
+SBD is an external binary driven through files, and it submits **one Slurm job per SCI growth cycle** (resources from the `sbd.slurm` block), blocking until each finishes. This nests inside the per-fragment `solve` job, so when `SCI_SBD` is in play the `slurm.fci` resources only need to cover orchestration/waiting while the heavy compute is sized via `sbd.slurm`. Selecting `SCI_SBD` therefore **requires** an `sbd:` block in `config.yaml` (executable paths, `proc_type`, performance options, and the per-cycle `sbd.slurm` resources) plus Slurm and the compiled SBD binary; the driver raises a clear error if `SCI_SBD` is selected without it. The SBD-specific options, file-transfer mechanics, and correctness notes (e.g. `ecore` bookkeeping, alpha/beta column orientation) are documented in [`SBD-in-PySCF-SCI-Exploration/README.md`](SBD-in-PySCF-SCI-Exploration/README.md).
 
 ### Running
 
@@ -229,10 +229,10 @@ Each optimization step writes its geometry, derived per-step config, and fragmen
 
 ```bash
 python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                        # integrals/cluster dump
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI|SBD] # cluster solve
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI|SCI_SBD] # cluster solve
 ```
 
-`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI, SCI, or SBD runs is decided per fragment. In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
+`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI, SCI, or SCI_SBD runs is decided per fragment. In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
 
 ---
 

@@ -36,11 +36,19 @@ ewf:
   # i.e. small clusters are cheap enough for exact FCI, while large
   # clusters fall back to the approximate (truncated) solver.  SCI
   # clusters still use sci_select_cutoff.
+  #
+  # Each role (high_accuracy_solver / approximate_solver) and the single
+  # ``solver`` above accept FCI, SCI, or SCI_SBD.  SCI_SBD is PySCF's SCI
+  # subspace growth with the external Selected-Basis-Diagonalization (SBD)
+  # binary as the per-cycle eigensolver; it requires the 'sbd:' block below
+  # + Slurm + the compiled SBD binary.  (The name marks the SCI growth
+  # scheme so future SBD workflows that grow the space differently stay
+  # distinct.)  Example for large clusters on GPUs: approximate_solver: SCI_SBD.
   multi_solver:
     enabled: true
     norb_threshold: 13
     high_accuracy_solver: FCI
-    approximate_solver: SCI
+    approximate_solver: SCI_SBD
 
   # Stage-1 Lagrangian assembly: rdm_t amplitudes + CCSD Λ-relaxed density.
   #   rdm_t_lambda     -- amplitude-response (Z-vector) relaxed global density.
@@ -57,7 +65,7 @@ ewf:
 
 calculation:
   geometry_file: propylene.txt
-  basis: sto-3g
+  basis: 6-31G*
   charge: 0
   spin: 0
   symmetry: false
@@ -70,11 +78,52 @@ slurm:
   dump:
     partition: xtreme
     ntasks: 2
-    mem: 10G
+    mem: 100G
   fci:
     partition: xtreme
     ntasks: 8
     mem: 100G
+
+# ---------------------------------------------------------------------------
+# SBD eigensolver configuration (only used when a cluster solver is 'SCI_SBD').
+# ---------------------------------------------------------------------------
+# When a fragment is assigned the SCI_SBD solver, the per-fragment solve worker
+# keeps PySCF's Selected-CI determinant growth but delegates each cycle's
+# diagonalization to the external SBD binary, submitting ONE Slurm job per
+# growth cycle (resources from sbd.slurm below) and blocking until it
+# finishes.  This nests inside the per-fragment 'solve' job, so when SCI_SBD is
+# used the slurm.fci resources above only need to cover orchestration/waiting,
+# while the heavy compute is sized via sbd.slurm.  See
+# SBD-in-PySCF-SCI-Exploration/README.md for full details.
+sbd:
+  sbd_exe_path_cpu: '/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag'
+  sbd_exe_path_gpu: '/home/liz7/isilon/Zhen/sbd-main/apps/chemistry_tpb_selected_basis_diagonalization/diag'
+  proc_type: 1            # 1 = GPU (CPUs as support), 0 = CPU-only
+  cpus_per_batch: 1       # CPU cores per batch (CPU runs); ignored for GPU (16/GPU hardcoded)
+  gpus_per_batch: 1       # GPUs per batch; ignored if proc_type: 0
+  sbd_omp_threads: 1      # ignored in GPU run
+  # SCI needs each diagonalization well converged (PySCF selects the next
+  # determinants from the returned CI vector), so these are tighter than SQD.
+  sbd_block: 20
+  sbd_dav_iteration: 100
+  sbd_tolerance: 1.e-8    # keep this exact "1.e-8" notation
+  sbd_adet_comm_size: 2   # "comm_size" options ignored in GPU run
+  sbd_bdet_comm_size: 2
+  sbd_task_comm_size: 2
+  sbd_init: 0
+  sbd_shuffle: 0
+  sbd_carryover_ratio: 0.5
+  # Slurm resources for each per-cycle SBD diagonalization job.  Make these
+  # consistent with proc_type and SBD's MPI rank count: GPU -> ntasks =
+  # gpus_per_batch*16 and gres gpu:<gpus_per_batch>; CPU -> ntasks = cpus_per_batch.
+  slurm:
+    poll_interval: 15
+    sbatch:
+      partition: 'merzk-a100'
+      nodes: 1
+      ntasks: 16
+      gres: 'gpu:1'
+      mem: 100000
 
 geomopt:
   enabled: true

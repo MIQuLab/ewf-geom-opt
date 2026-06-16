@@ -120,6 +120,19 @@ except ImportError as exc:  # pragma: no cover - import-time check
 from pyscf.lib import param as _lib_param
 BOHR = _lib_param.BOHR  # Angstrom per Bohr
 
+# Cluster solvers selectable via ``ewf.solver`` and the multi-solver
+# roles (``ewf.multi_solver.high_accuracy_solver`` / ``approximate_solver``):
+#   FCI     -- exact diagonalisation (pyscf direct_spin0)
+#   SCI     -- PySCF Selected-CI (pyscf selected_ci_spin0)
+#   SCI_SBD -- PySCF Selected-CI subspace growth with the external SBD
+#              (Selected-Basis-Diagonalization) binary as the per-cycle
+#              eigensolver (external_sci.ExternalEigSelectedCI; needs the
+#              'sbd:' config block + Slurm + the compiled SBD binary).  The
+#              name marks the *subspace-growth* scheme (SCI) so that future
+#              SBD-eigensolver workflows that grow the space differently can
+#              coexist under their own names.
+_VALID_SOLVERS = ("FCI", "SCI", "SCI_SBD")
+
 
 # ---------------------------------------------------------------------------
 # Geometry / config helpers
@@ -164,10 +177,10 @@ def load_config(path):
     ms["norb_threshold"] = int(ms["norb_threshold"])
     for key in ("high_accuracy_solver", "approximate_solver"):
         ms[key] = str(ms[key]).upper()
-        if ms[key] not in ("FCI", "SCI"):
+        if ms[key] not in _VALID_SOLVERS:
             raise ValueError(
                 f"Unsupported ewf.multi_solver.{key}={ms[key]!r}; "
-                f"expected 'FCI' or 'SCI'.")
+                f"expected one of {', '.join(_VALID_SOLVERS)}.")
     # ------------------------------------------------------------------
     # Assembly mode for the global EWF density matrix:
     #
@@ -228,10 +241,25 @@ def load_config(path):
             f"or 'democratic'.")
     ewf["assembly"] = asm
     solver = str(ewf["solver"]).upper()
-    if solver not in ("FCI", "SCI"):
+    if solver not in _VALID_SOLVERS:
         raise ValueError(
-            f"Unsupported ewf.solver={ewf['solver']!r}; expected 'FCI' or 'SCI'.")
+            f"Unsupported ewf.solver={ewf['solver']!r}; expected one of "
+            f"{', '.join(_VALID_SOLVERS)}.")
     ewf["solver"] = solver
+
+    # If any solver role can resolve to SCI_SBD, the 'sbd:' configuration
+    # block (executable paths, proc_type, and per-cycle 'sbd.slurm' resources)
+    # must be present -- SBD is an external MPI binary driven through that block.
+    used_solvers = ({ms["high_accuracy_solver"], ms["approximate_solver"]}
+                    if ms["enabled"] else {solver})
+    if "SCI_SBD" in used_solvers and not cfg.get("sbd"):
+        raise ValueError(
+            "a cluster solver is set to 'SCI_SBD' but config.yaml has no "
+            "'sbd:' block.  Add the SBD executable paths, proc_type, "
+            "performance options, and the per-cycle 'sbd.slurm' resources "
+            "(see the config.yaml template / "
+            "SBD-in-PySCF-SCI-Exploration/README.md).")
+
     calc = cfg.setdefault("calculation", {})
     calc.setdefault("geometry_file", "ch4_dimer.txt")
     calc.setdefault("basis", "sto-3g")
@@ -407,16 +435,80 @@ def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
     return e, np.asarray(dm1), np.asarray(dm2), civec
 
 
+def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
+                          select_cutoff=1.0e-4):
+    """Solve the cluster Hamiltonian with the ``SCI_SBD`` solver: PySCF
+    Selected-CI subspace growth with the external **SBD** binary as the
+    per-cycle eigensolver.
+
+    Uses :class:`external_sci.ExternalEigSelectedCI`, which keeps PySCF's
+    determinant-selection / subspace-growth machinery
+    (``kernel_float_space`` -> ``enlarge_space``) and replaces *only* the
+    per-iteration diagonalization with the SBD binary.  SBD is an external
+    MPI executable driven through files; the solver submits **one Slurm job
+    per SCI growth cycle** (resources from the ``sbd.slurm`` block of the
+    config) and blocks until it finishes.  Per-cycle scratch (integrals,
+    determinant lists, wavefunction, logs) lives under ``sbd_workdir``.
+
+    Returns ``(E, dm1, dm2, civec)`` matching
+    :func:`solve_cluster_sci`: ``dm1``/``dm2`` are spin-summed in chemist's
+    notation and ``civec`` is the selected-CI ``_SCIvector`` (carrying
+    ``._strs``), which the CI-amplitude assembly path densifies via
+    ``selected_ci.to_fci``.
+
+    Parameters
+    ----------
+    cluster : Cluster
+        The cluster Hamiltonian wrapper (effective ``heff`` + ``eris``).
+    sbd_workdir : str
+        Root scratch directory for this fragment's per-cycle SBD files.
+    conv_tol : float
+        PySCF SCI growth-loop energy-convergence tolerance.
+    select_cutoff : float
+        Determinant-selection / CI-coefficient cutoff for PySCF's
+        ``enlarge_space`` (the SBD-specific options live in ``cfg['sbd']``).
+    """
+    # The bundled SBD modules (external_sci.py, sbd_wrapper.py) sit next to
+    # this driver; make sure they are importable, then import lazily so that
+    # FCI/SCI-only runs never need them.
+    _here = os.path.dirname(os.path.abspath(__file__))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    from external_sci import ExternalEigSelectedCI
+
+    sbd_cfg = cfg.get("sbd")
+    if not sbd_cfg:
+        raise ValueError(
+            "cluster solver 'SCI_SBD' was requested but config.yaml has no "
+            "'sbd:' block (SBD executable paths, proc_type, and the per-cycle "
+            "'sbd.slurm' resources).  Add one (see config.yaml template).")
+
+    nelec = (cluster.nocc, cluster.nocc)
+    cisolver = ExternalEigSelectedCI()          # mol=None: effective Hamiltonian
+    cisolver.conv_tol = conv_tol
+    cisolver.select_cutoff = select_cutoff
+    cisolver.ci_coeff_cutoff = select_cutoff
+    cisolver.configure_sbd(config=sbd_cfg, workdir=sbd_workdir)
+    # ecore=0: the EWF cluster energy is the bare eigenvalue of (heff, eris),
+    # exactly as in solve_cluster_fci / solve_cluster_sci (no separate core
+    # energy is added downstream).
+    e, civec = cisolver.kernel(
+        cluster.heff, cluster.eris, cluster.norb, nelec, ecore=0.0)
+    dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
+    return e, np.asarray(dm1), np.asarray(dm2), civec
+
+
 def choose_solver_for_cluster(norb, cfg):
-    """Return the cluster solver name (``'FCI'`` or ``'SCI'``) for a cluster
-    with ``norb`` total active orbitals.
+    """Return the cluster solver name (``'FCI'``, ``'SCI'`` or ``'SCI_SBD'``)
+    for a cluster with ``norb`` total active orbitals.
 
     With ``ewf.multi_solver.enabled`` the choice is made per fragment from
     the cluster size: clusters *smaller* than ``norb_threshold`` are cheap
     enough for the high-accuracy solver (FCI scales exponentially with the
     cluster dimension), while clusters at or above it fall back to the
-    approximate solver (see :func:`load_config`).  Otherwise every fragment
-    uses the single ``ewf.solver``.
+    approximate solver (see :func:`load_config`).  Either role may be set to
+    ``SCI_SBD`` (SCI growth with the external SBD eigensolver).  Otherwise
+    every fragment uses the single ``ewf.solver``.
     """
     ewf = cfg["ewf"]
     ms = ewf.get("multi_solver", {})
@@ -437,15 +529,18 @@ def method_label_for_cfg(cfg):
     return f"EWF-{ewf['solver']}"
 
 
-def solve_cluster(cluster, cfg, solver=None):
-    """Dispatch to FCI or SCI for one cluster.
+def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None):
+    """Dispatch to FCI, SCI or SCI_SBD for one cluster.
 
     ``solver`` selects the cluster solver explicitly; when ``None`` it is
     resolved from the cluster size via :func:`choose_solver_for_cluster`
-    (which honours ``ewf.multi_solver``).
+    (which honours ``ewf.multi_solver``).  ``workdir`` / ``frag_idx`` are
+    only used by the SCI_SBD path, which needs a per-fragment scratch
+    directory for the SBD eigensolver.
 
     Returns ``(E, dm1, dm2, civec)`` -- see
-    :func:`solve_cluster_fci`/:func:`solve_cluster_sci` for details.
+    :func:`solve_cluster_fci`/:func:`solve_cluster_sci`/
+    :func:`solve_cluster_sci_sbd` for details.
     """
     if solver is None:
         solver = choose_solver_for_cluster(cluster.norb, cfg)
@@ -458,7 +553,17 @@ def solve_cluster(cluster, cfg, solver=None):
             conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
             select_cutoff=float(cfg["ewf"]["sci_select_cutoff"]),
         )
-    raise ValueError(f"Unsupported ewf.solver: {solver!r}")
+    elif solver == "SCI_SBD":
+        if workdir is None:
+            workdir = cfg["calculation"]["workdir"]
+        sbd_workdir = os.path.join(
+            workdir, f"sci_sbd_scratch_{(frag_idx if frag_idx is not None else 0):03d}")
+        return solve_cluster_sci_sbd(
+            cluster, cfg, sbd_workdir,
+            conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
+            select_cutoff=float(cfg["ewf"]["sci_select_cutoff"]),
+        )
+    raise ValueError(f"Unsupported cluster solver: {solver!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -818,9 +923,10 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
               f"{cluster.norb} {op} norb_threshold={thr} -> {solver}")
     if solver_override is not None:
         ovr = str(solver_override).upper()
-        if ovr not in ("FCI", "SCI"):
+        if ovr not in _VALID_SOLVERS:
             raise ValueError(
-                f"Invalid --solver {solver_override!r}; expected FCI or SCI.")
+                f"Invalid --solver {solver_override!r}; expected one of "
+                f"{', '.join(_VALID_SOLVERS)}.")
         if ovr != solver:
             raise RuntimeError(
                 f"--solver {ovr} (assigned by the driver at submission "
@@ -831,10 +937,15 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     if solver == "FCI":
         print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
               f"with FCI (conv_tol={fci_conv_tol})")
-    else:
+    elif solver == "SCI":
         print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
               f"with SCI (conv_tol={fci_conv_tol}, select_cutoff={sci_cutoff})")
-    e_cls, dm1x, dm2x, civec = solve_cluster(cluster, cfg, solver=solver)
+    else:  # SCI_SBD
+        print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
+              f"with SCI_SBD (PySCF SCI growth + external SBD eigensolver; "
+              f"select_cutoff={sci_cutoff}; submits per-cycle Slurm jobs)")
+    e_cls, dm1x, dm2x, civec = solve_cluster(
+        cluster, cfg, solver=solver, workdir=workdir, frag_idx=frag_idx)
     print(f"[solve frag={frag_idx}] E_cluster ({solver}) = {e_cls:.10f} Ha")
 
     # ------------------------------------------------------------------
@@ -880,7 +991,8 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.attrs["e_cluster"] = e_cls
         h5.attrs["bath_threshold"] = threshold
         h5.attrs["solver"] = solver
-        if solver == "SCI":
+        # SCI and SCI_SBD both use PySCF's determinant-selection cutoff.
+        if solver in ("SCI", "SCI_SBD"):
             h5.attrs["sci_select_cutoff"] = sci_cutoff
         h5.create_dataset("c_cluster",     data=cluster.c_cluster)
         h5.create_dataset("c_cluster_occ", data=cluster.c_cluster[:, :cluster.nocc])
@@ -1851,16 +1963,16 @@ def parse_args(argv=None):
                         "`dump` / `solve` are the per-fragment Slurm "
                         "workers (invoked by the generated batch scripts). "
                         "NOTE: `solve` names the cluster-solve STAGE, not "
-                        "a solver -- whether FCI or SCI runs is decided "
-                        "per fragment.")
+                        "a solver -- whether FCI, SCI or SCI_SBD runs is "
+                        "decided per fragment.")
     p.add_argument("--frag-idx", type=int, default=None,
                    help="Fragment index (required for worker modes).")
-    p.add_argument("--solver", default=None, choices=["FCI", "SCI"],
+    p.add_argument("--solver", default=None, choices=list(_VALID_SOLVERS),
                    type=lambda s: s.upper(),
-                   help="(solve mode) Explicit solver assignment written "
-                        "into the generated batch script by the driver in "
-                        "multi-solver mode.  Cross-checked against the "
-                        "worker's own size-based choice.")
+                   help="(solve mode) Explicit solver assignment (FCI, SCI, "
+                        "or SCI_SBD) written into the generated batch script "
+                        "by the driver in multi-solver mode.  Cross-checked "
+                        "against the worker's own size-based choice.")
     p.add_argument("--no-slurm", action="store_true",
                    help="(driver mode) Run fragment workers inline "
                         "instead of submitting Slurm jobs -- useful for "

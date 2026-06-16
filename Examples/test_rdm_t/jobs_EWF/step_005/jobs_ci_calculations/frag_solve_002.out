@@ -1,7 +1,0 @@
-No module named 'dyson'
-Dyson required for self-energy calculations
-[solve frag=2] Loaded Cluster(fragment_2, name=C, norb=17, nocc=9)
-[solve frag=2] Multi-solver: cluster norb=17 >= norb_threshold=13 -> SCI
-[solve frag=2] Solving cluster (norb=17) with SCI (conv_tol=1e-12, select_cutoff=0.0001)
-[solve frag=2] E_cluster (SCI) = -99.5619133709 Ha
-[solve frag=2] Wrote RDM file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/2_test_multi_solver/test_rdm_t/jobs_EWF/step_005/rdm_002.h5
