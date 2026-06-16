@@ -146,9 +146,9 @@ def main():
         epilog="""
 Examples
 --------
-  python geom_compare.py propylene_ccsd_t.txt propylene_rdm_t.txt propylene_rdm_t_lambda.txt
-  python geom_compare.py propylene_ccsd_t.txt propylene_ci.txt propylene_democratic.txt propylene_projected_lambda.txt
-  python geom_compare.py propylene_ccsd_t.txt propylene_*.txt
+  python geom_compare.py 6-31g_star_ccsd_t.txt sto-3g_ccsd_t.txt sto-3g_rdm_t.txt sto-3g_rdm_t_lambda.txt
+  python geom_compare.py 6-31g_star_ccsd_t.txt sto-3g_ci.txt sto-3g_democratic.txt sto-3g_projected_lambda.txt
+  python geom_compare.py 6-31g_star_ccsd_t.txt sto-3g_*.txt
         """,
     )
     parser.add_argument(

@@ -95,16 +95,16 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `ewf.assembly` | Construction | Origin |
 |---|---|---|
 | `democratic` | Cluster RDMs, democratically partitioned (4-index split) | mirrors Vayesta `make_rdm{1,2}_demo_rhf` |
-| `ci_revision` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→CCSD conversion → global CCSD RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
+| `ci` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→CCSD conversion → global CCSD RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
 | `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default CCSD 2-RDM route |
 | **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global CCSD RDM | **this project** |
 | **`rdm_t_lambda`** | `rdm_t` amplitudes + proper CCSD **Λ solve** → relaxed global RDMs | **this project** |
 
-### `ci_revision`: the CI-coefficient assembly (baseline, revised ordering)
+### `ci`: the CI-coefficient assembly (baseline, revised ordering)
 
 Vayesta's global-wavefunction route converts each fragment's FCI/SCI CI vector to CISD coefficients (`RFCI_WaveFunction.as_cisd`), applies the occupied-fragment projector at the CISD level, converts to T-amplitudes (`as_ccsd`) **per fragment**, rotates and accumulates them into one global `(T1, T2)`, and feeds a single `ccsd_rdm` call.
 
-The `ci_revision` mode (which replaces the former `ci` mode) keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→CCSD conversion `T2 = C2 − T1⊗T1` is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Vayesta's per-fragment conversion instead subtracts `Σ_x (P_x·T1)⊗(P_x·T1)`, which misses every cross-fragment product of the exact `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)`; converting once with the global T1 includes them.
+The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→CCSD conversion `T2 = C2 − T1⊗T1` is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Vayesta's per-fragment conversion instead subtracts `Σ_x (P_x·T1)⊗(P_x·T1)`, which misses every cross-fragment product of the exact `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)`; converting once with the global T1 includes them.
 
 Two approximations remain baked in:
 
@@ -113,10 +113,10 @@ Two approximations remain baked in:
 
 ### `rdm_t`: amplitudes from the exact RDM cumulant
 
-`rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci_revision` mode uses):
+`rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci` mode uses):
 
 ```
-CI-coefficient (ci_revision):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global CCSD RDM
+CI-coefficient (ci):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global CCSD RDM
 Vayesta democratic:            cluster RDMs → 4-index democratic projection → global RDM
 rdm_t (this project):          cluster RDMs → effective T1,T2 → global CCSD RDM
                                 └── novel front-end ──┘└── Vayesta back-end ──┘
@@ -129,7 +129,7 @@ T1_eff = dm1_corr[occ, vir]
 T2_eff = λ2_cumulant[occ, occ, vir, vir]
 ```
 
-is the new feature introduced in this project; it was not previously available in the Vayesta codebase. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This is the direct improvement over the `ci_revision` route's CISD truncation: where `as_cisd` discards everything above doubles, `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions survives into the global density.
+is the new feature introduced in this project; it was not previously available in the Vayesta codebase. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This is the direct improvement over the `ci` route's CISD truncation: where `as_cisd` discards everything above doubles, `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions survives into the global density.
 
 ### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 
@@ -156,7 +156,7 @@ All settings live in [`Source/config.yaml`](Source/config.yaml):
 ```yaml
 ewf:
   bath_threshold: 1.0e-5      # stable, non-full DMET bath
-  solver: SCI                 # FCI or Selected-CI cluster solver (single-solver mode)
+  solver: SCI                 # FCI, SCI, or SBD cluster solver (single-solver mode)
   sci_select_cutoff: 1.0e-4   # tight selection → geometry-independent determinant set
   assembly: rdm_t_lambda      # density-assembly route (see table above)
 
@@ -164,7 +164,7 @@ ewf:
     enabled: true
     norb_threshold: 13        # cluster-size cutoff (total active orbitals)
     high_accuracy_solver: FCI # used when norb <  norb_threshold
-    approximate_solver: SCI   # used when norb >= norb_threshold
+    approximate_solver: SCI   # used when norb >= norb_threshold  (FCI/SCI/SBD)
 
 calculation:
   geometry_file: propylene.txt
@@ -172,6 +172,9 @@ calculation:
   ...
 
 slurm:                        # per-wave Slurm resources (dump / fci)
+  ...
+
+sbd:                          # only used when a cluster solver is SBD (see below)
   ...
 
 geomopt:
@@ -191,9 +194,15 @@ norb <  norb_threshold   →   high_accuracy_solver   (default FCI)
 norb >= norb_threshold   →   approximate_solver     (default SCI)
 ```
 
-With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Both solver fields accept `FCI` or `SCI`, and SCI clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
+With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, or `SBD` (see below), and SCI/SBD clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
 
 Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the driver then falls back to single-solver mode and applies `ewf.solver` to every fragment, exactly as before. Existing configs without a `multi_solver` block default to this behavior, so they are unaffected.
+
+### SBD as a cluster solver (`SBD`)
+
+In addition to FCI and SCI, any solver role (`ewf.solver`, or either `multi_solver` role) may be set to **`SBD`** — the external [Selected-Basis-Diagonalization](SBD-in-PySCF-SCI-Exploration/README.md) eigensolver. SBD keeps PySCF's Selected-CI determinant-growth machinery (`kernel_float_space` → `enlarge_space`) and replaces **only** the per-iteration diagonalization with the SBD MPI binary, via `external_sci.ExternalEigSelectedCI` (bundled in `Source/`). It is intended for large clusters whose `na × nb` selected space is too big for stock Davidson but tractable for SBD's MPI-distributed tensor-product-basis engine — e.g. `approximate_solver: SBD` for the clusters above `norb_threshold`.
+
+SBD is an external binary driven through files, and it submits **one Slurm job per SCI growth cycle** (resources from the `sbd.slurm` block), blocking until each finishes. This nests inside the per-fragment `solve` job, so when SBD is in play the `slurm.fci` resources only need to cover orchestration/waiting while the heavy compute is sized via `sbd.slurm`. Selecting SBD therefore **requires** an `sbd:` block in `config.yaml` (executable paths, `proc_type`, performance options, and the per-cycle `sbd.slurm` resources) plus Slurm and the compiled SBD binary; the driver raises a clear error if `SBD` is selected without it. The SBD-specific options, file-transfer mechanics, and correctness notes (e.g. `ecore` bookkeeping, alpha/beta column orientation) are documented in [`SBD-in-PySCF-SCI-Exploration/README.md`](SBD-in-PySCF-SCI-Exploration/README.md).
 
 ### Running
 
@@ -219,11 +228,11 @@ Each optimization step writes its geometry, derived per-step config, and fragmen
 ### Worker modes (invoked by the generated batch scripts)
 
 ```bash
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                    # integrals/cluster dump
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI] # cluster solve
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                        # integrals/cluster dump
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI|SBD] # cluster solve
 ```
 
-`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI or SCI runs is decided per fragment (`--mode fci` is accepted as a legacy alias for the same stage). In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
+`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI, SCI, or SBD runs is decided per fragment. In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
 
 ---
 
