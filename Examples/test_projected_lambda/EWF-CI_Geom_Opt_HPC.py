@@ -280,9 +280,18 @@ def load_config(path):
     sl = cfg.setdefault("slurm", {})
     sl.setdefault("python_executable", sys.executable or "python")
     sl.setdefault("poll_interval", 15)
-    # Per-stage Slurm resource blocks (one per wave).
+    # Slurm resource blocks.  The DUMP wave uses ``slurm.dump``; the
+    # cluster-solve wave uses a PER-SOLVER block named after the resolved
+    # solver (``slurm.FCI`` / ``slurm.SCI`` / ``slurm.SCI_SBD``), so each
+    # fragment's solve job requests resources matching the solver that will
+    # actually run in it (e.g. a light FCI/SCI job vs. the heavier SCI_SBD
+    # outer job that orchestrates the nested SBD sub-jobs).  A legacy single
+    # ``slurm.fci`` block, if present, seeds any per-solver block not given
+    # explicitly (backward compatibility).
     sl.setdefault("dump", {})
-    sl.setdefault("fci", {})
+    legacy_solve = sl.pop("fci", None)
+    for _solver in _VALID_SOLVERS:
+        sl.setdefault(_solver, dict(legacy_solve) if legacy_solve else {})
 
     # ------------------------------------------------------------------
     # geomeTRIC geometry-optimisation block
@@ -622,24 +631,54 @@ def _flatten_sbatch_options(d):
             yield f"--{k.replace('_', '-')}={v}"
 
 
+def resolve_solve_solver(frag_idx, cfg, workdir):
+    """Resolve the cluster solver for fragment ``frag_idx``'s solve job.
+
+    Returns ``(solver, norb)``.  In multi-solver mode ``norb`` is read from the
+    fragment's ``cluster_<i>.h5`` (written by the completed DUMP wave) and the
+    solver is chosen by size; ``norb`` is returned for the audit comment.  In
+    single-solver mode the solver is ``ewf.solver`` and ``norb`` is ``None``.
+
+    Used both to select the per-solver Slurm resource block and to write the
+    explicit ``--solver`` hand-off, so the two can never disagree.
+    """
+    ms = cfg["ewf"].get("multi_solver", {})
+    if not ms.get("enabled", False):
+        return cfg["ewf"]["solver"], None
+    cluster_h5, _ = fragment_paths(workdir, frag_idx)
+    if not os.path.exists(cluster_h5):
+        raise RuntimeError(
+            f"Cannot resolve the solver for fragment {frag_idx}: {cluster_h5} "
+            f"not found.  The DUMP wave must finish before the solve wave is "
+            f"submitted.")
+    with h5py.File(cluster_h5, "r") as h5:
+        norb = int(h5[list(h5.keys())[0]].attrs["norb"])
+    return choose_solver_for_cluster(norb, cfg), norb
+
+
+def solve_stage_resources(cfg, solver):
+    """Per-solver Slurm resource block for the cluster-solve wave
+    (``slurm.FCI`` / ``slurm.SCI`` / ``slurm.SCI_SBD``)."""
+    return cfg["slurm"].get(solver, {})
+
+
 def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
                        script_path):
     """Write the per-fragment Slurm batch script for ``stage`` and return
     its path.  ``stage`` is one of ``'dump'`` or ``'fci'``.
 
-    For the solve stage in multi-solver mode the per-fragment solver is
-    resolved HERE, at script-generation time: the driver only writes the
-    wave-2 scripts after the DUMP wave has completed, so the fragment's
-    ``cluster_<i>.h5`` (and hence its ``norb``) is already on disk.  The
-    chosen solver is recorded in the script as a comment and passed to
-    the worker explicitly via ``--solver``, so the assignment is fully
-    auditable from the generated ``frag_solve_<i>.sh`` alone.
+    For the solve stage the per-fragment solver is resolved HERE, at
+    script-generation time (the driver only writes the wave-2 scripts after
+    the DUMP wave has completed, so each fragment's ``cluster_<i>.h5`` -- and
+    hence its ``norb`` -- is already on disk).  The resolved solver selects
+    both the Slurm resource block (``slurm.<SOLVER>``) and the explicit
+    ``--solver`` hand-off written into the script, so the resources requested
+    and the solver run are guaranteed to match and are fully auditable from
+    the generated ``frag_solve_<i>.sh`` alone.
     """
     if stage not in ("dump", "fci"):
         raise ValueError(f"Unknown stage: {stage!r}")
-    sl_stage = cfg["slurm"][stage]
     py = cfg["slurm"]["python_executable"]
-    sbatch_opts = list(_flatten_sbatch_options(sl_stage))
 
     stage_dir = stage_workdir(workdir, stage)
     label = _stage_label(stage, cfg)
@@ -652,27 +691,30 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
 
     # NOTE: the internal stage id ``"fci"`` is historical; the worker mode
     # it maps to is ``solve`` -- it names the SOLVE STAGE, not the solver.
-    # Which solver (FCI or SCI) runs is decided per fragment below / inside
-    # the worker.
+    # Which solver (FCI / SCI / SCI_SBD) runs is decided per fragment below.
     worker_mode = "solve" if stage == "fci" else stage
     solver_arg = ""
     solver_comment = ""
-    if stage == "fci":
+    if stage == "dump":
+        # DUMP wave: single resource block, no per-fragment solver.
+        sl_stage = cfg["slurm"]["dump"]
+    else:
+        # Solve wave: resolve THIS fragment's solver and request the matching
+        # per-solver resource block.  In multi-solver mode also emit the audit
+        # comment + the explicit ``--solver`` hand-off.
+        solver, norb = resolve_solve_solver(frag_idx, cfg, workdir)
+        sl_stage = solve_stage_resources(cfg, solver)
         ms = cfg["ewf"].get("multi_solver", {})
         if ms.get("enabled", False):
-            cluster_h5, _ = fragment_paths(workdir, frag_idx)
-            if os.path.exists(cluster_h5):
-                with h5py.File(cluster_h5, "r") as h5:
-                    grp = h5[list(h5.keys())[0]]
-                    norb = int(grp.attrs["norb"])
-                solver = choose_solver_for_cluster(norb, cfg)
-                thr = int(ms["norb_threshold"])
-                op = "<" if norb < thr else ">="
-                solver_comment = (
-                    f"# multi-solver assignment for fragment {frag_idx}: "
-                    f"cluster norb={norb} {op} norb_threshold={thr} "
-                    f"-> {solver}\n")
-                solver_arg = f" --solver {solver}"
+            thr = int(ms["norb_threshold"])
+            op = "<" if norb < thr else ">="
+            solver_comment = (
+                f"# multi-solver assignment for fragment {frag_idx}: "
+                f"cluster norb={norb} {op} norb_threshold={thr} "
+                f"-> {solver} (slurm.{solver} resources)\n")
+            solver_arg = f" --solver {solver}"
+
+    sbatch_opts = list(_flatten_sbatch_options(sl_stage))
 
     sbatch_header = "\n".join(
         ["#!/bin/bash",

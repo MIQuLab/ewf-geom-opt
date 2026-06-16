@@ -75,13 +75,27 @@ calculation:
 slurm:
   python_executable: python
   poll_interval: 15
+  # DUMP wave (integral/cluster dump): one block, not solver-specific.
   dump:
-    partition: xtreme
+    partition: defq
     ntasks: 2
     mem: 100G
-  fci:
-    partition: xtreme
-    ntasks: 8
+  # Cluster-solve wave: PER-SOLVER resource blocks.  Each fragment's solve job
+  # uses the block named after the solver that will actually run in it (FCI /
+  # SCI / SCI_SBD).  FCI and SCI are light; the SCI_SBD block is the *outer*
+  # orchestrator job that submits and waits on the nested SBD sub-jobs (sized
+  # separately under sbd.slurm below) and needs enough RAM to drive them.
+  FCI:
+    partition: defq
+    ntasks: 2
+    mem: 10G
+  SCI:
+    partition: defq
+    ntasks: 2
+    mem: 10G
+  SCI_SBD:
+    partition: defq
+    ntasks: 2
     mem: 100G
 
 # ---------------------------------------------------------------------------
@@ -91,9 +105,10 @@ slurm:
 # keeps PySCF's Selected-CI determinant growth but delegates each cycle's
 # diagonalization to the external SBD binary, submitting ONE Slurm job per
 # growth cycle (resources from sbd.slurm below) and blocking until it
-# finishes.  This nests inside the per-fragment 'solve' job, so when SCI_SBD is
-# used the slurm.fci resources above only need to cover orchestration/waiting,
-# while the heavy compute is sized via sbd.slurm.  See
+# finishes.  This nests inside the per-fragment 'solve' job, whose own
+# resources come from the slurm.SCI_SBD block above -- that outer job only
+# orchestrates/waits (hence few tasks) but needs enough RAM to drive the
+# sub-jobs; the heavy compute is sized separately via sbd.slurm below.  See
 # SBD-in-PySCF-SCI-Exploration/README.md for full details.
 sbd:
   sbd_exe_path_cpu: '/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag'
