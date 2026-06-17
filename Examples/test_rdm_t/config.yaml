@@ -20,13 +20,12 @@ ewf:
   # sizes are constant across a few geometries; widen if they change.
   bath_threshold: 1.0e-5
 
-  # Tight SCI so the selected determinant set is (nearly) geometry
-  # independent -- removes the determinant-selection discontinuity.
-  #
   # ``solver`` is used for every fragment ONLY when multi_solver.enabled is
   # false below.  In multi-solver mode it is ignored in favour of the
   # per-fragment, size-based selection.
   solver: SCI
+  
+  # This SCI cutoff is used for any fragments where SCI or SCI-SBD solver is assigned
   sci_select_cutoff: 1.0e-4
 
   # Per-fragment solver selection.  When enabled, the cluster solver is
@@ -77,7 +76,7 @@ slurm:
   poll_interval: 15
   # DUMP wave (integral/cluster dump): one block, not solver-specific.
   dump:
-    partition: defq
+    partition: xtreme
     ntasks: 2
     mem: 100G
   # Cluster-solve wave: PER-SOLVER resource blocks.  Each fragment's solve job
@@ -86,15 +85,15 @@ slurm:
   # orchestrator job that submits and waits on the nested SBD sub-jobs (sized
   # separately under sbd.slurm below) and needs enough RAM to drive them.
   FCI:
-    partition: defq
+    partition: xtreme
     ntasks: 2
     mem: 10G
   SCI:
-    partition: defq
+    partition: xtreme
     ntasks: 2
     mem: 10G
   SCI_SBD:
-    partition: defq
+    partition: xtreme
     ntasks: 2
     mem: 100G
 
@@ -113,10 +112,14 @@ slurm:
 sbd:
   sbd_exe_path_cpu: '/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag'
   sbd_exe_path_gpu: '/home/liz7/isilon/Zhen/sbd-main/apps/chemistry_tpb_selected_basis_diagonalization/diag'
+  # proc_type + gpus_per_batch / cpus_per_batch are the SINGLE source of truth
+  # for SBD's parallel layout: they set BOTH the SBD `mpirun -np` and the Slurm
+  # allocation (--ntasks / --gres / --cpus-per-task) for the sub-job below, so
+  # the two can never disagree.  Do NOT also set ntasks/gres under sbatch.
   proc_type: 1            # 1 = GPU (CPUs as support), 0 = CPU-only
-  cpus_per_batch: 1       # CPU cores per batch (CPU runs); ignored for GPU (16/GPU hardcoded)
-  gpus_per_batch: 1       # GPUs per batch; ignored if proc_type: 0
-  sbd_omp_threads: 1      # ignored in GPU run
+  gpus_per_batch: 4       # GPU runs: -np = gpus_per_batch*16, --gres=gpu:<n>, --ntasks=<n*16>
+  cpus_per_batch: 1       # CPU runs: -np = cpus_per_batch, --ntasks=cpus_per_batch (ignored for GPU)
+  sbd_omp_threads: 1      # CPU runs: OMP threads/rank -> --cpus-per-task (ignored for GPU)
   # SCI needs each diagonalization well converged (PySCF selects the next
   # determinants from the returned CI vector), so these are tighter than SQD.
   sbd_block: 20
@@ -128,17 +131,17 @@ sbd:
   sbd_init: 0
   sbd_shuffle: 0
   sbd_carryover_ratio: 0.5
-  # Slurm resources for each per-cycle SBD diagonalization job.  Make these
-  # consistent with proc_type and SBD's MPI rank count: GPU -> ntasks =
-  # gpus_per_batch*16 and gres gpu:<gpus_per_batch>; CPU -> ntasks = cpus_per_batch.
+  # Slurm resources for each per-cycle SBD diagonalization job.  NOTE:
+  # --ntasks, --gres and --cpus-per-task are DERIVED from proc_type +
+  # gpus_per_batch / cpus_per_batch above (single source of truth) and are
+  # injected automatically; do not set them here (they would be overridden).
+  # Set only the placement/limits not tied to the rank count.
   slurm:
     poll_interval: 15
     sbatch:
       partition: 'merzk-a100'
       nodes: 1
-      ntasks: 16
-      gres: 'gpu:1'
-      mem: 100000
+      mem: 500G
 
 geomopt:
   enabled: true

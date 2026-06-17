@@ -59,6 +59,7 @@ Real SBD run on HPC::
 import os
 import shlex
 import subprocess
+import sys
 import time
 import numpy
 from pyscf import ao2mo, tools
@@ -120,8 +121,54 @@ def load_sbd_config(config_path):
         return yaml.safe_load(f)
 
 
+# GPU runs launch this many MPI ranks (= CPU cores) per requested GPU.
+_CPU_CORES_PER_GPU = 16
+
+
+def sbd_parallel_layout(cfg):
+    '''Single source of truth for SBD's parallel layout.
+
+    The SBD ``mpirun -np`` rank count AND the Slurm allocation
+    (``--ntasks`` / ``--gres`` / ``--cpus-per-task``) are derived together
+    from here, from ONE knob per mode -- ``gpus_per_batch`` (GPU) or
+    ``cpus_per_batch`` (CPU) -- so the command SBD launches and the resources
+    Slurm grants can never disagree.  This removes the previous footgun where
+    ``mpirun -np`` was computed from ``gpus_per_batch``/``cpus_per_batch`` but
+    ``--ntasks`` / ``--gres`` were set independently in ``slurm.sbatch``.
+
+    Returns a dict::
+
+        nranks        -- mpirun -np         (number of MPI ranks)
+        omp           -- OMP_NUM_THREADS    (threads per rank)
+        ntasks        -- Slurm --ntasks         (== nranks)
+        cpus_per_task -- Slurm --cpus-per-task  (== omp)
+        gres          -- Slurm --gres string, or None (CPU runs)
+    '''
+    proc_type = cfg['proc_type']
+    if proc_type == 1:        # GPU: nranks = gpus * cores-per-gpu, 1 thread each
+        ngpu = int(cfg['gpus_per_batch'])
+        if ngpu < 1:
+            raise ValueError("gpus_per_batch must be >= 1 for proc_type=1 (GPU)")
+        nranks = ngpu * _CPU_CORES_PER_GPU
+        return dict(nranks=nranks, omp=1, ntasks=nranks,
+                    cpus_per_task=1, gres="gpu:%d" % ngpu)
+    if proc_type == 0:        # CPU: nranks = cpus_per_batch, omp = sbd_omp_threads
+        ncpu = int(cfg['cpus_per_batch'])
+        if ncpu < 1:
+            raise ValueError("cpus_per_batch must be >= 1 for proc_type=0 (CPU)")
+        omp = int(cfg.get('sbd_omp_threads', 1) or 1)
+        return dict(nranks=ncpu, omp=omp, ntasks=ncpu,
+                    cpus_per_task=omp, gres=None)
+    raise ValueError("proc_type must be 0 (CPU) or 1 (GPU); got %r" % proc_type)
+
+
 def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
     '''Assemble the SBD ``mpirun`` command, mirroring ``solver.py``.
+
+    The ``-np`` rank count and ``OMP_NUM_THREADS`` come from
+    :func:`sbd_parallel_layout` -- the SAME source the Slurm ``--ntasks`` /
+    ``--gres`` / ``--cpus-per-task`` are derived from -- so the launched
+    command and the requested allocation are guaranteed consistent.
 
     Two differences vs. ``solver.py`` are deliberate and important for SCI:
 
@@ -132,39 +179,26 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
       and must not grow it on its own -- PySCF's ``enlarge_space`` owns subspace
       growth.  ``--dump_matrix_form_wf`` makes SBD write the full CI vector.
     '''
+    layout = sbd_parallel_layout(cfg)
     proc_type = cfg['proc_type']
-    if proc_type == 0:  # CPU-only
-        exe = cfg['sbd_exe_path_cpu']
-        cpus = cfg['cpus_per_batch']
-        omp = cfg['sbd_omp_threads']
-        base = (
-            f"mpirun -np {cpus} -x OMP_NUM_THREADS={omp} {exe} "
-            f"--fcidump {fcidump_path} --adetfile {adet_path} "
-            f"--bdetfile {bdet_path} --method 0 "
-            f"--block {cfg['sbd_block']} --iteration {cfg['sbd_dav_iteration']} "
-            f"--tolerance {cfg['sbd_tolerance']} "
+    exe = cfg['sbd_exe_path_gpu'] if proc_type == 1 else cfg['sbd_exe_path_cpu']
+    base = (
+        f"mpirun -np {layout['nranks']} -x OMP_NUM_THREADS={layout['omp']} {exe} "
+        f"--fcidump {fcidump_path} --adetfile {adet_path} "
+        f"--bdetfile {bdet_path} --method 0 "
+        f"--block {cfg['sbd_block']} --iteration {cfg['sbd_dav_iteration']} "
+        f"--tolerance {cfg['sbd_tolerance']} "
+    )
+    if proc_type == 0:  # the comm_size options are ignored in GPU runs
+        base += (
             f"--adet_comm_size {cfg['sbd_adet_comm_size']} "
             f"--bdet_comm_size {cfg['sbd_bdet_comm_size']} "
             f"--task_comm_size {cfg['sbd_task_comm_size']} "
-            f"--init {cfg['sbd_init']} --shuffle {cfg['sbd_shuffle']} "
-            f"--carryover_ratio {cfg['sbd_carryover_ratio']}"
         )
-    elif proc_type == 1:  # GPU
-        exe = cfg['sbd_exe_path_gpu']
-        cpus = cfg['gpus_per_batch'] * 16  # hardcoded CPU cores per GPU
-        base = (
-            f"mpirun -np {cpus} -x OMP_NUM_THREADS=1 {exe} "
-            f"--fcidump {fcidump_path} --adetfile {adet_path} "
-            f"--bdetfile {bdet_path} --method 0 "
-            f"--block {cfg['sbd_block']} --iteration {cfg['sbd_dav_iteration']} "
-            f"--tolerance {cfg['sbd_tolerance']} "
-            f"--init {cfg['sbd_init']} --shuffle {cfg['sbd_shuffle']} "
-            f"--carryover_ratio {cfg['sbd_carryover_ratio']}"
-        )
-    else:
-        raise ValueError("proc_type must be 0 (CPU) or 1 (GPU); got %r"
-                         % proc_type)
-
+    base += (
+        f"--init {cfg['sbd_init']} --shuffle {cfg['sbd_shuffle']} "
+        f"--carryover_ratio {cfg['sbd_carryover_ratio']}"
+    )
     return base + " --rdm 0 --dump_matrix_form_wf matrixformwf.txt"
 
 
@@ -190,14 +224,44 @@ def _flatten_sbatch_options(d):
 def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg):
     '''Write the per-cycle SBD Slurm batch script and return its path.
 
-    Everything under ``cfg['slurm']['sbatch']`` is emitted verbatim as
-    ``#SBATCH --key=value`` directives, so any sbatch flag (partition, nodes,
-    ntasks, gres, mem, time, account, ...) can be set from config.yaml.  The
-    SBD command's own stdout/stderr go to ``log_path`` (so the existing parsers
-    still work); the Slurm-level stdout/stderr go to ``slurm.out``/``slurm.err``.
+    Resource consistency
+    --------------------
+    ``--ntasks``, ``--gres`` and ``--cpus-per-task`` are NOT taken from
+    ``slurm.sbatch``; they are DERIVED from :func:`sbd_parallel_layout`
+    (``proc_type`` + ``gpus_per_batch`` / ``cpus_per_batch``) so the Slurm
+    allocation always matches the SBD ``mpirun -np``.  Any of those three keys
+    found in ``slurm.sbatch`` is dropped (with a warning if it conflicts with
+    the derived value) -- they are single-sourced, not duplicated.
+
+    Everything else under ``cfg['slurm']['sbatch']`` (partition, nodes, mem,
+    time, account/``extra``, ...) is emitted verbatim as ``#SBATCH --key=value``.
+    The SBD command's own stdout/stderr go to ``log_path`` (so the existing
+    parsers still work); the Slurm-level stdout/stderr go to
+    ``slurm.out``/``slurm.err``.
     '''
     slurm = cfg.get('slurm', {}) or {}
-    sbatch_opts = list(_flatten_sbatch_options(slurm.get('sbatch', {})))
+    sbatch = dict(slurm.get('sbatch', {}) or {})
+
+    # Strip the layout-controlled keys from the user block (warn on conflict),
+    # then inject the authoritative derived values -- one source of truth.
+    layout = sbd_parallel_layout(cfg)
+    derived = {'ntasks': layout['ntasks'], 'gres': layout['gres'],
+               'cpus_per_task': layout['cpus_per_task']}
+    for key, dval in derived.items():
+        for variant in {key, key.replace('_', '-')}:
+            if variant in sbatch:
+                uval = sbatch.pop(variant)
+                if dval is not None and str(uval) != str(dval):
+                    print(f"[warn] sbd.slurm.sbatch.{variant}={uval!r} overridden "
+                          f"-> {dval} (derived from proc_type + "
+                          f"gpus_per_batch/cpus_per_batch).", file=sys.stderr)
+    sbatch['ntasks'] = layout['ntasks']
+    if layout['gres'] is not None:
+        sbatch['gres'] = layout['gres']
+    if layout['cpus_per_task'] > 1:
+        sbatch['cpus_per_task'] = layout['cpus_per_task']
+
+    sbatch_opts = list(_flatten_sbatch_options(sbatch))
     job_name = 'sbd_' + os.path.basename(workdir)
     slurm_out = os.path.join(workdir, 'slurm.out')
     slurm_err = os.path.join(workdir, 'slurm.err')
