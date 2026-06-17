@@ -64,7 +64,7 @@ ewf:
 
 calculation:
   geometry_file: propylene.txt
-  basis: 6-31G*
+  basis: sto-3g
   charge: 0
   spin: 0
   symmetry: false
