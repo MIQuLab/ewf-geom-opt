@@ -121,44 +121,51 @@ def load_sbd_config(config_path):
         return yaml.safe_load(f)
 
 
-# GPU runs launch this many MPI ranks (= CPU cores) per requested GPU.
-_CPU_CORES_PER_GPU = 16
-
-
 def sbd_parallel_layout(cfg):
     '''Single source of truth for SBD's parallel layout.
 
     The SBD ``mpirun -np`` rank count AND the Slurm allocation
     (``--ntasks`` / ``--gres`` / ``--cpus-per-task``) are derived together
-    from here, from ONE knob per mode -- ``gpus_per_batch`` (GPU) or
-    ``cpus_per_batch`` (CPU) -- so the command SBD launches and the resources
-    Slurm grants can never disagree.  This removes the previous footgun where
-    ``mpirun -np`` was computed from ``gpus_per_batch``/``cpus_per_batch`` but
-    ``--ntasks`` / ``--gres`` were set independently in ``slurm.sbatch``.
+    from here, so the command SBD launches and the resources Slurm grants can
+    never disagree (the previous footgun was ``mpirun -np`` and
+    ``--ntasks``/``--gres`` being set independently).
+
+    Knobs:
+
+    * ``cpus_per_batch`` -- number of MPI ranks (= CPU cores), for BOTH CPU and
+      GPU runs.  This is fully user-controlled; nothing is hardcoded (the old
+      ``gpus_per_batch * 16`` rule is gone).
+    * ``gpus_per_batch`` -- GPU runs only: how many GPUs to request
+      (``--gres=gpu:<n>``).
+    * ``sbd_omp_threads`` -- OMP threads per rank (both modes).
 
     Returns a dict::
 
-        nranks        -- mpirun -np         (number of MPI ranks)
+        nranks        -- mpirun -np         (== cpus_per_batch)
         omp           -- OMP_NUM_THREADS    (threads per rank)
         ntasks        -- Slurm --ntasks         (== nranks)
         cpus_per_task -- Slurm --cpus-per-task  (== omp)
         gres          -- Slurm --gres string, or None (CPU runs)
     '''
     proc_type = cfg['proc_type']
-    if proc_type == 1:        # GPU: nranks = gpus * cores-per-gpu, 1 thread each
+    if proc_type not in (0, 1):
+        raise ValueError("proc_type must be 0 (CPU) or 1 (GPU); got %r"
+                         % proc_type)
+    # MPI rank count -- user-controlled for both modes (no hardcoded cores/GPU).
+    ncpu = int(cfg['cpus_per_batch'])
+    if ncpu < 1:
+        raise ValueError("cpus_per_batch must be >= 1 (it is the MPI rank count "
+                         "for both CPU and GPU runs)")
+    # OMP_NUM_THREADS per rank, honoured for BOTH modes (default 1).
+    omp = int(cfg.get('sbd_omp_threads', 1) or 1)
+    gres = None
+    if proc_type == 1:        # GPU: request gpus_per_batch GPUs
         ngpu = int(cfg['gpus_per_batch'])
         if ngpu < 1:
             raise ValueError("gpus_per_batch must be >= 1 for proc_type=1 (GPU)")
-        nranks = ngpu * _CPU_CORES_PER_GPU
-        return dict(nranks=nranks, omp=1, ntasks=nranks,
-                    cpus_per_task=1, gres="gpu:%d" % ngpu)
-    if proc_type == 0:        # CPU: nranks = cpus_per_batch, omp = sbd_omp_threads
-        ncpu = int(cfg['cpus_per_batch'])
-        if ncpu < 1:
-            raise ValueError("cpus_per_batch must be >= 1 for proc_type=0 (CPU)")
-        omp = int(cfg.get('sbd_omp_threads', 1) or 1)
-        return dict(nranks=ncpu, omp=omp, ntasks=ncpu,
-                    cpus_per_task=omp, gres=None)
+        gres = "gpu:%d" % ngpu
+    return dict(nranks=ncpu, omp=omp, ntasks=ncpu,
+                cpus_per_task=omp, gres=gres)
     raise ValueError("proc_type must be 0 (CPU) or 1 (GPU); got %r" % proc_type)
 
 

@@ -111,15 +111,16 @@ slurm:
 # SBD-in-PySCF-SCI-Exploration/README.md for full details.
 sbd:
   sbd_exe_path_cpu: '/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag'
-  sbd_exe_path_gpu: '/home/liz7/isilon/Zhen/sbd-main/apps/chemistry_tpb_selected_basis_diagonalization/diag'
-  # proc_type + gpus_per_batch / cpus_per_batch are the SINGLE source of truth
-  # for SBD's parallel layout: they set BOTH the SBD `mpirun -np` and the Slurm
-  # allocation (--ntasks / --gres / --cpus-per-task) for the sub-job below, so
-  # the two can never disagree.  Do NOT also set ntasks/gres under sbatch.
+  sbd_exe_path_gpu: '/home/liz7/isilon/Zhen/sbd-main/apps/test/diag'
+  # proc_type + cpus_per_batch (+ gpus_per_batch for GPU) are the SINGLE source
+  # of truth for SBD's parallel layout: they set BOTH the SBD `mpirun -np` and
+  # the Slurm allocation (--ntasks / --gres / --cpus-per-task) for the sub-job
+  # below, so the two can never disagree.  Do NOT also set ntasks/gres/
+  # cpus-per-task under sbatch (they are injected automatically).
   proc_type: 1            # 1 = GPU (CPUs as support), 0 = CPU-only
-  gpus_per_batch: 4       # GPU runs: -np = gpus_per_batch*16, --gres=gpu:<n>, --ntasks=<n*16>
-  cpus_per_batch: 1       # CPU runs: -np = cpus_per_batch, --ntasks=cpus_per_batch (ignored for GPU)
-  sbd_omp_threads: 1      # CPU runs: OMP threads/rank -> --cpus-per-task (ignored for GPU)
+  cpus_per_batch: 8       # MPI ranks = CPU cores (GPU & CPU): sets -np and --ntasks
+  gpus_per_batch: 4       # GPU runs only: number of GPUs -> --gres=gpu:<n>
+  sbd_omp_threads: 4      # OMP threads/rank (GPU & CPU): -x OMP_NUM_THREADS + --cpus-per-task
   # SCI needs each diagonalization well converged (PySCF selects the next
   # determinants from the returned CI vector), so these are tighter than SQD.
   sbd_block: 20
