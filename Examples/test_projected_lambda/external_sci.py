@@ -132,41 +132,73 @@ def sbd_parallel_layout(cfg):
 
     Knobs:
 
-    * ``cpus_per_batch`` -- number of MPI ranks (= CPU cores), for BOTH CPU and
-      GPU runs.  This is fully user-controlled; nothing is hardcoded (the old
-      ``gpus_per_batch * 16`` rule is gone).
-    * ``gpus_per_batch`` -- GPU runs only: how many GPUs to request
+    * ``gpus_per_batch`` -- GPU runs: how many GPUs to request
       (``--gres=gpu:<n>``).
+    * ``cpus_per_gpu`` -- GPU runs: support MPI ranks PER GPU (default 8).
+      SBD's GPU build runs CPU MPI ranks that feed each GPU, so the rank count
+      MUST stay tied to the GPU count -- ``nranks = gpus_per_batch *
+      cpus_per_gpu`` -- otherwise the GPUs are not engaged (too few support
+      ranks) and the binary falls back to the CPU cores of the GPU node.
+      Tunable (the old hardcoded 16 is now this knob); >= 8 recommended.
+    * ``cpus_per_batch`` -- CPU runs only: the MPI rank count (ignored for GPU).
     * ``sbd_omp_threads`` -- OMP threads per rank (both modes).
 
     Returns a dict::
 
-        nranks        -- mpirun -np         (== cpus_per_batch)
+        nranks        -- mpirun -np
+                         (GPU: gpus_per_batch * cpus_per_gpu; CPU: cpus_per_batch)
         omp           -- OMP_NUM_THREADS    (threads per rank)
-        ntasks        -- Slurm --ntasks         (== nranks)
-        cpus_per_task -- Slurm --cpus-per-task  (== omp)
-        gres          -- Slurm --gres string, or None (CPU runs)
+        ntasks        -- Slurm --ntasks          (== nranks)
+        cpus_per_task -- Slurm --cpus-per-task   (== omp)
+        gpus_per_node -- Slurm --gpus-per-node  GPU count, or None (CPU runs)
     '''
     proc_type = cfg['proc_type']
     if proc_type not in (0, 1):
         raise ValueError("proc_type must be 0 (CPU) or 1 (GPU); got %r"
                          % proc_type)
-    # MPI rank count -- user-controlled for both modes (no hardcoded cores/GPU).
-    ncpu = int(cfg['cpus_per_batch'])
-    if ncpu < 1:
-        raise ValueError("cpus_per_batch must be >= 1 (it is the MPI rank count "
-                         "for both CPU and GPU runs)")
     # OMP_NUM_THREADS per rank, honoured for BOTH modes (default 1).
     omp = int(cfg.get('sbd_omp_threads', 1) or 1)
-    gres = None
-    if proc_type == 1:        # GPU: request gpus_per_batch GPUs
+    if proc_type == 1:        # GPU: nranks = gpus * support-ranks-per-gpu
         ngpu = int(cfg['gpus_per_batch'])
         if ngpu < 1:
             raise ValueError("gpus_per_batch must be >= 1 for proc_type=1 (GPU)")
-        gres = "gpu:%d" % ngpu
+        cpus_per_gpu = int(cfg.get('cpus_per_gpu', 8))
+        if cpus_per_gpu < 1:
+            raise ValueError("cpus_per_gpu must be >= 1 (SBD GPU mode needs "
+                             "support ranks per GPU; >= 8 recommended)")
+        nranks = ngpu * cpus_per_gpu
+        # GPU SBD runs on ONE node (its gpus_per_batch GPUs).  Pin all ranks to
+        # a single node via --ntasks-per-node (= nranks) so the job never spans
+        # nodes -- the robust way to force single-node placement WITHOUT relying
+        # on --nodes, which some Slurm configs reject.  NB: this only schedules
+        # if one node can host nranks*omp cores; size cpus_per_gpu/omp so that
+        # gpus_per_batch * cpus_per_gpu * sbd_omp_threads <= cores/node.
+        return dict(nranks=nranks, omp=omp, ntasks=nranks,
+                    cpus_per_task=omp, gpus_per_node=ngpu,
+                    ntasks_per_node=nranks)
+    # CPU: nranks = cpus_per_batch
+    ncpu = int(cfg['cpus_per_batch'])
+    if ncpu < 1:
+        raise ValueError("cpus_per_batch must be >= 1 for proc_type=0 (CPU)")
     return dict(nranks=ncpu, omp=omp, ntasks=ncpu,
-                cpus_per_task=omp, gres=gres)
-    raise ValueError("proc_type must be 0 (CPU) or 1 (GPU); got %r" % proc_type)
+                cpus_per_task=omp, gpus_per_node=None, ntasks_per_node=None)
+
+
+def _mpi_env_arg(proc_type, name, value):
+    '''Return the launcher flag that exports an environment variable, in the
+    syntax of the MPI implementation used for this ``proc_type``.
+
+    The GPU and CPU SBD builds use different MPI stacks with INCOMPATIBLE
+    env-passing syntax, so the option must match the launcher:
+
+    * ``proc_type == 0`` (CPU build, **OpenMPI**) -> ``-x NAME=VALUE``
+    * ``proc_type == 1`` (GPU build, **MPICH/Hydra**) -> ``-env NAME VALUE``
+      (space-separated; MPICH does NOT accept OpenMPI's ``-x``.  ``-genv`` is
+      the equivalent "set for all ranks" form.)
+    '''
+    if proc_type == 1:      # MPICH / Hydra (GPU)
+        return f"-env {name} {value}"
+    return f"-x {name}={value}"   # OpenMPI (CPU)
 
 
 def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
@@ -175,7 +207,10 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
     The ``-np`` rank count and ``OMP_NUM_THREADS`` come from
     :func:`sbd_parallel_layout` -- the SAME source the Slurm ``--ntasks`` /
     ``--gres`` / ``--cpus-per-task`` are derived from -- so the launched
-    command and the requested allocation are guaranteed consistent.
+    command and the requested allocation are guaranteed consistent.  The
+    ``OMP_NUM_THREADS`` export uses the launcher syntax matching the MPI stack
+    of the selected build (OpenMPI ``-x`` for CPU, MPICH ``-env`` for GPU); see
+    :func:`_mpi_env_arg`.
 
     Two differences vs. ``solver.py`` are deliberate and important for SCI:
 
@@ -189,8 +224,13 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
     layout = sbd_parallel_layout(cfg)
     proc_type = cfg['proc_type']
     exe = cfg['sbd_exe_path_gpu'] if proc_type == 1 else cfg['sbd_exe_path_cpu']
+    omp_env = _mpi_env_arg(proc_type, "OMP_NUM_THREADS", layout['omp'])
+    # The launcher may be an ABSOLUTE path (sbd.mpi_launcher) so it resolves
+    # without depending on PATH -- avoids "mpirun: command not found" on nodes
+    # where the module/PATH setup did not apply or the MPI install isn't mounted.
+    launcher = cfg.get('mpi_launcher', 'mpirun')
     base = (
-        f"mpirun -np {layout['nranks']} -x OMP_NUM_THREADS={layout['omp']} {exe} "
+        f"{launcher} -np {layout['nranks']} {omp_env} {exe} "
         f"--fcidump {fcidump_path} --adetfile {adet_path} "
         f"--bdetfile {bdet_path} --method 0 "
         f"--block {cfg['sbd_block']} --iteration {cfg['sbd_dav_iteration']} "
@@ -233,38 +273,60 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg):
 
     Resource consistency
     --------------------
-    ``--ntasks``, ``--gres`` and ``--cpus-per-task`` are NOT taken from
+    ``--ntasks``, ``--gpus-per-node`` and ``--cpus-per-task`` are NOT taken from
     ``slurm.sbatch``; they are DERIVED from :func:`sbd_parallel_layout`
-    (``proc_type`` + ``gpus_per_batch`` / ``cpus_per_batch``) so the Slurm
-    allocation always matches the SBD ``mpirun -np``.  Any of those three keys
-    found in ``slurm.sbatch`` is dropped (with a warning if it conflicts with
-    the derived value) -- they are single-sourced, not duplicated.
+    (``proc_type`` + ``gpus_per_batch`` / ``cpus_per_gpu`` / ``cpus_per_batch``)
+    so the Slurm allocation always matches the SBD ``mpirun -np``.  GPUs are
+    requested with ``--gpus-per-node=<n>`` (more reliable than ``--gres=gpu:<n>``
+    on some Slurm versions).  Any of these keys -- including a legacy ``gres`` --
+    found in ``slurm.sbatch`` is dropped (with a warning if it conflicts with the
+    derived value); they are single-sourced, not duplicated.
 
     Everything else under ``cfg['slurm']['sbatch']`` (partition, nodes, mem,
     time, account/``extra``, ...) is emitted verbatim as ``#SBATCH --key=value``.
     The SBD command's own stdout/stderr go to ``log_path`` (so the existing
     parsers still work); the Slurm-level stdout/stderr go to
     ``slurm.out``/``slurm.err``.
+
+    Environment preamble
+    --------------------
+    ``cfg['slurm']['preamble']`` (a block string or a list of lines) is emitted
+    verbatim inside the sub-job script, right before ``mpirun``, so the GPU/MPI
+    environment (``module load ...``, ``export PATH/LD_LIBRARY_PATH ...``) is set
+    up ON the compute node itself.  This guarantees the right environment even
+    when the parent job's exported env does not reach the node -- the cause of
+    intermittent ``mpirun`` failures on some merzk-a100 nodes.
     '''
     slurm = cfg.get('slurm', {}) or {}
     sbatch = dict(slurm.get('sbatch', {}) or {})
 
     # Strip the layout-controlled keys from the user block (warn on conflict),
-    # then inject the authoritative derived values -- one source of truth.
+    # then inject the authoritative derived values -- one source of truth.  A
+    # user-supplied 'gres' is always dropped: GPUs are requested via
+    # --gpus-per-node, so a stray gres would double-request.
     layout = sbd_parallel_layout(cfg)
-    derived = {'ntasks': layout['ntasks'], 'gres': layout['gres'],
-               'cpus_per_task': layout['cpus_per_task']}
+    derived = {'ntasks': layout['ntasks'],
+               'ntasks_per_node': layout['ntasks_per_node'],
+               'gpus_per_node': layout['gpus_per_node'],
+               'cpus_per_task': layout['cpus_per_task'],
+               'gres': None}
     for key, dval in derived.items():
         for variant in {key, key.replace('_', '-')}:
             if variant in sbatch:
                 uval = sbatch.pop(variant)
                 if dval is not None and str(uval) != str(dval):
                     print(f"[warn] sbd.slurm.sbatch.{variant}={uval!r} overridden "
-                          f"-> {dval} (derived from proc_type + "
-                          f"gpus_per_batch/cpus_per_batch).", file=sys.stderr)
+                          f"-> {dval} (derived from proc_type + gpus_per_batch/"
+                          f"cpus_per_gpu/cpus_per_batch).", file=sys.stderr)
+                elif key == 'gres':
+                    print(f"[warn] sbd.slurm.sbatch.{variant}={uval!r} dropped; "
+                          f"GPUs are requested via --gpus-per-node.",
+                          file=sys.stderr)
     sbatch['ntasks'] = layout['ntasks']
-    if layout['gres'] is not None:
-        sbatch['gres'] = layout['gres']
+    if layout['ntasks_per_node'] is not None:
+        sbatch['ntasks_per_node'] = layout['ntasks_per_node']
+    if layout['gpus_per_node'] is not None:
+        sbatch['gpus_per_node'] = layout['gpus_per_node']
     if layout['cpus_per_task'] > 1:
         sbatch['cpus_per_task'] = layout['cpus_per_task']
 
@@ -279,6 +341,42 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg):
          f"#SBATCH --output={slurm_out}",
          f"#SBATCH --error={slurm_err}"]
         + [f"#SBATCH {opt}" for opt in sbatch_opts]
+    )
+
+    # Optional environment preamble (sbd.slurm.preamble): module loads + PATH /
+    # LD_LIBRARY_PATH exports emitted verbatim INSIDE the sub-job script, so the
+    # GPU/MPI environment is guaranteed on the compute node even when the parent
+    # job's environment does not propagate to it (observed on some merzk-a100
+    # nodes -> mpirun failure).  Accepts a block string or a list of lines.
+    preamble = slurm.get('preamble', '')
+    if isinstance(preamble, (list, tuple)):
+        preamble = "\n".join(str(x) for x in preamble)
+    preamble = str(preamble).strip()
+    preamble_block = ""
+    if preamble:
+        preamble_block = (
+            "# --- sbd.slurm.preamble: set up GPU/MPI env on this node --------\n"
+            "set +u  # module/env scripts commonly reference unset variables\n"
+            f"{preamble}\n"
+            "set -u\n"
+        )
+
+    # Fail FAST and CLEARLY if the MPI launcher is not resolvable on this node
+    # (the "mpirun: command not found" that strikes only some merzk-a100 nodes
+    # when the MPICH install isn't mounted there, or the module/PATH setup did
+    # not apply).  Turns a cryptic shell error into a node-identifying message
+    # and a clean FAILED status (via the EXIT trap) the driver can report.
+    launcher = cfg.get('mpi_launcher', 'mpirun')
+    ql = shlex.quote(launcher)
+    launcher_guard = (
+        f"if ! command -v {ql} >/dev/null 2>&1; then\n"
+        f"    echo \"ERROR: MPI launcher {ql} not found on node $(hostname -s).\" >&2\n"
+        f"    echo \"  The MPICH install is likely not mounted on this node, or the\" >&2\n"
+        f"    echo \"  env preamble (module load / PATH export) did not apply.\" >&2\n"
+        f"    echo \"  Fix: set sbd.mpi_launcher to an absolute path, or exclude this\" >&2\n"
+        f"    echo \"  node via sbd.slurm.sbatch.extra.exclude.  PATH=$PATH\" >&2\n"
+        f"    exit 127\n"
+        f"fi\n"
     )
 
     # The job manages its own status file (DONE / FAILED <rc>) via an EXIT trap
@@ -296,6 +394,8 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg):
         "}\n"
         "trap on_exit EXIT\n"
         "echo \"RUNNING ${SLURM_JOB_ID:-?} $(date -u +%FT%TZ)\" > \"$STATUS_FILE\"\n"
+        f"{preamble_block}"
+        f"{launcher_guard}"
         f"cd {shlex.quote(workdir)}\n"
         f"{run_cmd} > {shlex.quote(log_path)} 2>&1\n"
     )

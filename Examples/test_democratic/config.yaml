@@ -112,15 +112,31 @@ slurm:
 sbd:
   sbd_exe_path_cpu: '/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag'
   sbd_exe_path_gpu: '/home/liz7/isilon/Zhen/sbd-main/apps/test/diag'
-  # proc_type + cpus_per_batch (+ gpus_per_batch for GPU) are the SINGLE source
-  # of truth for SBD's parallel layout: they set BOTH the SBD `mpirun -np` and
-  # the Slurm allocation (--ntasks / --gres / --cpus-per-task) for the sub-job
-  # below, so the two can never disagree.  Do NOT also set ntasks/gres/
-  # cpus-per-task under sbatch (they are injected automatically).
+  # MPI launcher.  Use an ABSOLUTE path so it resolves without relying on PATH
+  # -- avoids "mpirun: command not found" on nodes where the module/PATH setup
+  # did not apply.  (If even the absolute path is missing on a node, the MPICH
+  # install isn't mounted there -> exclude it via sbd.slurm.sbatch.extra.exclude.)
+  mpi_launcher: '/home/liz7/isilon/Zhen/mpich/bin/mpirun'
+  # These knobs are the SINGLE source of truth for SBD's parallel layout: they
+  # set BOTH the SBD `mpirun -np` and the Slurm allocation (--ntasks /
+  # --gpus-per-node / --cpus-per-task) for the sub-job below, so the two can
+  # never disagree.  Do NOT also set ntasks/gpus-per-node/gres/cpus-per-task
+  # under sbatch (injected automatically; GPUs use --gpus-per-node, not gres).
+  #
+  # GPU rank count is gpus_per_batch * cpus_per_gpu (NOT cpus_per_batch): SBD's
+  # GPU build uses CPU MPI ranks to feed each GPU, so the ranks must stay tied
+  # to the GPU count, else the GPUs sit idle and work falls back to CPU.
+  #
+  # SINGLE-NODE budget: the GPU sub-job is pinned to ONE node (via
+  # --ntasks-per-node, so no --nodes flag is needed), so it only schedules if
+  # one node can host it.  Keep the total CPU cores within a node:
+  #     gpus_per_batch * cpus_per_gpu * sbd_omp_threads  <=  cores_per_node
+  # Example node = 4 GPUs + 64 cores -> 4 * 16 * 1 = 64 cores (fills the node).
   proc_type: 1            # 1 = GPU (CPUs as support), 0 = CPU-only
-  cpus_per_batch: 8       # MPI ranks = CPU cores (GPU & CPU): sets -np and --ntasks
-  gpus_per_batch: 4       # GPU runs only: number of GPUs -> --gres=gpu:<n>
-  sbd_omp_threads: 4      # OMP threads/rank (GPU & CPU): -x OMP_NUM_THREADS + --cpus-per-task
+  gpus_per_batch: 4       # GPU runs: number of GPUs -> --gpus-per-node=<n>
+  cpus_per_gpu: 16        # GPU runs: support MPI ranks PER GPU (16 = proven SBD layout)
+  cpus_per_batch: 8       # CPU runs ONLY: MPI ranks (-np / --ntasks); ignored for GPU
+  sbd_omp_threads: 1      # OMP threads/rank (GPU & CPU): OMP_NUM_THREADS + --cpus-per-task
   # SCI needs each diagonalization well converged (PySCF selects the next
   # determinants from the returned CI vector), so these are tighter than SQD.
   sbd_block: 20
@@ -133,16 +149,30 @@ sbd:
   sbd_shuffle: 0
   sbd_carryover_ratio: 0.5
   # Slurm resources for each per-cycle SBD diagonalization job.  NOTE:
-  # --ntasks, --gres and --cpus-per-task are DERIVED from proc_type +
-  # gpus_per_batch / cpus_per_batch above (single source of truth) and are
-  # injected automatically; do not set them here (they would be overridden).
-  # Set only the placement/limits not tied to the rank count.
+  # --ntasks, --ntasks-per-node, --gpus-per-node and --cpus-per-task are DERIVED
+  # from proc_type + gpus_per_batch / cpus_per_gpu / cpus_per_batch above (single
+  # source of truth) and injected automatically; do not set them here
+  # (overridden).  GPUs use --gpus-per-node (not gres), and single-node
+  # placement is enforced via --ntasks-per-node (so no --nodes is needed -- do
+  # NOT add it back; some Slurm configs reject it).  Set only partition / mem /
+  # time / account etc.
   slurm:
     poll_interval: 15
+    # Shell preamble run INSIDE each SBD sub-job, on the GPU node, right before
+    # mpirun.  Put the module loads + PATH/LD_LIBRARY_PATH exports the SBD GPU
+    # binary needs here, so the environment is guaranteed even when the parent
+    # job's env does not propagate to the node (some merzk-a100 nodes -> mpirun
+    # failure).  YAML block scalar '|' preserves the lines verbatim.
+    preamble: |
+      module load gcc/11.2.0 cuda12.3/toolkit/12.3.2 cudnn8.9-cuda12.3/8.9.7.29 boost/1.85.0
+      export PATH="/home/liz7/isilon/Zhen/mpich/bin:$PATH"
+      export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblasgpu/lib:$LD_LIBRARY_PATH"
+      export PATH="/home/liz7/beegfs/liz7/openblasgpu/bin:$PATH"
     sbatch:
       partition: 'merzk-a100'
-      nodes: 1
       mem: 500G
+      extra:
+        exclude: m002        # skip node(s) that fail mpirun (comma-separate for more)
 
 geomopt:
   enabled: true
