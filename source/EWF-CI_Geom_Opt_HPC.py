@@ -77,12 +77,14 @@ import shlex
 import subprocess
 import sys
 import time
+import types
 
 import h5py
 import numpy as np
 import yaml
 
 from pyscf import gto, scf, ao2mo
+from pyscf import grad as _pyscf_grad  # noqa: F401  (registers mf.Gradients())
 from pyscf.fci import direct_spin0
 # Helpers used by the CI-amplitude ("global wave function") assembly path.
 # They mirror the FCI -> CISD -> CCSD conversion that Vayesta uses
@@ -96,7 +98,7 @@ from pyscf.fci import selected_ci as _selected_ci
 import vayesta
 import vayesta.ewf
 
-from isolated_casci_gradient import build_ewf_grad
+from isolated_casci_gradient import build_ewf_grad, build_grad
 from embedding_lagrangian import assemble_global_rdms_rdm_t_lambda
 
 try:
@@ -247,11 +249,57 @@ def load_config(path):
             f"{', '.join(_VALID_SOLVERS)}.")
     ewf["solver"] = solver
 
-    # If any solver role can resolve to SCI_SBD, the 'sbd:' configuration
-    # block (executable paths, proc_type, and per-cycle 'sbd.slurm' resources)
-    # must be present -- SBD is an external MPI binary driven through that block.
-    used_solvers = ({ms["high_accuracy_solver"], ms["approximate_solver"]}
-                    if ms["enabled"] else {solver})
+    calc = cfg.setdefault("calculation", {})
+    # Calculation mode (the alternative-workflow keyword):
+    #   "ewf"                   -- (default) embedded wave function: fragment
+    #                              the molecule, solve each cluster, assemble
+    #                              global RDMs (fragmented Slurm workflow;
+    #                              honours ewf.multi_solver).
+    #   "unfragmented_EWF_limit"-- solve the WHOLE molecule with ewf.solver and
+    #                              evaluate the SAME EWF energy *functional* +
+    #                              gradient (ewf_energy_from_rdms /
+    #                              build_ewf_grad) -- the no-fragmentation limit
+    #                              of EWF.  A debug/reference tool; the energy is
+    #                              the EWF functional, NOT the exact eigenvalue.
+    #   "true_unfragmented"     -- solve the WHOLE molecule with ewf.solver and
+    #                              use the EXACT total energy (eigenvalue+E_nuc)
+    #                              with the ANALYTIC CASCI gradient (build_grad,
+    #                              ncore=0/ncas=nmo).  A genuine full-system
+    #                              FCI/SCI/SCI_SBD geometry optimisation.
+    # The unfragmented modes ignore ewf.multi_solver (one system, not a
+    # per-fragment choice) and use ewf.solver directly.
+    _RUN_MODES = ("ewf", "unfragmented_EWF_limit", "true_unfragmented")
+    _MODE_MARKER = {"ewf": "EWF",
+                    "unfragmented_EWF_limit": "EWFLIM",
+                    "true_unfragmented": "TRUEUNFRAG"}
+    run_mode = str(calc.setdefault("run_mode", "ewf"))
+    if run_mode not in _RUN_MODES:
+        raise ValueError(
+            f"Unsupported calculation.run_mode={run_mode!r}; expected one of "
+            f"{', '.join(_RUN_MODES)}.")
+    calc["run_mode"] = run_mode
+    calc.setdefault("geometry_file", "ch4_dimer.txt")
+    calc.setdefault("basis", "sto-3g")
+    calc.setdefault("charge", 0)
+    calc.setdefault("spin", 0)
+    calc.setdefault("symmetry", False)
+    calc.setdefault("workdir", "jobs")
+    # Force a MODE-specific marker into the workdir so the three run modes always
+    # write to *different* directories, even from the same base ``config.yaml``.
+    marker = _MODE_MARKER[run_mode]
+    if marker.lower() not in str(calc["workdir"]).lower():
+        calc["workdir"] = f"{calc['workdir']}_{marker}"
+    calc.setdefault("fci_conv_tol", 1.0e-12)
+
+    # The 'sbd:' block (SBD executable paths, proc_type, per-cycle 'sbd.slurm'
+    # resources) is required whenever a solver that will actually run resolves
+    # to SCI_SBD.  In the unfragmented modes that is simply ewf.solver; in 'ewf'
+    # mode it is the multi_solver roles (when enabled) or ewf.solver.
+    if run_mode in ("unfragmented_EWF_limit", "true_unfragmented"):
+        used_solvers = {solver}
+    else:
+        used_solvers = ({ms["high_accuracy_solver"], ms["approximate_solver"]}
+                        if ms["enabled"] else {solver})
     if "SCI_SBD" in used_solvers and not cfg.get("sbd"):
         raise ValueError(
             "a cluster solver is set to 'SCI_SBD' but config.yaml has no "
@@ -259,24 +307,6 @@ def load_config(path):
             "performance options, and the per-cycle 'sbd.slurm' resources "
             "(see the config.yaml template / "
             "SBD-in-PySCF-SCI-Exploration/README.md).")
-
-    calc = cfg.setdefault("calculation", {})
-    calc.setdefault("geometry_file", "ch4_dimer.txt")
-    calc.setdefault("basis", "sto-3g")
-    calc.setdefault("charge", 0)
-    calc.setdefault("spin", 0)
-    calc.setdefault("symmetry", False)
-    calc.setdefault("workdir", "jobs")
-    # Force a driver-specific marker into the workdir so the EWF-CI
-    # driver and the unfragmented-SCI reference driver always write to
-    # *different* directories, even when they share the same
-    # ``config.yaml``.  The unfragmented driver applies the same
-    # post-processing with the marker ``unfragmented`` -- between the
-    # two of them, every collision is avoided by construction.
-    _DRIVER_WORKDIR_MARKER = "EWF"
-    if _DRIVER_WORKDIR_MARKER.lower() not in str(calc["workdir"]).lower():
-        calc["workdir"] = f"{calc['workdir']}_{_DRIVER_WORKDIR_MARKER}"
-    calc.setdefault("fci_conv_tol", 1.0e-12)
     sl = cfg.setdefault("slurm", {})
     sl.setdefault("python_executable", sys.executable or "python")
     sl.setdefault("poll_interval", 15)
@@ -529,9 +559,14 @@ def choose_solver_for_cluster(norb, cfg):
 
 
 def method_label_for_cfg(cfg):
-    """Human-readable method label, e.g. ``EWF-FCI`` or, in multi-solver
-    mode, ``EWF-FCI/SCI`` (high-accuracy / approximate)."""
+    """Human-readable method label, e.g. ``EWF-FCI``, ``EWF-FCI/SCI`` (multi-
+    solver), ``UnfragEWFlim-SCI`` or ``TrueUnfrag-FCI`` (unfragmented modes)."""
     ewf = cfg["ewf"]
+    run_mode = cfg.get("calculation", {}).get("run_mode", "ewf")
+    if run_mode == "unfragmented_EWF_limit":
+        return f"UnfragEWFlim-{ewf['solver']}"
+    if run_mode == "true_unfragmented":
+        return f"TrueUnfrag-{ewf['solver']}"
     ms = ewf.get("multi_solver", {})
     if ms.get("enabled", False):
         return f"EWF-{ms['high_accuracy_solver']}/{ms['approximate_solver']}"
@@ -1755,21 +1790,171 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     return mol, mf, float(e_ewf), np.asarray(de_ewf)
 
 
-def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False):
-    """Single-point driver: compute one EWF-CI gradient at the input
-    geometry from ``config.yaml`` and exit.  Equivalent to the original
-    behaviour of the workflow before geometry optimisation was added.
+# ---------------------------------------------------------------------------
+# Unfragmented (full-system) cycle -- alternative to the fragmented EWF path
+# ---------------------------------------------------------------------------
+
+def build_full_system_cluster(mol, mf):
+    """Build a single 'cluster' that spans the FULL MO space -- no
+    fragmentation, no DMET bath, no embedding potential.
+
+    The effective one-electron Hamiltonian is just the bare core Hamiltonian in
+    the RHF MO basis and the two-electron term is the full MO ERI tensor, so the
+    cluster solvers (FCI / SCI / SCI_SBD) diagonalise the *exact* full-system
+    Hamiltonian.  The returned object exposes exactly the attributes the solvers
+    read from a Vayesta cluster dump (``norb``/``nocc``/``nvir``/``heff``/
+    ``eris``), so :func:`solve_cluster` works on it unchanged.
     """
-    mol, mf, e_ewf, de_ewf = _run_ewf_cycle(
+    mo = np.asarray(mf.mo_coeff)
+    nmo = mo.shape[1]
+    nocc = mol.nelectron // 2
+    h1e = mo.T @ mf.get_hcore() @ mo
+    eri = ao2mo.kernel(mol, mo, compact=False).reshape([nmo, nmo, nmo, nmo])
+    return types.SimpleNamespace(
+        name="full_system", id=0, norb=nmo, nocc=nocc, nvir=nmo - nocc,
+        heff=np.asarray(h1e), eris=np.asarray(eri), c_cluster=mo)
+
+
+def _solve_full_system(cfg, tag):
+    """Shared front-end for the two unfragmented run modes: build mol + RHF,
+    form the full-system cluster (no fragmentation/bath), and solve it once with
+    ``ewf.solver`` (FCI / SCI / SCI_SBD).
+
+    Returns ``(mol, mf, e_cls, dm1, dm2, hcore_gen, grad_nuc_gen, solver)`` where
+    ``e_cls`` is the electronic eigenvalue of (heff, eris) and ``dm1``/``dm2``
+    are the full-system RDMs (make_rdm12 convention) in the RHF MO basis.  The
+    whole solve runs in-process: FCI/SCI is a single (possibly large) driver
+    computation; for SCI_SBD the per-cycle SBD Slurm sub-jobs carry the heavy
+    compute and the driver only orchestrates them.  ``ewf.multi_solver`` is
+    ignored (one system, not a per-fragment choice).
+    """
+    workdir = cfg["calculation"]["workdir"]
+    os.makedirs(workdir, exist_ok=True)
+    solver = cfg["ewf"]["solver"]
+    sci_cutoff = float(cfg["ewf"]["sci_select_cutoff"])
+    fci_conv_tol = float(cfg["calculation"]["fci_conv_tol"])
+
+    mol, mf = build_mol_and_mf(cfg)
+    print(f"[{tag}] HF energy: {mf.e_tot:.10f}")
+
+    # Gradient helpers (same as the EWF path).
+    mf_grad = mf.Gradients()
+    hcore_gen = mf_grad.hcore_generator(mol)
+    grad_nuc_gen = lambda atmlst: mf_grad.grad_nuc(mol, atmlst=atmlst)
+
+    cluster = build_full_system_cluster(mol, mf)
+    print(f"[{tag}] Full active space: norb={cluster.norb}, "
+          f"nocc={cluster.nocc}, nelec={mol.nelectron}")
+    if solver == "FCI":
+        print(f"[{tag}] Solving full system with FCI (conv_tol={fci_conv_tol})")
+    elif solver == "SCI":
+        print(f"[{tag}] Solving full system with SCI (select_cutoff={sci_cutoff})")
+    else:  # SCI_SBD
+        print(f"[{tag}] Solving full system with SCI_SBD (PySCF SCI growth + "
+              f"external SBD eigensolver; select_cutoff={sci_cutoff}; submits "
+              f"per-cycle Slurm jobs)")
+    e_cls, dm1, dm2, civec = solve_cluster(
+        cluster, cfg, solver=solver, workdir=workdir, frag_idx=0)
+    print(f"[{tag}] Full-system E ({solver}) = {e_cls:.10f} Ha (electronic); "
+          f"total = {e_cls + mol.energy_nuc():.10f} Ha (eigenvalue + E_nuc)")
+    dm1 = np.asarray(dm1)
+    dm2 = np.asarray(dm2)
+    print(f"[{tag}] Tr(dm1) = {np.trace(dm1):.6f} "
+          f"(expected: nelec = {mol.nelectron})")
+    return mol, mf, e_cls, dm1, dm2, hcore_gen, grad_nuc_gen, solver
+
+
+def _run_unfragmented_ewf_limit_cycle(cfg, tag="driver"):
+    """run_mode ``unfragmented_EWF_limit``: solve the whole molecule and evaluate
+    the EWF energy *functional* + :func:`build_ewf_grad` gradient -- the
+    no-fragmentation limit of the EWF method (a debug / reference tool).
+
+    The optimised energy is the EWF functional (consistent with the EWF
+    gradient), NOT the exact eigenvalue; the two differ by a small second-order
+    term (zero at the HF density).  Use ``true_unfragmented`` for the exact
+    full-system FCI/SCI energy + gradient.
+    """
+    print(f"[{tag}] Unfragmented (EWF-limit) full-system calculation")
+    (mol, mf, e_cls, dm1, dm2,
+     hcore_gen, grad_nuc_gen, solver) = _solve_full_system(cfg, tag)
+
+    # Full-system 2-RDM cumulant (chemist's notation) -- same convention as the
+    # democratic EWF assembly, so ewf_energy_from_rdms / build_ewf_grad apply
+    # unchanged (dm1, dm2 are already in the RHF MO basis = mf.mo_coeff).
+    dm2_cum = (dm2
+               - np.einsum("ij,kl->ijkl", dm1, dm1)
+               + np.einsum("ij,kl->iklj", dm1, dm1) / 2.0)
+    dm1 = 0.5 * (dm1 + dm1.T)
+    dm2_cum = 0.5 * (dm2_cum + dm2_cum.transpose(1, 0, 3, 2))
+
+    e = ewf_energy_from_rdms(mol, mf, dm1, dm2_cum)
+    print(f"[{tag}] UnfragEWFlim-{solver} energy (EWF functional): {e:.10f} Ha")
+
+    grad_fn = build_ewf_grad(
+        mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ, mf.get_hcore(),
+        hcore_generator=hcore_gen, grad_nuc_fn=grad_nuc_gen)
+    de = grad_fn(dm1, dm2_cum)
+    return mol, mf, float(e), np.asarray(de)
+
+
+def _run_true_unfragmented_cycle(cfg, tag="driver"):
+    """run_mode ``true_unfragmented``: a genuine full-system FCI/SCI/SCI_SBD
+    geometry optimisation -- the EXACT total energy (eigenvalue + E_nuc) paired
+    with the ANALYTIC CASCI nuclear gradient (:func:`build_grad`), with the FULL
+    MO space treated as the active space (``ncore=0``, ``ncas=nmo``).
+
+    This reproduces ``mc.Gradients().kernel()`` for ``CASCI(nmo, nelec)``: the
+    CASCI Z-vector blocks vanish (no orbitals outside the active space) and the
+    CPHF term carries the RHF-orbital relaxation, so it is the true full-system
+    gradient.  Requires a closed-shell reference (spin 0); ``ewf.multi_solver``
+    is ignored.
+    """
+    print(f"[{tag}] True unfragmented full-system calculation")
+    (mol, mf, e_cls, dm1, dm2,
+     hcore_gen, grad_nuc_gen, solver) = _solve_full_system(cfg, tag)
+    nmo = mf.mo_coeff.shape[1]
+    e_total = e_cls + mol.energy_nuc()
+    print(f"[{tag}] TrueUnfrag-{solver} energy (exact total): {e_total:.10f} Ha")
+
+    # Analytic CASCI gradient with the full MO space as the active space; dm1,
+    # dm2 are the full-system RDMs (= casdm1, casdm2 since ncore=0, ncas=nmo).
+    grad_fn = build_grad(
+        mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ, ncore=0, ncas=nmo,
+        h1=mf.get_hcore(), hcore_generator=hcore_gen, grad_nuc_fn=grad_nuc_gen)
+    de = grad_fn(dm1, dm2)
+    return mol, mf, float(e_total), np.asarray(de)
+
+
+def _run_cycle(cfg, config_path, script_path, no_slurm=False, tag="driver"):
+    """Per-geometry energy + gradient, dispatched on ``calculation.run_mode``:
+    ``'ewf'`` (default; fragmented Slurm workflow), ``'unfragmented_EWF_limit'``
+    (full-system EWF functional), or ``'true_unfragmented'`` (full-system exact
+    energy + analytic CASCI gradient).  Returns ``(mol, mf, E, grad)``."""
+    mode = cfg["calculation"].get("run_mode", "ewf")
+    if mode == "unfragmented_EWF_limit":
+        return _run_unfragmented_ewf_limit_cycle(cfg, tag=tag)
+    if mode == "true_unfragmented":
+        return _run_true_unfragmented_cycle(cfg, tag=tag)
+    return _run_ewf_cycle(cfg, config_path, script_path,
+                          no_slurm=no_slurm, tag=tag)
+
+
+def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False):
+    """Single-point driver: compute one energy + gradient at the input geometry
+    from ``config.yaml`` and exit.  Honours ``calculation.run_mode`` (fragmented
+    EWF or unfragmented full-system)."""
+    mol, mf, e_ewf, de_ewf = _run_cycle(
         cfg, config_path, script_path, no_slurm=no_slurm, tag="driver")
     method_label = method_label_for_cfg(cfg)
     print(f"\n{method_label} Nuclear Gradient (Hartree/Bohr):")
     print(de_ewf)
     print(f"\n  Max |grad| : {np.max(np.abs(de_ewf)):.4e} Eh/Bohr")
     print(f"  RMS  grad  : {np.sqrt(np.mean(de_ewf**2)):.4e} Eh/Bohr")
-    print("\n[driver] To compare against a full-system (unfragmented) "
-          "Selected-CI gradient, run:")
-    print("    python Unfragmented_SCI_Gradient.py --config <config.yaml>")
+    if cfg["calculation"].get("run_mode", "ewf") == "ewf":
+        print("\n[driver] To compare against a full-system reference, set "
+              "calculation.run_mode to 'true_unfragmented' (exact energy + "
+              "analytic CASCI gradient) or 'unfragmented_EWF_limit' (EWF "
+              "functional, debug) in the config.")
 
 
 # ---------------------------------------------------------------------------
@@ -1864,10 +2049,11 @@ class EwfCiEngine(geometric.engine.Engine):
 
         tag = f"geomopt step={step_idx:03d}"
         print("\n" + "=" * 70)
-        print(f"[{tag}] Starting EWF-CI single-point in {step_dir}")
+        print(f"[{tag}] Starting {method_label_for_cfg(step_cfg)} single-point "
+              f"in {step_dir}")
         print("=" * 70)
 
-        mol, mf, e_ewf, de_ewf = _run_ewf_cycle(
+        mol, mf, e_ewf, de_ewf = _run_cycle(
             step_cfg, step_cfg_path, self.script_path,
             no_slurm=self.no_slurm, tag=tag)
 
@@ -1899,14 +2085,17 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
     init_xyz = np.array([g[1] for g in geo], dtype=float)  # Angstrom
 
     ms = cfg["ewf"].get("multi_solver", {})
-    if ms.get("enabled", False):
+    run_mode = cfg["calculation"].get("run_mode", "ewf")
+    if run_mode in ("unfragmented_EWF_limit", "true_unfragmented"):
+        solver_desc = f"{cfg['ewf']['solver']} (full system)"
+    elif ms.get("enabled", False):
         solver_desc = (
             f"multi-solver (norb<{ms['norb_threshold']} -> "
             f"{ms['high_accuracy_solver']}, else {ms['approximate_solver']})")
     else:
         solver_desc = cfg["ewf"]["solver"]
     print(f"[geomopt] {len(elements)} atoms, basis={cfg['calculation']['basis']}, "
-          f"solver={solver_desc}")
+          f"mode={run_mode}, solver={solver_desc}")
     print(f"[geomopt] Working directory : {base_workdir}")
     step_subdir_fmt = cfg["geomopt"]["step_subdir_fmt"]
     print(f"[geomopt] Per-step subfolder: {step_subdir_fmt}")
@@ -1977,7 +2166,8 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
     print(f"  Converged              : {converged}")
     print(f"  Cycles evaluated       : {engine.cycle}")
     if engine.last_energy is not None:
-        print(f"  Final EWF-CI energy    : {engine.last_energy:.10f} Ha")
+        print(f"  Final {method_label_for_cfg(cfg):<16s} energy: "
+              f"{engine.last_energy:.10f} Ha")
         print(f"  Final |grad|           : "
               f"{np.linalg.norm(engine.last_gradient):.4e} Eh/Bohr")
     print(f"  Trajectory (multi-XYZ) : {xyzout}")

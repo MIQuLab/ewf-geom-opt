@@ -63,6 +63,26 @@ ewf:
   assembly: rdm_t_lambda
 
 calculation:
+  # Calculation mode (alternative workflows).  The two unfragmented modes solve
+  # the WHOLE molecule directly with ewf.solver (FCI / SCI / SCI_SBD); they
+  # ignore ewf.multi_solver and run no DUMP/solve Slurm waves.  Each mode gets
+  # its own workdir marker (_EWF / _EWFLIM / _TRUEUNFRAG) so runs never collide.
+  #   ewf                    -- (default) embedded wave function: fragment the
+  #                             molecule, solve each cluster, assemble global
+  #                             RDMs (honours ewf.multi_solver; fragmented Slurm
+  #                             DUMP + solve waves).
+  #   unfragmented_EWF_limit -- full-system solve evaluated with the EWF energy
+  #                             *functional* + build_ewf_grad gradient: the
+  #                             no-fragmentation limit of EWF.  A debug/reference
+  #                             tool -- the energy is the EWF functional, NOT the
+  #                             exact eigenvalue (they differ by a small 2nd-order
+  #                             term).
+  #   true_unfragmented      -- genuine full-system optimisation: the EXACT total
+  #                             energy (eigenvalue + E_nuc) with the analytic
+  #                             CASCI gradient (full space as active space).  Use
+  #                             this for true unfragmented FCI/SCI/SCI_SBD
+  #                             geometries.  (Requires a closed-shell spin: 0.)
+  run_mode: ewf
   geometry_file: propylene.txt
   basis: sto-3g
   charge: 0
