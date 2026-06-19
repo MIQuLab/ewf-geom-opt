@@ -158,6 +158,11 @@ sbd:
   # time / account etc.
   slurm:
     poll_interval: 15
+    # If an SBD sub-job lands on a node whose environment cannot run mpirun
+    # (the in-job guard detects "mpirun not found"), the driver resubmits it on
+    # another node -- adding the bad node to --exclude -- up to this many times
+    # before giving up.  Set 0 to disable auto-retry (fail on the first bad node).
+    max_node_retries: 5
     # Shell preamble run INSIDE each SBD sub-job, on the GPU node, right before
     # mpirun.  Put the module loads + PATH/LD_LIBRARY_PATH exports the SBD GPU
     # binary needs here, so the environment is guaranteed even when the parent

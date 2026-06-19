@@ -268,8 +268,14 @@ def _flatten_sbatch_options(d):
             yield f"--{k.replace('_', '-')}={v}"
 
 
-def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg):
+def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
+                            extra_exclude=None):
     '''Write the per-cycle SBD Slurm batch script and return its path.
+
+    ``extra_exclude`` is an iterable of node names to add to ``--exclude`` on
+    top of any user-configured ``sbatch.extra.exclude`` -- used by the bad-node
+    auto-retry in :func:`sbd_eigensolver` to steer a resubmission away from a
+    node whose environment cannot run ``mpirun``.
 
     Resource consistency
     --------------------
@@ -299,6 +305,20 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg):
     '''
     slurm = cfg.get('slurm', {}) or {}
     sbatch = dict(slurm.get('sbatch', {}) or {})
+
+    # Merge configured exclude (sbatch.extra.exclude) with any dynamically
+    # discovered bad nodes (extra_exclude) into a single --exclude list.
+    extra = dict(sbatch.get('extra', {}) or {})
+    excl = []
+    for n in str(extra.get('exclude', '')).split(','):
+        if n.strip():
+            excl.append(n.strip())
+    for n in (extra_exclude or []):
+        if n and n not in excl:
+            excl.append(n)
+    if excl:
+        extra['exclude'] = ','.join(excl)
+        sbatch['extra'] = extra
 
     # Strip the layout-controlled keys from the user block (warn on conflict),
     # then inject the authoritative derived values -- one source of truth.  A
@@ -368,13 +388,16 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg):
     # and a clean FAILED status (via the EXIT trap) the driver can report.
     launcher = cfg.get('mpi_launcher', 'mpirun')
     ql = shlex.quote(launcher)
+    node_marker = os.path.join(workdir, 'mpirun_missing.node')
     launcher_guard = (
         f"if ! command -v {ql} >/dev/null 2>&1; then\n"
+        # Record the bad node so the driver can resubmit elsewhere (auto-retry).
+        f"    hostname -s > {shlex.quote(node_marker)} 2>/dev/null || true\n"
         f"    echo \"ERROR: MPI launcher {ql} not found on node $(hostname -s).\" >&2\n"
         f"    echo \"  The MPICH install is likely not mounted on this node, or the\" >&2\n"
         f"    echo \"  env preamble (module load / PATH export) did not apply.\" >&2\n"
-        f"    echo \"  Fix: set sbd.mpi_launcher to an absolute path, or exclude this\" >&2\n"
-        f"    echo \"  node via sbd.slurm.sbatch.extra.exclude.  PATH=$PATH\" >&2\n"
+        f"    echo \"  The driver will resubmit on another node (excluding this one).\" >&2\n"
+        f"    echo \"  PATH=$PATH\" >&2\n"
         f"    exit 127\n"
         f"fi\n"
     )
@@ -430,15 +453,13 @@ def _read_status(path):
 
 
 def _wait_for_slurm_job(status_path, poll_interval=15, log_path=None):
-    '''Block until the job's status file reports DONE; raise on FAILED.'''
+    '''Block until the job's status file reaches a terminal state and return it
+    (``"DONE"`` or ``"FAILED <rc>"``).  The caller decides how to handle a
+    failure (e.g. the bad-node auto-retry in :func:`sbd_eigensolver`).'''
     while True:
         s = _read_status(status_path)
-        if s.startswith("DONE"):
+        if s.startswith("DONE") or s.startswith("FAILED"):
             return s
-        if s.startswith("FAILED"):
-            raise RuntimeError(
-                f"SBD Slurm job failed ({s}); inspect {log_path} and the "
-                f"slurm.out/slurm.err next to it.")
         time.sleep(poll_interval)
 
 
@@ -536,20 +557,60 @@ def sbd_eigensolver(op, x0, precond, nroots=1, ndim=None, myci=None,
         os.path.join(workdir, 'BetaDets.txt'))
 
     # Submit this SBD diagonalization as its own Slurm job (resources from the
-    # config.yaml 'slurm' block) and block until it finishes.
+    # config.yaml 'slurm' block) and block until it finishes.  If the job lands
+    # on a node whose environment cannot run mpirun (the in-job guard writes
+    # 'mpirun_missing.node'), automatically resubmit on another node -- adding
+    # the bad node to --exclude -- up to slurm.max_node_retries times.
     log_path = os.path.join(workdir, 'sbd_solver_logfile.log')
     status_path = os.path.join(workdir, 'sbd_job.status')
-    sh_path = _write_sbd_slurm_script(workdir, cmd, log_path, status_path, cfg)
-    poll = int((cfg.get('slurm', {}) or {}).get('poll_interval', 15))
+    node_marker = os.path.join(workdir, 'mpirun_missing.node')
+    sl = cfg.get('slurm', {}) or {}
+    poll = int(sl.get('poll_interval', 15))
+    max_node_retries = int(sl.get('max_node_retries', 5))
 
-    with open(status_path, 'w') as fh:
-        fh.write('SUBMITTED\n')
+    excluded = []
     t0 = time.time()
-    jid = _submit_slurm_job(sh_path)
-    if verbose:
-        verbose.info('  SBD cycle %d: submitted Slurm job %s (dim %d x %d), '
-                     'waiting ...', myci._sbd_iter, jid, na, nb)
-    _wait_for_slurm_job(status_path, poll_interval=poll, log_path=log_path)
+    while True:
+        if os.path.exists(node_marker):     # clear stale marker from a prior try
+            os.remove(node_marker)
+        sh_path = _write_sbd_slurm_script(
+            workdir, cmd, log_path, status_path, cfg, extra_exclude=excluded)
+        with open(status_path, 'w') as fh:
+            fh.write('SUBMITTED\n')
+        jid = _submit_slurm_job(sh_path)
+        if verbose:
+            verbose.info('  SBD cycle %d: submitted Slurm job %s (dim %d x %d)%s,'
+                         ' waiting ...', myci._sbd_iter, jid, na, nb,
+                         (' [excluding %s]' % ','.join(excluded)) if excluded else '')
+        status = _wait_for_slurm_job(status_path, poll_interval=poll,
+                                     log_path=log_path)
+        if status.startswith('DONE'):
+            break
+
+        # FAILED: was it the mpirun-missing (bad node) case?  Resubmit elsewhere.
+        bad_node = ''
+        if os.path.exists(node_marker):
+            try:
+                bad_node = open(node_marker).read().strip()
+            except OSError:
+                bad_node = ''
+        if bad_node and len(excluded) < max_node_retries:
+            if bad_node not in excluded:
+                excluded.append(bad_node)
+            if verbose:
+                verbose.info('  SBD cycle %d: mpirun unavailable on node %s; '
+                             'resubmitting (retry %d/%d), excluding %s',
+                             myci._sbd_iter, bad_node, len(excluded),
+                             max_node_retries, ','.join(excluded))
+            continue
+
+        # Different failure, or out of bad-node retries -> give up.
+        extra = (' after %d bad-node retr%s (excluded %s)'
+                 % (len(excluded), 'y' if len(excluded) == 1 else 'ies',
+                    ','.join(excluded))) if excluded else ''
+        raise RuntimeError(
+            "SBD Slurm job failed (%s)%s; inspect %s and the slurm.out/slurm.err "
+            "next to it." % (status, extra, log_path))
     wall = time.time() - t0
 
     e_tot = sbd_wrapper.extract_energy(log_path)
