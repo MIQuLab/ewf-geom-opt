@@ -39,21 +39,35 @@ MSU_ACCOUNT_DEFAULT = "merzjrke"
 MSU_TIME_DEFAULT = "12:00:00"
 CCF_CPU_PARTITION = "defq"
 CCF_GPU_PARTITION = "merzk-a100"
+# The per-cycle SBD iteration jobs are heavier than the DUMP/solve waves and
+# run on the dedicated CCF CPU partition.
+CCF_CPU_SBD_PARTITION = "merzk"
 
 # --- CCF SBD environment defaults ------------------------------------------
 CCF_SBD_EXE_CPU = "/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag"
 CCF_SBD_EXE_GPU = "/home/liz7/isilon/Zhen/sbd-main/apps/test/diag"
-CCF_MPI_LAUNCHER = "/home/liz7/isilon/Zhen/mpich/bin/mpirun"
-CCF_SBD_PREAMBLE = [
+# GPU build uses MPICH; CPU build uses OpenMPI (matching sbd.proc_type / the
+# preambles above).
+CCF_MPI_LAUNCHER_GPU = "/home/liz7/isilon/Zhen/mpich/bin/mpirun"
+CCF_MPI_LAUNCHER_CPU = "/home/kaliakd/beegfs/kaliakd/Software/openmpi-4.1.5/bin/mpirun"
+CCF_SBD_PREAMBLE_GPU = [
     "module load gcc/11.2.0 cuda12.3/toolkit/12.3.2 cudnn8.9-cuda12.3/8.9.7.29 boost/1.85.0",
     'export PATH="/home/liz7/isilon/Zhen/mpich/bin:$PATH"',
     'export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblasgpu/lib:$LD_LIBRARY_PATH"',
     'export PATH="/home/liz7/beegfs/liz7/openblasgpu/bin:$PATH"',
 ]
+CCF_SBD_PREAMBLE_CPU = [
+    'export PATH="/home/kaliakd/beegfs/kaliakd/Software/openmpi-4.1.5/bin:$PATH"',
+    'export PATH="/home/liz7/beegfs/liz7/openblas/lib/:$PATH"',
+    'export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblas/lib/:$LD_LIBRARY_PATH"',
+]
 
 # --- MSU SBD environment defaults ------------------------------------------
-# The same SBD binary is used for both CPU and GPU runs on MSU.
+# GPU runs: a100 uses the default build, v100 uses a v100-specific build.
+# CPU runs use a separate CPU build.
 MSU_SBD_EXE = "/mnt/home/lizhen6/sbd/apps/chemistry_tpb_selected_basis_diagonalization/diag"
+MSU_SBD_EXE_V100 = "/mnt/home/lizhen6/sbd/apps/chemistry_v100_tpb_selected_basis_diagonalization/diag"
+MSU_SBD_EXE_CPU = "/mnt/home/lizhen6/SBD_Solver/executable/diag"
 MSU_MPI_LAUNCHER = "/mnt/home/lizhen6/mpich/bin/mpirun"
 MSU_SBD_PREAMBLE = [
     'export PATH="/mnt/home/lizhen6/mpich/bin:$PATH"',
@@ -122,10 +136,21 @@ def _sbatch_lines(indent, hpc, partition, ntasks=None, mem=None):
     return out
 
 
-def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt"):
-    """Assemble the focused config.yaml text for the chosen options."""
+def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
+                 gpu_type=None):
+    """Assemble the focused config.yaml text for the chosen options.
+
+    ``gpu_type`` ('a100' / 'v100') is only meaningful for an MSU GPU SBD run;
+    it selects the default ``cpus_per_gpu`` and SBD-job ``mem`` (a100 -> 16 /
+    350G, v100 -> 8 / 170G).  It is ignored elsewhere.
+    """
     is_ewf = (run_mode == "ewf")
     gpu = (proc == "GPU")
+    # MSU GPU runs pick resources by GPU model; default to a100 if unspecified.
+    msu_gpu = (hpc == "MSU" and gpu)
+    if msu_gpu and gpu_type is None:
+        gpu_type = MSU_GPU_TYPE
+    is_v100 = (msu_gpu and gpu_type == "v100")
 
     # --- solver selection from the answers ---------------------------------
     plain_solver = "SCI"                       # non-SBD default (FCI / SCI)
@@ -225,21 +250,28 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt"):
         a("# External SBD eigensolver (present because a solver is SCI_SBD).")
         a("sbd:")
         if hpc == "CCF":
+            ccf_launcher = CCF_MPI_LAUNCHER_GPU if gpu else CCF_MPI_LAUNCHER_CPU
             a(f"  sbd_exe_path_cpu: '{CCF_SBD_EXE_CPU}'")
             a(f"  sbd_exe_path_gpu: '{CCF_SBD_EXE_GPU}'")
-            a(f"  mpi_launcher: '{CCF_MPI_LAUNCHER}'   # absolute path (PATH-independent)")
-        else:  # MSU: same binary for CPU and GPU
-            a(f"  sbd_exe_path_cpu: '{MSU_SBD_EXE}'")
-            a(f"  sbd_exe_path_gpu: '{MSU_SBD_EXE}'")
+            a(f"  mpi_launcher: '{ccf_launcher}'   # absolute path (PATH-independent)")
+        else:  # MSU: separate CPU build; GPU a100 default vs v100-specific
+            msu_gpu_exe = MSU_SBD_EXE_V100 if is_v100 else MSU_SBD_EXE
+            a(f"  sbd_exe_path_cpu: '{MSU_SBD_EXE_CPU}'")
+            a(f"  sbd_exe_path_gpu: '{msu_gpu_exe}'")
             a(f"  mpi_launcher: '{MSU_MPI_LAUNCHER}'   # absolute path (PATH-independent)")
         a(f"  proc_type: {1 if gpu else 0}            # {'1 = GPU (CPUs as support)' if gpu else '0 = CPU-only'}")
         if gpu:
             a("  gpus_per_batch: 4       # GPUs per SBD job -> --gpus-per-node")
-            a("  cpus_per_gpu: 16        # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)")
+            cpus_per_gpu = 8 if is_v100 else 16
+            a(f"  cpus_per_gpu: {cpus_per_gpu}"
+              f"{' ' * max(1, 8 - len(str(cpus_per_gpu)))}"
+              "# support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)")
             if hpc == "MSU":
-                a(f"  gpu_type: {MSU_GPU_TYPE}         # MSU: only a100 GPUs -> --gpus-per-node=a100:<n>")
+                a(f"  gpu_type: {gpu_type}"
+                  f"{' ' * max(1, 9 - len(str(gpu_type)))}"
+                  f"# MSU GPU model -> --gpus-per-node={gpu_type}:<n>")
         else:
-            a("  cpus_per_batch: 8       # MPI ranks (-np / --ntasks) for the CPU run")
+            a("  cpus_per_batch: 96      # MPI ranks (-np / --ntasks) for the CPU run")
         a("  sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)")
         a("  sbd_block: 20")
         a("  sbd_dav_iteration: 100")
@@ -258,13 +290,24 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt"):
         a("    poll_interval: 15")
         a("    max_node_retries: 5       # resubmit on another node if mpirun is missing")
         a("    preamble: |               # <-- UPDATE if your environment changes")
-        preamble = CCF_SBD_PREAMBLE if hpc == "CCF" else MSU_SBD_PREAMBLE
+        if hpc == "CCF":
+            preamble = CCF_SBD_PREAMBLE_GPU if gpu else CCF_SBD_PREAMBLE_CPU
+        else:
+            preamble = MSU_SBD_PREAMBLE
         for ln in preamble:
             a(f"      {ln}")
         a("    sbatch:")
-        sbd_partition = CCF_GPU_PARTITION if gpu else CCF_CPU_PARTITION
-        # MSU GPU nodes have less RAM than CCF -> 350G for MSU GPU SBD jobs.
-        sbd_mem = "350G" if (hpc == "MSU" and gpu) else "500G"
+        sbd_partition = CCF_GPU_PARTITION if gpu else CCF_CPU_SBD_PARTITION
+        # Per-cycle SBD sub-job memory by site / processor:
+        #   MSU GPU a100 -> 350G, MSU GPU v100 -> 170G, CCF GPU -> 500G,
+        #   MSU CPU -> 760G, CCF CPU -> 1T.
+        if gpu:
+            if msu_gpu:
+                sbd_mem = "170G" if is_v100 else "350G"
+            else:  # CCF GPU
+                sbd_mem = "500G"
+        else:  # CPU
+            sbd_mem = "760G" if hpc == "MSU" else "1T"
         L.extend(_sbatch_lines(6, hpc, sbd_partition, ntasks=None, mem=sbd_mem))
         a("      # extra:")
         a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
@@ -311,10 +354,16 @@ def main():
     sbd = ask_yesno("5) Use the SCI-SBD external eigensolver?")
 
     proc = None
+    gpu_type = None
     if sbd:
         proc = ask_choice("6) GPU or CPU-only SCI-SBD calculation?", ["GPU", "CPU"])
+        if hpc == "MSU" and proc == "GPU":
+            # MSU GPU model sets the default cpus_per_gpu + SBD-job mem
+            # (a100 -> 16 / 350G, v100 -> 8 / 170G).
+            gpu_type = ask_choice("7) MSU GPU type?", ["a100", "v100"])
 
-    text = build_config(hpc, run_mode, multi, sbd, proc, geometry)
+    text = build_config(hpc, run_mode, multi, sbd, proc, geometry,
+                        gpu_type=gpu_type)
 
     # Optional sanity check: the produced text must be valid YAML.
     try:
