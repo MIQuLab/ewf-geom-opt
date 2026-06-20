@@ -56,12 +56,13 @@ CCF_SBD_PREAMBLE = [
 MSU_SBD_EXE = "/mnt/home/lizhen6/sbd/apps/chemistry_tpb_selected_basis_diagonalization/diag"
 MSU_MPI_LAUNCHER = "/mnt/home/lizhen6/mpich/bin/mpirun"
 MSU_SBD_PREAMBLE = [
-    "module load powertools Miniforge3 GCCcore/13.3.0 LLVM/18.1.8-GCCcore-13.3.0 OpenBLAS/0.3.27-GCC-13.3.0 CUDA/12.9.1",
     'export PATH="/mnt/home/lizhen6/mpich/bin:$PATH"',
-    "conda activate ewf",
 ]
 # On MSU only a100 GPUs may be used -> request --gpus-per-node=a100:<n>.
 MSU_GPU_TYPE = "a100"
+# MSU compute nodes do not reliably inherit an activated conda env, so the
+# worker subprocesses are launched with an EXPLICIT python interpreter path.
+MSU_PYTHON = "/mnt/home/k0095864/.conda/envs/ewf/bin/python3.1"
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +92,12 @@ def ask_yesno(prompt):
         print("   Please answer yes or no.")
 
 
+def ask_text(prompt, default):
+    """Free-form text answer; an empty reply keeps ``default``."""
+    ans = input(f"\n{prompt}\n   [press Enter for default: {default}]\n> ").strip()
+    return ans or default
+
+
 # ---------------------------------------------------------------------------
 # Config rendering helpers
 # ---------------------------------------------------------------------------
@@ -115,7 +122,7 @@ def _sbatch_lines(indent, hpc, partition, ntasks=None, mem=None):
     return out
 
 
-def build_config(hpc, run_mode, multi, sbd, proc):
+def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt"):
     """Assemble the focused config.yaml text for the chosen options."""
     is_ewf = (run_mode == "ewf")
     gpu = (proc == "GPU")
@@ -173,7 +180,8 @@ def build_config(hpc, run_mode, multi, sbd, proc):
     # --- calculation block --------------------------------------------------
     a("calculation:")
     a(f"  run_mode: {run_mode}")
-    a("  geometry_file: geometry.txt    # <-- UPDATE: path to your geometry (Element x y z)")
+    a(f"  geometry_file: {geometry}"
+      f"{' ' * max(1, 18 - len(str(geometry)))}# geometry file (Element x y z, one atom per line)")
     a("  basis: sto-3g                  # <-- UPDATE: basis set")
     a("  charge: 0                      # <-- UPDATE if non-neutral")
     a("  spin: 0                        # closed-shell required (esp. true_unfragmented)")
@@ -186,8 +194,20 @@ def build_config(hpc, run_mode, multi, sbd, proc):
     if is_ewf:
         a("# Slurm resources for the fragmented DUMP + solve waves.")
         a("slurm:")
-        a("  python_executable: python")
+        if hpc == "MSU":
+            a(f"  python_executable: {MSU_PYTHON}   # explicit interpreter"
+              " (MSU compute nodes lack an active conda env)")
+        else:
+            a("  python_executable: python")
         a("  poll_interval: 15")
+        if hpc == "MSU":
+            # Per-sub-job env: the parent job's conda env does not propagate to
+            # the DUMP/solve sub-jobs on MSU compute nodes, so put the env's bin
+            # on PATH explicitly (the absolute python_executable above is the
+            # other half of this -- together they fix 'No module named yaml').
+            env_bin = os.path.dirname(MSU_PYTHON)
+            a("  preamble: |                # env setup inside each DUMP/solve sub-job")
+            a(f'      export PATH="{env_bin}:$PATH"')
         a("  dump:                        # integral / cluster dump wave")
         L.extend(_sbatch_lines(4, hpc, CCF_CPU_PARTITION, ntasks=2, mem="100G"))
         a("  # Per-solver solve-wave blocks (one job per fragment uses the block named")
@@ -243,7 +263,9 @@ def build_config(hpc, run_mode, multi, sbd, proc):
             a(f"      {ln}")
         a("    sbatch:")
         sbd_partition = CCF_GPU_PARTITION if gpu else CCF_CPU_PARTITION
-        L.extend(_sbatch_lines(6, hpc, sbd_partition, ntasks=None, mem="500G"))
+        # MSU GPU nodes have less RAM than CCF -> 350G for MSU GPU SBD jobs.
+        sbd_mem = "350G" if (hpc == "MSU" and gpu) else "500G"
+        L.extend(_sbatch_lines(6, hpc, sbd_partition, ntasks=None, mem=sbd_mem))
         a("      # extra:")
         a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
         a("")
@@ -280,17 +302,19 @@ def main():
         ["EWF", "unfragmented_EWF_limit", "true_unfragmented"])
     run_mode = "ewf" if run_mode == "EWF" else run_mode  # config token
 
+    geometry = ask_text("3) Geometry file name?", "geometry.txt")
+
     multi = False
     if run_mode == "ewf":
-        multi = ask_yesno("3) Utilize the per-fragment multi-solver?")
+        multi = ask_yesno("4) Utilize the per-fragment multi-solver?")
 
-    sbd = ask_yesno("4) Use the SCI-SBD external eigensolver?")
+    sbd = ask_yesno("5) Use the SCI-SBD external eigensolver?")
 
     proc = None
     if sbd:
-        proc = ask_choice("5) GPU or CPU-only SCI-SBD calculation?", ["GPU", "CPU"])
+        proc = ask_choice("6) GPU or CPU-only SCI-SBD calculation?", ["GPU", "CPU"])
 
-    text = build_config(hpc, run_mode, multi, sbd, proc)
+    text = build_config(hpc, run_mode, multi, sbd, proc, geometry)
 
     # Optional sanity check: the produced text must be valid YAML.
     try:
@@ -318,7 +342,7 @@ def main():
     print("This is a TEMPLATE: it contains only the options relevant to your run,")
     print("with defaults elsewhere.  You STILL need to update the run-specific")
     print("values inside it before submitting -- in particular:")
-    print("   * calculation.geometry_file and calculation.basis (and charge/spin)")
+    print("   * calculation.basis (and charge/spin); confirm the geometry file exists")
     if hpc == "MSU":
         print(f"   * the Slurm 'account' (default {MSU_ACCOUNT_DEFAULT}) and 'time' "
               f"(default {MSU_TIME_DEFAULT}) in every sbatch block")

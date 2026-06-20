@@ -681,7 +681,8 @@ def resolve_solve_solver(frag_idx, cfg, workdir):
     if not ms.get("enabled", False):
         return cfg["ewf"]["solver"], None
     cluster_h5, _ = fragment_paths(workdir, frag_idx)
-    if not os.path.exists(cluster_h5):
+    # Cross-node read of a DUMP-stage file; tolerate shared-FS visibility lag.
+    if wait_for_files_visible([cluster_h5], label="cluster dump"):
         raise RuntimeError(
             f"Cannot resolve the solver for fragment {frag_idx}: {cluster_h5} "
             f"not found.  The DUMP wave must finish before the solve wave is "
@@ -714,6 +715,27 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
     if stage not in ("dump", "fci"):
         raise ValueError(f"Unknown stage: {stage!r}")
     py = cfg["slurm"]["python_executable"]
+
+    # Optional per-sub-job environment setup (slurm.preamble): module loads /
+    # PATH / LD_LIBRARY_PATH lines emitted verbatim INSIDE each DUMP/solve
+    # worker script, so the worker has the right environment on its compute
+    # node even when the parent job's env (e.g. an activated conda env) does
+    # NOT propagate to the sub-jobs -- the cause of "ModuleNotFoundError: No
+    # module named 'yaml'" in worker sub-jobs on some sites (e.g. MSU).  Accepts
+    # a block string or a list of lines.  (Using an absolute interpreter for
+    # slurm.python_executable is the other half of this fix.)
+    preamble = cfg["slurm"].get("preamble", "")
+    if isinstance(preamble, (list, tuple)):
+        preamble = "\n".join(str(x) for x in preamble)
+    preamble = str(preamble).strip()
+    preamble_block = ""
+    if preamble:
+        preamble_block = (
+            "# --- slurm.preamble: set up the worker environment on this node -\n"
+            "set +u  # module/env scripts commonly reference unset variables\n"
+            f"{preamble}\n"
+            "set -u\n"
+        )
 
     stage_dir = stage_workdir(workdir, stage)
     label = _stage_label(stage, cfg)
@@ -776,6 +798,7 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
         f'trap on_exit EXIT\n'
         f'echo "RUNNING ${{SLURM_JOB_ID:-?}} $(date -u +%FT%TZ)" > "$STATUS_FILE"\n'
         f'cd "{os.path.abspath(os.getcwd())}"\n'
+        f'{preamble_block}'
         f'export OMP_NUM_THREADS=${{SLURM_NTASKS:-1}}\n'
         f'export MKL_NUM_THREADS=${{SLURM_NTASKS:-1}}\n'
         f'{solver_comment}'
@@ -857,6 +880,48 @@ def wait_for_slurm_jobs(status_files, poll_interval=15):
             f"corresponding *.err / *.out files.")
     print("[driver] All fragment jobs reported DONE.")
     return statuses
+
+
+def wait_for_files_visible(paths, label="output", poll_interval=5,
+                           max_wait=180):
+    """Wait until worker-produced files become visible on a shared filesystem.
+
+    On clustered / NFS-style filesystems (e.g. MSU's ``ffs24``), a file
+    written by a compute node can lag behind the job's ``DONE`` status as
+    seen from another node (the driver, or a downstream worker): the new
+    directory entry has not yet propagated, and/or a stale *negative* dentry
+    is cached from the pre-run stale-file wipe.  Because the job already
+    reported ``DONE``, the file is guaranteed to have been written -- it is
+    only a visibility lag -- so we force a fresh directory read
+    (``os.listdir``, which invalidates the cached dentries) and re-``stat``,
+    retrying until the files appear or ``max_wait`` seconds elapse.
+
+    Returns the list of still-missing paths (empty on success).
+    """
+    deadline = time.time() + max_wait
+    announced = False
+    while True:
+        # A fresh readdir on each parent busts any stale (negative) dentry
+        # cache left from the earlier os.remove()/os.path.exists() wipe.
+        for d in {os.path.dirname(p) or "." for p in paths}:
+            try:
+                os.listdir(d)
+            except OSError:
+                pass
+        missing = [p for p in paths if not os.path.exists(p)]
+        if not missing:
+            if announced:
+                print(f"[driver] {label} file(s) became visible after "
+                      f"filesystem settle.")
+            return []
+        if time.time() >= deadline:
+            return missing
+        if not announced:
+            print(f"[driver] {len(missing)} {label} file(s) not yet visible "
+                  f"despite DONE status; waiting up to {max_wait}s for the "
+                  f"shared filesystem to settle...")
+            announced = True
+        time.sleep(poll_interval)
 
 
 # ---------------------------------------------------------------------------
@@ -971,7 +1036,10 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     workdir = cfg["calculation"]["workdir"]
     os.makedirs(workdir, exist_ok=True)
     cluster_h5, rdm_h5 = fragment_paths(workdir, frag_idx)
-    if not os.path.exists(cluster_h5):
+    # The DUMP stage may have written this file from a *different* node; on a
+    # clustered filesystem its directory entry can lag, so settle before
+    # declaring it missing (see wait_for_files_visible).
+    if wait_for_files_visible([cluster_h5], label="cluster dump"):
         raise RuntimeError(
             f"Cluster dump file not found for fragment {frag_idx}: "
             f"{cluster_h5}.  Make sure the DUMP stage completed first.")
@@ -1671,7 +1739,7 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
         dump_status_files = _submit_stage(
             "dump", nfrag, cfg, workdir, config_path, script_path)
         wait_for_slurm_jobs(dump_status_files, poll_interval=poll)
-        missing = [p for p in cluster_files if not os.path.exists(p)]
+        missing = wait_for_files_visible(cluster_files, label="cluster dump")
         if missing:
             raise RuntimeError(
                 "The following per-fragment cluster dump files were not "
@@ -1685,7 +1753,7 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
             "fci", nfrag, cfg, workdir, config_path, script_path)
         wait_for_slurm_jobs(fci_status_files, poll_interval=poll)
 
-    missing = [p for p in rdm_files if not os.path.exists(p)]
+    missing = wait_for_files_visible(rdm_files, label="RDM")
     if missing:
         raise RuntimeError(
             "The following per-fragment RDM files were not produced "
