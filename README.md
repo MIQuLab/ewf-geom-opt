@@ -19,12 +19,15 @@ The central contribution of this project is a pair of density-assembly routes �
 
 | File | Role |
 |---|---|
-| `EWF-CI_Geom_Opt_HPC.py` | Main driver: fragment construction, Slurm orchestration, RDM assembly dispatch, geomeTRIC engine |
+| `EWF-CI_Geom_Opt_HPC.py` | Main driver: run-mode dispatch, fragment construction, Slurm orchestration, RDM assembly dispatch, geomeTRIC engine |
 | `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + proper CCSD Λ (Z-vector) relaxed density |
-| `isolated_casci_gradient.py` | Analytic EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) |
+| `isolated_casci_gradient.py` | Analytic gradients: the EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) and the full-system CASCI gradient `build_grad` |
+| `external_sci.py` | `SCI_SBD` solver: PySCF Selected-CI growth with the external SBD eigensolver (CPU or GPU), driven through files and per-cycle Slurm sub-jobs |
+| `calculation_setup.py` | Interactive generator for a focused `config.yaml` (see *Usage → Generating a config*) |
+| `slurm_jobs_check.py` | Post-mortem Slurm diagnostic for the workflow's multi-layer jobs (see below) |
 | `config.yaml` | Calculation, embedding, Slurm, and optimizer settings |
 | `propylene.txt` | Propylene test geometry |
-| `submit_zvec.sh` | Slurm submission script |
+| `submit_slurm_*.sh` | Example Slurm submission scripts |
 
 ---
 
@@ -147,7 +150,37 @@ The optimization energy remains the density functional `ewf_energy_from_rdms(γ)
 
 ---
 
+## Run modes
+
+`calculation.run_mode` selects what the driver optimizes. The fragmented EWF method described above is the default; two additional **unfragmented** modes solve the whole molecule as a single cluster and exist as references that pinpoint where the EWF approximations enter.
+
+| `run_mode` | What it solves | Energy | Gradient |
+|---|---|---|---|
+| **`ewf`** (default) | Fragmented EWF — per-fragment cluster solves assembled into a global density | EWF density functional `ewf_energy_from_rdms(γ)` | EWF analytic gradient (`build_ewf_grad` + assembly route) |
+| **`unfragmented_EWF_limit`** | One cluster spanning the entire system, evaluated through the EWF machinery | EWF density *functional* | `build_ewf_grad` |
+| **`true_unfragmented`** | One full-system CASCI (all orbitals active) | Exact total energy (eigenvalue + `E_nuc`) | Analytic CASCI gradient `build_grad`, equivalent to PySCF `mc.Gradients().kernel()` |
+
+Both unfragmented modes remove fragmentation, but they differ in *how the energy and gradient are evaluated* — and that difference is the point:
+
+- **`unfragmented_EWF_limit`** keeps the EWF energy functional and `build_ewf_grad`, so it still carries the EWF functional's own approximation: the assembled density does not extremize `E`, so the non-Hellmann–Feynman density-response term is present. It is the no-fragmentation limit of the EWF estimator — comparing it against a fragmented `ewf` run isolates the error introduced purely by partitioning into fragments.
+- **`true_unfragmented`** is a genuine, non-embedded reference: it returns the exact eigenvalue energy and its variational analytic gradient (Hellmann–Feynman holds), reproducing a standard PySCF CASCI optimization on the same code path. Comparing it against `unfragmented_EWF_limit` isolates the error of the EWF *functional* itself, with fragmentation taken out of the picture.
+
+Together the three modes let the fragmentation error and the functional error be measured separately against an exact full-system benchmark. Each mode runs in its own working directory, so the runs never collide. The unfragmented modes require a closed-shell reference and solve a single full-system cluster with `ewf.solver` (per-fragment `multi_solver` does not apply to them).
+
+---
+
 ## Usage
+
+### Generating a config (`calculation_setup.py`)
+
+`config.yaml` spans many options across run modes, solvers, the CPU/GPU SBD eigensolver, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — the run mode, the geometry file, whether to use per-fragment multi-solver, whether to use the SCI-SBD eigensolver and on **CPU or GPU**, and the target compute environment — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
+
+```bash
+cd Source
+python calculation_setup.py
+```
+
+The result is a short, readable template rather than the full option set — the recommended starting point for a new calculation. The reference below documents the individual options it produces.
 
 ### Configuration
 
@@ -167,6 +200,7 @@ ewf:
     approximate_solver: SCI   # used when norb >= norb_threshold  (FCI/SCI/SCI_SBD)
 
 calculation:
+  run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented (see Run modes)
   geometry_file: propylene.txt
   basis: sto-3g
   ...
@@ -205,6 +239,8 @@ Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the d
 
 In addition to FCI and SCI, any solver role (`ewf.solver`, or either `multi_solver` role) may be set to **`SCI_SBD`** — PySCF's Selected-CI subspace growth with the external [Selected-Basis-Diagonalization (SBD)](SBD-in-PySCF-SCI-Exploration/README.md) binary as the per-cycle eigensolver. It keeps PySCF's determinant-growth machinery (`kernel_float_space` → `enlarge_space`) and replaces **only** the per-iteration diagonalization with the SBD MPI binary, via `external_sci.ExternalEigSelectedCI` (bundled in `Source/`). It is intended for large clusters whose `na × nb` selected space is too big for stock Davidson but tractable for SBD's MPI-distributed tensor-product-basis engine — e.g. `approximate_solver: SCI_SBD` for the clusters above `norb_threshold`. The name carries the **subspace-growth scheme** (SCI) explicitly, so future workflows that pair the SBD eigensolver with a *different* growth strategy can coexist under their own `*_SBD` names.
 
+The SBD eigensolver runs on either **CPU or GPU**, selected by `sbd.proc_type` (`0` = CPU, `1` = GPU). The per-cycle MPI launch layout — rank counts, GPU binding, and the launcher's environment-passing flags — is derived automatically for the chosen backend, so switching between CPU and GPU is a one-line config change.
+
 SBD is an external binary driven through files, and it submits **one Slurm job per SCI growth cycle** (resources from the `sbd.slurm` block), blocking until each finishes. This nests inside the per-fragment `solve` job, whose own resources come from the per-solver `slurm.SCI_SBD` block — that outer job only orchestrates/waits (few tasks) but needs enough RAM to drive the sub-jobs, while the heavy compute is sized separately via `sbd.slurm`. Selecting `SCI_SBD` therefore **requires** an `sbd:` block in `config.yaml` (executable paths, `proc_type`, performance options, and the per-cycle `sbd.slurm` resources) plus Slurm and the compiled SBD binary; the driver raises a clear error if `SCI_SBD` is selected without it. The SBD-specific options, file-transfer mechanics, and correctness notes (e.g. `ecore` bookkeeping, alpha/beta column orientation) are documented in [`SBD-in-PySCF-SCI-Exploration/README.md`](SBD-in-PySCF-SCI-Exploration/README.md).
 
 ### Running
@@ -220,10 +256,10 @@ python EWF-CI_Geom_Opt_HPC.py --config config.yaml
 python EWF-CI_Geom_Opt_HPC.py --config config.yaml --no-slurm
 ```
 
-On the cluster, submit through the provided script:
+On the cluster, submit through a Slurm submission script (example scripts are provided in [`Source/`](Source/)):
 
 ```bash
-sbatch submit_zvec.sh
+sbatch submit_slurm_*.sh
 ```
 
 Each optimization step writes its geometry, derived per-step config, and fragment work into `step_NNN/` subdirectories; the driver submits a DUMP wave and a cluster-solver wave per step and assembles the global RDMs from the workers' HDF5 output.
