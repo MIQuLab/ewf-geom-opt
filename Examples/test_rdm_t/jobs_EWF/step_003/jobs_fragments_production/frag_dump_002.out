@@ -1,7 +1,0 @@
-No module named 'dyson'
-Dyson required for self-energy calculations
-[dump frag=2] Building mol + RHF
-[dump frag=2] HF energy: -115.6589942281
-[dump frag=2] vayesta.ewf.EWF(solver=DUMP, bath_options=dict(threshold=1e-05))
-[dump frag=2] Running ONLY fragment 'Fragment 2: C' -> /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/2_test_multi_solver/test_rdm_t/jobs_EWF/step_003/cluster_002.h5
-[dump frag=2] Wrote cluster file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/2_test_multi_solver/test_rdm_t/jobs_EWF/step_003/cluster_002.h5

@@ -19,12 +19,15 @@ The central contribution of this project is a pair of density-assembly routes �
 
 | File | Role |
 |---|---|
-| `EWF-CI_Geom_Opt_HPC.py` | Main driver: fragment construction, Slurm orchestration, RDM assembly dispatch, geomeTRIC engine |
+| `EWF-CI_Geom_Opt_HPC.py` | Main driver: run-mode dispatch, fragment construction, Slurm orchestration, RDM assembly dispatch, geomeTRIC engine |
 | `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + proper CCSD Λ (Z-vector) relaxed density |
-| `isolated_casci_gradient.py` | Analytic EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) |
+| `isolated_casci_gradient.py` | Analytic gradients: the EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) and the full-system CASCI gradient `build_grad` |
+| `external_sci.py` | `SCI_SBD` solver: PySCF Selected-CI growth with the external SBD eigensolver (CPU or GPU), driven through files and per-cycle Slurm sub-jobs |
+| `calculation_setup.py` | Interactive generator for a focused `config.yaml` (see *Usage → Generating a config*) |
+| `slurm_jobs_check.py` | Post-mortem Slurm diagnostic for the workflow's multi-layer jobs (see below) |
 | `config.yaml` | Calculation, embedding, Slurm, and optimizer settings |
 | `propylene.txt` | Propylene test geometry |
-| `submit_zvec.sh` | Slurm submission script |
+| `submit_slurm_*.sh` | Example Slurm submission scripts |
 
 ---
 
@@ -95,16 +98,16 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `ewf.assembly` | Construction | Origin |
 |---|---|---|
 | `democratic` | Cluster RDMs, democratically partitioned (4-index split) | mirrors Vayesta `make_rdm{1,2}_demo_rhf` |
-| `ci_revision` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→CCSD conversion → global CCSD RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
+| `ci` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→CCSD conversion → global CCSD RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
 | `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default CCSD 2-RDM route |
 | **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global CCSD RDM | **this project** |
 | **`rdm_t_lambda`** | `rdm_t` amplitudes + proper CCSD **Λ solve** → relaxed global RDMs | **this project** |
 
-### `ci_revision`: the CI-coefficient assembly (baseline, revised ordering)
+### `ci`: the CI-coefficient assembly (baseline, revised ordering)
 
 Vayesta's global-wavefunction route converts each fragment's FCI/SCI CI vector to CISD coefficients (`RFCI_WaveFunction.as_cisd`), applies the occupied-fragment projector at the CISD level, converts to T-amplitudes (`as_ccsd`) **per fragment**, rotates and accumulates them into one global `(T1, T2)`, and feeds a single `ccsd_rdm` call.
 
-The `ci_revision` mode (which replaces the former `ci` mode) keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→CCSD conversion `T2 = C2 − T1⊗T1` is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Vayesta's per-fragment conversion instead subtracts `Σ_x (P_x·T1)⊗(P_x·T1)`, which misses every cross-fragment product of the exact `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)`; converting once with the global T1 includes them.
+The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→CCSD conversion `T2 = C2 − T1⊗T1` is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Vayesta's per-fragment conversion instead subtracts `Σ_x (P_x·T1)⊗(P_x·T1)`, which misses every cross-fragment product of the exact `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)`; converting once with the global T1 includes them.
 
 Two approximations remain baked in:
 
@@ -113,10 +116,10 @@ Two approximations remain baked in:
 
 ### `rdm_t`: amplitudes from the exact RDM cumulant
 
-`rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci_revision` mode uses):
+`rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci` mode uses):
 
 ```
-CI-coefficient (ci_revision):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global CCSD RDM
+CI-coefficient (ci):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global CCSD RDM
 Vayesta democratic:            cluster RDMs → 4-index democratic projection → global RDM
 rdm_t (this project):          cluster RDMs → effective T1,T2 → global CCSD RDM
                                 └── novel front-end ──┘└── Vayesta back-end ──┘
@@ -129,7 +132,7 @@ T1_eff = dm1_corr[occ, vir]
 T2_eff = λ2_cumulant[occ, occ, vir, vir]
 ```
 
-is the new feature introduced in this project; it was not previously available in the Vayesta codebase. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This is the direct improvement over the `ci_revision` route's CISD truncation: where `as_cisd` discards everything above doubles, `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions survives into the global density.
+is the new feature introduced in this project; it was not previously available in the Vayesta codebase. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This is the direct improvement over the `ci` route's CISD truncation: where `as_cisd` discards everything above doubles, `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions survives into the global density.
 
 ### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 
@@ -147,7 +150,37 @@ The optimization energy remains the density functional `ewf_energy_from_rdms(γ)
 
 ---
 
+## Run modes
+
+`calculation.run_mode` selects what the driver optimizes. The fragmented EWF method described above is the default; two additional **unfragmented** modes solve the whole molecule as a single cluster and exist as references that pinpoint where the EWF approximations enter.
+
+| `run_mode` | What it solves | Energy | Gradient |
+|---|---|---|---|
+| **`ewf`** (default) | Fragmented EWF — per-fragment cluster solves assembled into a global density | EWF density functional `ewf_energy_from_rdms(γ)` | EWF analytic gradient (`build_ewf_grad` + assembly route) |
+| **`unfragmented_EWF_limit`** | One cluster spanning the entire system, evaluated through the EWF machinery | EWF density *functional* | `build_ewf_grad` |
+| **`true_unfragmented`** | One full-system CASCI (all orbitals active) | Exact total energy (eigenvalue + `E_nuc`) | Analytic CASCI gradient `build_grad`, equivalent to PySCF `mc.Gradients().kernel()` |
+
+Both unfragmented modes remove fragmentation, but they differ in *how the energy and gradient are evaluated* — and that difference is the point:
+
+- **`unfragmented_EWF_limit`** keeps the EWF energy functional and `build_ewf_grad`, so it still carries the EWF functional's own approximation: the assembled density does not extremize `E`, so the non-Hellmann–Feynman density-response term is present. It is the no-fragmentation limit of the EWF estimator — comparing it against a fragmented `ewf` run isolates the error introduced purely by partitioning into fragments.
+- **`true_unfragmented`** is a genuine, non-embedded reference: it returns the exact eigenvalue energy and its variational analytic gradient (Hellmann–Feynman holds), reproducing a standard PySCF CASCI optimization on the same code path. Comparing it against `unfragmented_EWF_limit` isolates the error of the EWF *functional* itself, with fragmentation taken out of the picture.
+
+Together the three modes let the fragmentation error and the functional error be measured separately against an exact full-system benchmark. Each mode runs in its own working directory, so the runs never collide. The unfragmented modes require a closed-shell reference and solve a single full-system cluster with `ewf.solver` (per-fragment `multi_solver` does not apply to them).
+
+---
+
 ## Usage
+
+### Generating a config (`calculation_setup.py`)
+
+`config.yaml` spans many options across run modes, solvers, the CPU/GPU SBD eigensolver, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — the run mode, the geometry file, whether to use per-fragment multi-solver, whether to use the SCI-SBD eigensolver and on **CPU or GPU**, and the target compute environment — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
+
+```bash
+cd Source
+python calculation_setup.py
+```
+
+The result is a short, readable template rather than the full option set — the recommended starting point for a new calculation. The reference below documents the individual options it produces.
 
 ### Configuration
 
@@ -156,7 +189,7 @@ All settings live in [`Source/config.yaml`](Source/config.yaml):
 ```yaml
 ewf:
   bath_threshold: 1.0e-5      # stable, non-full DMET bath
-  solver: SCI                 # FCI or Selected-CI cluster solver (single-solver mode)
+  solver: SCI                 # FCI, SCI, or SCI_SBD cluster solver (single-solver mode)
   sci_select_cutoff: 1.0e-4   # tight selection → geometry-independent determinant set
   assembly: rdm_t_lambda      # density-assembly route (see table above)
 
@@ -164,14 +197,21 @@ ewf:
     enabled: true
     norb_threshold: 13        # cluster-size cutoff (total active orbitals)
     high_accuracy_solver: FCI # used when norb <  norb_threshold
-    approximate_solver: SCI   # used when norb >= norb_threshold
+    approximate_solver: SCI   # used when norb >= norb_threshold  (FCI/SCI/SCI_SBD)
 
 calculation:
+  run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented (see Run modes)
   geometry_file: propylene.txt
   basis: sto-3g
   ...
 
-slurm:                        # per-wave Slurm resources (dump / fci)
+slurm:                        # Slurm resources: dump wave + PER-SOLVER solve blocks
+  dump: { ... }               # integral/cluster dump wave
+  FCI:  { ... }               # solve job for FCI fragments      (light)
+  SCI:  { ... }               # solve job for SCI fragments      (light)
+  SCI_SBD: { ... }            # solve job for SCI_SBD fragments  (outer orchestrator; more RAM)
+
+sbd:                          # only used when a cluster solver is SCI_SBD (see below)
   ...
 
 geomopt:
@@ -191,9 +231,17 @@ norb <  norb_threshold   →   high_accuracy_solver   (default FCI)
 norb >= norb_threshold   →   approximate_solver     (default SCI)
 ```
 
-With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Both solver fields accept `FCI` or `SCI`, and SCI clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
+With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, or `SCI_SBD` (see below), and SCI/SCI_SBD clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
 
 Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the driver then falls back to single-solver mode and applies `ewf.solver` to every fragment, exactly as before. Existing configs without a `multi_solver` block default to this behavior, so they are unaffected.
+
+### `SCI_SBD`: SCI growth with the SBD eigensolver
+
+In addition to FCI and SCI, any solver role (`ewf.solver`, or either `multi_solver` role) may be set to **`SCI_SBD`** — PySCF's Selected-CI subspace growth with the external [Selected-Basis-Diagonalization (SBD)](SBD-in-PySCF-SCI-Exploration/README.md) binary as the per-cycle eigensolver. It keeps PySCF's determinant-growth machinery (`kernel_float_space` → `enlarge_space`) and replaces **only** the per-iteration diagonalization with the SBD MPI binary, via `external_sci.ExternalEigSelectedCI` (bundled in `Source/`). It is intended for large clusters whose `na × nb` selected space is too big for stock Davidson but tractable for SBD's MPI-distributed tensor-product-basis engine — e.g. `approximate_solver: SCI_SBD` for the clusters above `norb_threshold`. The name carries the **subspace-growth scheme** (SCI) explicitly, so future workflows that pair the SBD eigensolver with a *different* growth strategy can coexist under their own `*_SBD` names.
+
+The SBD eigensolver runs on either **CPU or GPU**, selected by `sbd.proc_type` (`0` = CPU, `1` = GPU). The per-cycle MPI launch layout — rank counts, GPU binding, and the launcher's environment-passing flags — is derived automatically for the chosen backend, so switching between CPU and GPU is a one-line config change.
+
+SBD is an external binary driven through files, and it submits **one Slurm job per SCI growth cycle** (resources from the `sbd.slurm` block), blocking until each finishes. This nests inside the per-fragment `solve` job, whose own resources come from the per-solver `slurm.SCI_SBD` block — that outer job only orchestrates/waits (few tasks) but needs enough RAM to drive the sub-jobs, while the heavy compute is sized separately via `sbd.slurm`. Selecting `SCI_SBD` therefore **requires** an `sbd:` block in `config.yaml` (executable paths, `proc_type`, performance options, and the per-cycle `sbd.slurm` resources) plus Slurm and the compiled SBD binary; the driver raises a clear error if `SCI_SBD` is selected without it. The SBD-specific options, file-transfer mechanics, and correctness notes (e.g. `ecore` bookkeeping, alpha/beta column orientation) are documented in [`SBD-in-PySCF-SCI-Exploration/README.md`](SBD-in-PySCF-SCI-Exploration/README.md).
 
 ### Running
 
@@ -208,10 +256,10 @@ python EWF-CI_Geom_Opt_HPC.py --config config.yaml
 python EWF-CI_Geom_Opt_HPC.py --config config.yaml --no-slurm
 ```
 
-On the cluster, submit through the provided script:
+On the cluster, submit through a Slurm submission script (example scripts are provided in [`Source/`](Source/)):
 
 ```bash
-sbatch submit_zvec.sh
+sbatch submit_slurm_*.sh
 ```
 
 Each optimization step writes its geometry, derived per-step config, and fragment work into `step_NNN/` subdirectories; the driver submits a DUMP wave and a cluster-solver wave per step and assembles the global RDMs from the workers' HDF5 output.
@@ -219,11 +267,11 @@ Each optimization step writes its geometry, derived per-step config, and fragmen
 ### Worker modes (invoked by the generated batch scripts)
 
 ```bash
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                    # integrals/cluster dump
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI] # cluster solve
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                        # integrals/cluster dump
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI|SCI_SBD] # cluster solve
 ```
 
-`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI or SCI runs is decided per fragment (`--mode fci` is accepted as a legacy alias for the same stage). In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
+`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI, SCI, or SCI_SBD runs is decided per fragment. In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
 
 ---
 
@@ -239,3 +287,26 @@ python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solv
   ```
 
   See [`Geom_Comparison_Tool/README.md`](Geom_Comparison_Tool/README.md) for formats and the notebook workflow.
+
+---
+
+## Slurm job diagnostics (`slurm_jobs_check.py`)
+
+[`Source/slurm_jobs_check.py`](Source/slurm_jobs_check.py) is a post-mortem diagnostic for the workflow's **multi-layer** Slurm jobs, written for the memory-orchestration problem that comes with nesting them. A single optimization spawns jobs on several layers:
+
+- **DUMP wave** — one job per fragment (`jobs_fragments_production/frag_dump_*`);
+- **SOLVE wave** — one job per fragment (`jobs_ci_calculations/frag_*`), whose resolved solver (FCI / SCI / SCI_SBD) decides which `slurm.<SOLVER>` block it used;
+- **SBD sub-jobs** — for `SCI_SBD` fragments, one job per SCI growth cycle (`sci_sbd_scratch_<frag>/iter_<cycle>/sbd_job*`);
+
+all of them grouped per `step_<NNN>/` under geometry optimization. With memory sized independently at each layer (`slurm.dump.mem`, the per-solver `slurm.FCI/SCI/SCI_SBD.mem`, and `sbd.slurm.sbatch.mem`), an out-of-memory kill on one layer is easy to misattribute.
+
+The tool walks the working directory, discovers every job from its on-disk artifacts, resolves each Slurm JobID (from the `.status` file while a job is queued/running, otherwise via `sacct` matched by job name and submit time), runs **`seff`** on each, and reports failures with an *explained* reason. Out-of-memory is detected from `State: OUT_OF_MEMORY`, exit code 137, or near-100% memory efficiency, and each OOM points at the exact config knob to raise (including a note that an SBD sub-job is sized by `sbd.slurm.sbatch.mem`, not the outer `slurm.SCI_SBD` block). It also prints a per-layer **memory-orchestration table** (peak used vs. requested, with `TIGHT` / `over-provisioned` / `OOM` verdicts) to help right-size each block.
+
+```bash
+cd Source
+python slurm_jobs_check.py --workdir jobs_EWF        # or --config config.yaml
+python slurm_jobs_check.py --workdir jobs_EWF --all  # also list successful jobs
+python slurm_jobs_check.py --workdir jobs_EWF --json report.json
+```
+
+Stdlib-only (plus `seff`/`sacct` on `PATH`); read-only (never calls `squeue`/`scancel` or touches the run), so it is safe to run at any time, including while jobs are still in flight. It exits non-zero if any job failed, and degrades gracefully to the on-disk `.status` records when `seff`/`sacct` are unavailable.
