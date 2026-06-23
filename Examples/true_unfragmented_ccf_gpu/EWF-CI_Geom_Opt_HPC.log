@@ -1,0 +1,262 @@
+          |                                    ___       ___
+          |  _______________________________  /   \ . . /   \
+          |                                   \___/     \___/
+          |              VAYESTA                  .  V  .   .
+          |     Quantum Embedding Package          .___.  A  .___
+          |  _______________________________       /   \ . . /   \
+          |                    version 1.0.1       \___/     \___/ 
+          |
+No module named 'dyson'
+Dyson required for self-energy calculations
+[geomopt] 9 atoms, basis=sto-3g, mode=true_unfragmented, solver=SCI_SBD (full system)
+[geomopt] Working directory : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG
+[geomopt] Per-step subfolder: step_{step:03d}
+[geomopt] geomeTRIC kwargs: {'maxiter': 100, 'coordsys': 'tric', 'convergence_energy': 0.001, 'convergence_grms': 0.005, 'convergence_gmax': 0.005, 'convergence_drms': 0.012, 'convergence_dmax': 0.018, 'convergence_set': 'GAU', 'logIni': '/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/geometric/config/log.ini'}
+[geomopt] Trajectory will be written to: /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/true_unfragmented_geomopt_optim.xyz
+geometric-optimize called with the following command line:
+EWF-CI_Geom_Opt_HPC.py --config config.yaml
+
+                                        [91m())))))))))))))))/[0m                     
+                                    [91m())))))))))))))))))))))))),[0m                
+                                [91m*)))))))))))))))))))))))))))))))))[0m             
+                        [94m#,[0m    [91m()))))))))/[0m                [91m.)))))))))),[0m          
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m.))))))))*[0m        
+                      [94m*%%%%%%,[0m  [91m))[0m              [93m..[0m              [91m,))))))).[0m      
+                        [94m*%%%%%%,[0m         [93m***************/.[0m        [91m.)))))))[0m     
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m/*********************.[0m       [91m)))))))[0m    
+              [94m.%%%%%%#[0m      [94m*%%%%%%,[0m  [93m*******/,[0m     [93m**********,[0m      [91m.))))))[0m   
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**[0m              [93m********[0m      [91m.))))))[0m  
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m,******[0m      [91m/)))))[0m  
+        [94m%%%%%%[0m      [94m.%%%%%%#[0m      [94m*%%%%%%,[0m    [92m,/////.[0m       [93m******[0m      [91m))))))[0m 
+      [94m#%[0m      [94m%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////,[0m      [93m*****/[0m     [91m,)))))[0m 
+    [94m#%%[0m  [94m%%%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+  [94m#%%%%.[0m      [94m%%%%%#[0m      [94m/%%%%%%*[0m      [94m#%%%%%%[0m   [92m/////)[0m     [93m******[0m      [91m))))),[0m
+    [94m#%%%%##%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+      [94m##[0m     [94m%%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////.[0m      [93m*****/[0m     [91m,)))))[0m 
+        [94m#%%%%#[0m      [94m/%%%%%%/[0m      [94m(%%%%%%[0m      [92m/)/)//[0m       [93m******[0m      [91m))))))[0m 
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m*******[0m      [91m))))))[0m  
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**.[0m             [93m/*******[0m      [91m.))))))[0m  
+              [94m*%%%%%%/[0m      [94m(%%%%%%[0m   [93m********/*..,*/*********[0m       [91m*))))))[0m   
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m*********************/[0m        [91m)))))))[0m    
+                        [94m*%%%%%%,[0m         [93m,**************/[0m         [91m,))))))/[0m     
+                      [94m(%%%%%%[0m   [91m()[0m                              [91m))))))))[0m       
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m,)))))))),[0m        
+                        [94m#,[0m    [91m())))))))))[0m                [91m,)))))))))).[0m          
+                                 [91m()))))))))))))))))))))))))))))))/[0m             
+                                    [91m())))))))))))))))))))))))).[0m                
+                                         [91m())))))))))))))),[0m                     
+
+-=# [1;94m geomeTRIC started. Version: 1.1.1 [0m #=-
+Current date and time: 2026-06-20 19:13:35
+#========================================================#
+#| [92m    Arguments passed to driver run_optimizer():     [0m |#
+#========================================================#
+convergence_dmax          0.018 
+convergence_drms          0.012 
+convergence_energy        0.001 
+convergence_gmax          0.005 
+convergence_grms          0.005 
+convergence_set           GAU 
+coordsys                  tric 
+customengine              <__main__.EwfCiEngine object at 0x1555250de650> 
+input                     /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/true_unfragmented_geomopt.xyz 
+logIni                    /home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/geometric/config/log.ini 
+maxiter                   100 
+prefix                    /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/true_unfragmented_geomopt 
+----------------------------------------------------------
+Custom engine selected.
+Bonds will be generated from interatomic distances less than 1.20 times sum of covalent radii
+27 internal coordinates being used (instead of 27 Cartesians)
+Internal coordinate system (atoms numbered from 1):
+Distance 1-2
+Distance 1-4
+Distance 1-5
+Distance 1-6
+Distance 2-3
+Distance 2-7
+Distance 3-8
+Distance 3-9
+Angle 2-1-4
+Angle 2-1-5
+Angle 2-1-6
+Angle 4-1-5
+Angle 4-1-6
+Angle 5-1-6
+Angle 1-2-7
+Angle 3-2-7
+Angle 2-3-9
+Angle 8-3-9
+Out-of-Plane 2-1-3-7
+Out-of-Plane 3-2-8-9
+Dihedral 4-1-2-3
+Dihedral 4-1-2-7
+Dihedral 5-1-2-3
+Dihedral 5-1-2-7
+Dihedral 6-1-2-3
+Dihedral 6-1-2-7
+Dihedral 1-2-3-8
+Dihedral 1-2-3-9
+Dihedral 7-2-3-8
+Dihedral 7-2-3-9
+Translation-X 1-9
+Translation-Y 1-9
+Translation-Z 1-9
+Rotation-A 1-9
+Rotation-B 1-9
+Rotation-C 1-9
+<class 'geometric.internal.Distance'> : 8
+<class 'geometric.internal.Angle'> : 10
+<class 'geometric.internal.OutOfPlane'> : 2
+<class 'geometric.internal.Dihedral'> : 10
+<class 'geometric.internal.TranslationX'> : 1
+<class 'geometric.internal.TranslationY'> : 1
+<class 'geometric.internal.TranslationZ'> : 1
+<class 'geometric.internal.RotationA'> : 1
+<class 'geometric.internal.RotationB'> : 1
+<class 'geometric.internal.RotationC'> : 1
+> ===== Optimization Info: ====
+> Job type: Energy minimization
+> Maximum number of optimization cycles: 100
+> Initial / maximum trust radius (Angstrom): 0.100 / 0.300
+> Convergence Criteria:
+> Will converge when all 5 criteria are reached:
+>  |Delta-E| < 1.00e-03
+>  RMS-Grad  < 5.00e-03
+>  Max-Grad  < 5.00e-03
+>  RMS-Disp  < 1.20e-02
+>  Max-Disp  < 1.80e-02
+> === End Optimization Info ===
+
+======================================================================
+[geomopt step=000] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/step_000
+======================================================================
+[geomopt step=000] True unfragmented full-system calculation
+[geomopt step=000] HF energy: -115.5871420241
+[geomopt step=000] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=000] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=000] Full-system E (SCI_SBD) = -181.5652236385 Ha (electronic); total = -115.8547189180 Ha (eigenvalue + E_nuc)
+[geomopt step=000] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=000] TrueUnfrag-SCI_SBD energy (exact total): -115.8547189180 Ha
+[geomopt step=000] E = -115.8547189180 Ha   |grad| = 1.4490e-01
+======================================================================
+
+Step    0 : Gradient = 4.830e-02/5.900e-02 (rms/max) Energy = -115.8547189180
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.58307e-01 2.58467e-01 3.99459e-01
+
+======================================================================
+[geomopt step=001] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/step_001
+======================================================================
+[geomopt step=001] True unfragmented full-system calculation
+[geomopt step=001] HF energy: -115.6521465537
+[geomopt step=001] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=001] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=001] Full-system E (SCI_SBD) = -185.2714095945 Ha (electronic); total = -115.8870464610 Ha (eigenvalue + E_nuc)
+[geomopt step=001] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=001] TrueUnfrag-SCI_SBD energy (exact total): -115.8870464610 Ha
+[geomopt step=001] E = -115.8870464610 Ha   |grad| = 2.8204e-02
+======================================================================
+
+Step    1 : Displace = [0m1.003e-01[0m/[0m1.409e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad = [0m9.401e-03[0m/[0m1.179e-02[0m (rms/max) E (change) = -115.8870464610 ([0m-3.233e-02[0m) Quality = [0m0.759[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.58373e-01 2.95482e-01 4.53564e-01
+
+======================================================================
+[geomopt step=002] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/step_002
+======================================================================
+[geomopt step=002] True unfragmented full-system calculation
+[geomopt step=002] HF energy: -115.6555492620
+[geomopt step=002] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=002] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=002] Full-system E (SCI_SBD) = -185.4122049780 Ha (electronic); total = -115.8865084615 Ha (eigenvalue + E_nuc)
+[geomopt step=002] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=002] TrueUnfrag-SCI_SBD energy (exact total): -115.8865084615 Ha
+[geomopt step=002] E = -115.8865084615 Ha   |grad| = 2.1456e-02
+======================================================================
+
+Step    2 : Displace = [0m5.540e-02[0m/[0m9.529e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad = [0m7.152e-03[0m/[0m1.160e-02[0m (rms/max) E (change) = -115.8865084615 ([92m+5.380e-04[0m) Quality = [91m-0.384[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.65230e-01 4.28413e-01 5.00850e-01
+
+======================================================================
+[geomopt step=003] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/step_003
+======================================================================
+[geomopt step=003] True unfragmented full-system calculation
+[geomopt step=003] HF energy: -115.6559847852
+[geomopt step=003] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=003] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=003] Full-system E (SCI_SBD) = -185.5403510259 Ha (electronic); total = -115.8870616801 Ha (eigenvalue + E_nuc)
+[geomopt step=003] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=003] TrueUnfrag-SCI_SBD energy (exact total): -115.8870616801 Ha
+[geomopt step=003] E = -115.8870616801 Ha   |grad| = 1.0597e-02
+======================================================================
+
+Step    3 : Displace = [0m2.623e-02[0m/[0m4.354e-02[0m (rms/max) Trust = 2.770e-02 ([91m-[0m) Grad = [92m3.532e-03[0m/[0m5.044e-03[0m (rms/max) E (change) = -115.8870616801 ([92m-5.532e-04[0m) Quality = [0m0.753[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 2.67458e-01 4.31286e-01 5.71409e-01
+
+======================================================================
+[geomopt step=004] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/step_004
+======================================================================
+[geomopt step=004] True unfragmented full-system calculation
+[geomopt step=004] HF energy: -115.6551239254
+[geomopt step=004] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=004] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=004] Full-system E (SCI_SBD) = -185.4870216720 Ha (electronic); total = -115.8872360678 Ha (eigenvalue + E_nuc)
+[geomopt step=004] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=004] TrueUnfrag-SCI_SBD energy (exact total): -115.8872360678 Ha
+[geomopt step=004] E = -115.8872360678 Ha   |grad| = 9.6839e-03
+======================================================================
+
+Step    4 : Displace = [0m2.022e-02[0m/[0m3.355e-02[0m (rms/max) Trust = 3.917e-02 ([92m+[0m) Grad = [92m3.228e-03[0m/[0m5.708e-03[0m (rms/max) E (change) = -115.8872360678 ([92m-1.744e-04[0m) Quality = [0m0.807[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 3.81857e-01 4.13722e-01 4.76966e-01
+
+======================================================================
+[geomopt step=005] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/step_005
+======================================================================
+[geomopt step=005] True unfragmented full-system calculation
+[geomopt step=005] HF energy: -115.6554106438
+[geomopt step=005] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=005] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=005] Full-system E (SCI_SBD) = -185.5514068885 Ha (electronic); total = -115.8872455454 Ha (eigenvalue + E_nuc)
+[geomopt step=005] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=005] TrueUnfrag-SCI_SBD energy (exact total): -115.8872455454 Ha
+[geomopt step=005] E = -115.8872455454 Ha   |grad| = 3.1271e-03
+======================================================================
+
+Step    5 : Displace = [92m9.119e-03[0m/[0m2.077e-02[0m (rms/max) Trust = 5.540e-02 ([92m+[0m) Grad = [92m1.042e-03[0m/[92m1.742e-03[0m (rms/max) E (change) = -115.8872455454 ([92m-9.478e-06[0m) Quality = [0m0.071[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 3.55539e-01 4.48353e-01 5.72359e-01
+
+======================================================================
+[geomopt step=006] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/step_006
+======================================================================
+[geomopt step=006] True unfragmented full-system calculation
+[geomopt step=006] HF energy: -115.6556383211
+[geomopt step=006] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=006] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=006] Full-system E (SCI_SBD) = -185.5498366044 Ha (electronic); total = -115.8872458249 Ha (eigenvalue + E_nuc)
+[geomopt step=006] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=006] TrueUnfrag-SCI_SBD energy (exact total): -115.8872458249 Ha
+[geomopt step=006] E = -115.8872458249 Ha   |grad| = 2.2490e-03
+======================================================================
+
+Step    6 : Displace = [92m3.784e-03[0m/[92m5.542e-03[0m (rms/max) Trust = 4.559e-03 ([91m-[0m) Grad = [92m7.497e-04[0m/[92m1.030e-03[0m (rms/max) E (change) = -115.8872458249 ([92m-2.795e-07[0m) Quality = [0m0.013[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.54027e-02 ... 3.55539e-01 4.48353e-01 5.72359e-01
+Converged! =D
+
+    #==========================================================================#
+    #| If this code has benefited your research, please support us by citing: |#
+    #|                                                                        |#
+    #| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+    #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+    #| http://dx.doi.org/10.1063/1.4952956                                    |#
+    #==========================================================================#
+    Time elapsed since start of run_optimizer: 19150.618 seconds
+
+######################################################################
+  GEOMETRY OPTIMISATION SUMMARY
+######################################################################
+  Converged              : True
+  Cycles evaluated       : 7
+  Final TrueUnfrag-SCI_SBD energy: -115.8872458249 Ha
+  Final |grad|           : 2.2490e-03 Eh/Bohr
+  Trajectory (multi-XYZ) : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/true_unfragmented_geomopt_optim.xyz
+  Per-step folders       : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/true_unfragmented_gpu_sci_cutoff_1e-3/jobs_TRUEUNFRAG/<step_subdir_fmt>/
+######################################################################
+

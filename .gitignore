@@ -38,6 +38,7 @@ ENV/
 *.npy
 *.npz
 slurm-*.out
+matrixformwf.txt          # SBD wavefunction dumps (hundreds of MB each)
 
 # SCI-SBD initial exploration folder
 SBD-in-PySCF-SCI-Exploration/
