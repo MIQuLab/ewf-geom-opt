@@ -59,12 +59,12 @@ slurm:
 # External SBD eigensolver (present because a solver is SCI_SBD).
 sbd:
   sbd_exe_path_cpu: '/mnt/home/lizhen6/SBD_Solver/executable/diag'
-  sbd_exe_path_gpu: '/mnt/home/lizhen6/sbd/apps/chemistry_v100_tpb_selected_basis_diagonalization/diag'
+  sbd_exe_path_gpu: '/mnt/home/lizhen6/sbd/apps/chemistry_tpb_selected_basis_diagonalization/diag'
   mpi_launcher: '/mnt/home/lizhen6/mpich/bin/mpirun'   # absolute path (PATH-independent)
   proc_type: 1            # 1 = GPU (CPUs as support)
   gpus_per_batch: 4       # GPUs per SBD job -> --gpus-per-node
-  cpus_per_gpu: 8       # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
-  gpu_type: v100     # MSU GPU model -> --gpus-per-node=v100:<n>
+  cpus_per_gpu: 16      # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
+  gpu_type: a100     # MSU GPU model -> --gpus-per-node=a100:<n>
   sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)
   sbd_block: 20
   sbd_dav_iteration: 100
@@ -79,10 +79,12 @@ sbd:
     poll_interval: 15
     max_node_retries: 5       # resubmit on another node if mpirun is missing
     preamble: |               # <-- UPDATE if your environment changes
+      module purge
+      module load powertools GCCcore/13.3.0 LLVM/18.1.8-GCCcore-13.3.0 OpenBLAS/0.3.27-GCC-13.3.0 CUDA/12.9.1
       export PATH="/mnt/home/lizhen6/mpich/bin:$PATH"
     sbatch:
       account: merzjrke      # <-- UPDATE if needed
-      mem: 170G
+      mem: 350G
       time: '12:00:00'
       # extra:
       #   exclude: node01,node02   # skip nodes that fail mpirun

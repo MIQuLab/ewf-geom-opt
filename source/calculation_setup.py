@@ -70,6 +70,11 @@ MSU_SBD_EXE_V100 = "/mnt/home/lizhen6/sbd/apps/chemistry_v100_tpb_selected_basis
 MSU_SBD_EXE_CPU = "/mnt/home/lizhen6/SBD_Solver/executable/diag"
 MSU_MPI_LAUNCHER = "/mnt/home/lizhen6/mpich/bin/mpirun"
 MSU_SBD_PREAMBLE = [
+    # SBD sub-jobs do not inherit the modules loaded for the main job, so load
+    # them here too (LLVM provides libomp.so, which the SBD binary links).
+    "module purge",
+    "module load powertools GCCcore/13.3.0 LLVM/18.1.8-GCCcore-13.3.0"
+    " OpenBLAS/0.3.27-GCC-13.3.0 CUDA/12.9.1",
     'export PATH="/mnt/home/lizhen6/mpich/bin:$PATH"',
 ]
 # On MSU only a100 GPUs may be used -> request --gpus-per-node=a100:<n>.
