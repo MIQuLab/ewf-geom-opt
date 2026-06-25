@@ -24,7 +24,7 @@ ewf:
 
 calculation:
   run_mode: ewf
-  geometry_file: geometry.txt    # <-- UPDATE: path to your geometry (Element x y z)
+  geometry_file: propylene.txt     # geometry file (Element x y z, one atom per line)
   basis: sto-3g                  # <-- UPDATE: basis set
   charge: 0                      # <-- UPDATE if non-neutral
   spin: 0                        # closed-shell required (esp. true_unfragmented)
@@ -58,7 +58,7 @@ sbd:
   mpi_launcher: '/home/liz7/isilon/Zhen/mpich/bin/mpirun'   # absolute path (PATH-independent)
   proc_type: 1            # 1 = GPU (CPUs as support)
   gpus_per_batch: 4       # GPUs per SBD job -> --gpus-per-node
-  cpus_per_gpu: 16        # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
+  cpus_per_gpu: 16      # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
   sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)
   sbd_block: 20
   sbd_dav_iteration: 100
@@ -72,7 +72,7 @@ sbd:
   slurm:
     poll_interval: 15
     max_node_retries: 5       # resubmit on another node if mpirun is missing
-    preamble: |               # <-- UPDATE: modules + PATH/LD_LIBRARY_PATH for SBD
+    preamble: |               # <-- UPDATE if your environment changes
       module load gcc/11.2.0 cuda12.3/toolkit/12.3.2 cudnn8.9-cuda12.3/8.9.7.29 boost/1.85.0
       export PATH="/home/liz7/isilon/Zhen/mpich/bin:$PATH"
       export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblasgpu/lib:$LD_LIBRARY_PATH"
