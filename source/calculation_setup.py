@@ -16,10 +16,11 @@ you still have to fill in the run-specific values it marks with ``<-- UPDATE``
 Questions
 ---------
 1. HPC type ........... CCF or MSU
-2. Fragmentation type . EWF | unfragmented_EWF_limit | true_unfragmented
-3. (EWF only) .......... use multi-solver?            yes / no
-4. Use SCI-SBD? ........ yes / no
-5. (SCI-SBD only) ...... GPU or CPU
+2. Geometry optimizer . GeomeTRIC | Sella | Berny (PyBerny)
+3. Fragmentation type . EWF | unfragmented_EWF_limit | true_unfragmented
+4. (EWF only) .......... use multi-solver?            yes / no
+5. Use SCI-SBD? ........ yes / no
+6. (SCI-SBD only) ...... GPU or CPU
 
 HPC-specific Slurm handling
 ---------------------------
@@ -33,6 +34,15 @@ Run:
 
 import os
 import sys
+
+# --- Geometry-optimizer backends -------------------------------------------
+# Menu label -> config token written as ``geomopt.optimizer``.  GeomeTRIC and
+# Sella drive Cartesian/internal optimisation; Berny is PyBerny.
+OPTIMIZER_TOKENS = {
+    "GeomeTRIC": "geometric",
+    "Sella": "sella",
+    "Berny": "berny",
+}
 
 # --- HPC-site defaults -----------------------------------------------------
 MSU_ACCOUNT_DEFAULT = "merzjrke"
@@ -142,12 +152,15 @@ def _sbatch_lines(indent, hpc, partition, ntasks=None, mem=None):
 
 
 def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
-                 gpu_type=None):
+                 gpu_type=None, optimizer="geometric"):
     """Assemble the focused config.yaml text for the chosen options.
 
     ``gpu_type`` ('a100' / 'v100') is only meaningful for an MSU GPU SBD run;
     it selects the default ``cpus_per_gpu`` and SBD-job ``mem`` (a100 -> 16 /
     350G, v100 -> 8 / 170G).  It is ignored elsewhere.
+
+    ``optimizer`` ('geometric' / 'berny' / 'sella') selects the geometry-
+    optimisation backend; only that backend's options block is emitted.
     """
     is_ewf = (run_mode == "ewf")
     gpu = (proc == "GPU")
@@ -321,16 +334,36 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
     # --- geomopt block ------------------------------------------------------
     a("geomopt:")
     a("  enabled: true                  # set false for a single-point energy + gradient")
+    a(f"  optimizer: {optimizer}            # geometric | berny | sella")
     a(f"  prefix: {run_mode}_geomopt")
     a('  step_subdir_fmt: "step_{step:03d}"')
-    a("  geometric:")
-    a("    maxiter: 100")
-    a("    coordsys: tric")
-    a("    convergence_energy: 1.0e-3   # Eh")
-    a("    convergence_grms:   5.0e-3   # Eh / Bohr")
-    a("    convergence_gmax:   5.0e-3   # Eh / Bohr")
-    a("    convergence_drms:   1.2e-2   # Angstrom")
-    a("    convergence_dmax:   1.8e-2   # Angstrom")
+    if optimizer == "geometric":
+        # Keys forwarded verbatim to geometric.optimize.run_optimizer.
+        a("  geometric:")
+        a("    maxiter: 100")
+        a("    coordsys: tric")
+        a("    convergence_energy: 1.0e-3   # Eh")
+        a("    convergence_grms:   5.0e-3   # Eh / Bohr")
+        a("    convergence_gmax:   5.0e-3   # Eh / Bohr")
+        a("    convergence_drms:   1.2e-2   # Angstrom")
+        a("    convergence_dmax:   1.8e-2   # Angstrom")
+    elif optimizer == "berny":
+        # Keys forwarded verbatim to berny.Berny(...); thresholds are in a.u.
+        # and mirror Gaussian's default convergence set.
+        a("  berny:")
+        a("    maxsteps:    100")
+        a("    gradientmax: 4.5e-4   # Eh / Bohr")
+        a("    gradientrms: 3.0e-4   # Eh / Bohr")
+        a("    stepmax:     1.8e-3   # Bohr")
+        a("    steprms:     1.2e-3   # Bohr")
+    elif optimizer == "sella":
+        # fmax (eV/Angstrom) and steps drive Sella.run(); other keys are
+        # forwarded to sella.Sella(...).
+        a("  sella:")
+        a("    fmax:  0.01           # eV / Angstrom (max-force convergence)")
+        a("    steps: 100            # max optimizer steps")
+        a("    # order: 0            # 0 = minimisation (default), 1 = saddle")
+        a("    # internal: true      # use internal coordinates")
     a("")
     return "\n".join(L)
 
@@ -345,30 +378,35 @@ def main():
     print("Answer a few questions to produce a focused config.yaml for one run type.")
 
     hpc = ask_choice("1) HPC type?", ["CCF", "MSU"])
+
+    optimizer_label = ask_choice(
+        "2) Geometry optimizer?", ["GeomeTRIC", "Sella", "Berny"])
+    optimizer = OPTIMIZER_TOKENS[optimizer_label]  # config token
+
     run_mode = ask_choice(
-        "2) Fragmentation type?",
+        "3) Fragmentation type?",
         ["EWF", "unfragmented_EWF_limit", "true_unfragmented"])
     run_mode = "ewf" if run_mode == "EWF" else run_mode  # config token
 
-    geometry = ask_text("3) Geometry file name?", "geometry.txt")
+    geometry = ask_text("4) Geometry file name?", "geometry.txt")
 
     multi = False
     if run_mode == "ewf":
-        multi = ask_yesno("4) Utilize the per-fragment multi-solver?")
+        multi = ask_yesno("5) Utilize the per-fragment multi-solver?")
 
-    sbd = ask_yesno("5) Use the SCI-SBD external eigensolver?")
+    sbd = ask_yesno("6) Use the SCI-SBD external eigensolver?")
 
     proc = None
     gpu_type = None
     if sbd:
-        proc = ask_choice("6) GPU or CPU-only SCI-SBD calculation?", ["GPU", "CPU"])
+        proc = ask_choice("7) GPU or CPU-only SCI-SBD calculation?", ["GPU", "CPU"])
         if hpc == "MSU" and proc == "GPU":
             # MSU GPU model sets the default cpus_per_gpu + SBD-job mem
             # (a100 -> 16 / 350G, v100 -> 8 / 170G).
-            gpu_type = ask_choice("7) MSU GPU type?", ["a100", "v100"])
+            gpu_type = ask_choice("8) MSU GPU type?", ["a100", "v100"])
 
     text = build_config(hpc, run_mode, multi, sbd, proc, geometry,
-                        gpu_type=gpu_type)
+                        gpu_type=gpu_type, optimizer=optimizer)
 
     # Optional sanity check: the produced text must be valid YAML.
     try:
