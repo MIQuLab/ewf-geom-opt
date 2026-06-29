@@ -14,7 +14,7 @@
 ewf:
   bath_threshold: 1.0e-5      # DMET bath truncation threshold
   solver: SCI             # single-solver value (ignored when multi_solver.enabled is true)
-  sci_select_cutoff: 1.0e-4   # SCI / SCI_SBD determinant-selection cutoff
+  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff
   multi_solver:
     enabled: true
     norb_threshold: 13        # clusters with norb < this -> high_accuracy_solver

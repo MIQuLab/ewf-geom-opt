@@ -152,7 +152,7 @@ def load_config(path):
     ewf = cfg.setdefault("ewf", {})
     ewf.setdefault("bath_threshold", 1.0e-8)
     ewf.setdefault("solver", "FCI")
-    ewf.setdefault("sci_select_cutoff", 1.0e-4)
+    ewf.setdefault("sci_select_cutoff", 1.0e-3)
     # ------------------------------------------------------------------
     # Per-fragment ("multi-solver") solver selection.
     #

@@ -188,7 +188,7 @@ All settings live in [`Source/config.yaml`](Source/config.yaml):
 ewf:
   bath_threshold: 1.0e-5      # stable, non-full DMET bath
   solver: SCI                 # FCI, SCI, or SCI_SBD cluster solver (single-solver mode)
-  sci_select_cutoff: 1.0e-4   # tight selection → geometry-independent determinant set
+  sci_select_cutoff: 1.0e-3   # determinant-selection cutoff for SCI / SCI_SBD
   assembly: rdm_t_lambda      # density-assembly route (see table above)
 
   multi_solver:               # per-fragment solver selection (see below)
