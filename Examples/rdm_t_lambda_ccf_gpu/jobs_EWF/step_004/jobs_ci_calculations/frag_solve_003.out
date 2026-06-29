@@ -1,7 +1,0 @@
-No module named 'dyson'
-Dyson required for self-energy calculations
-[solve frag=3] Loaded Cluster(fragment_3, name=H, norb=8, nocc=4)
-[solve frag=3] Multi-solver: cluster norb=8 < norb_threshold=13 -> FCI
-[solve frag=3] Solving cluster (norb=8) with FCI (conv_tol=1e-12)
-[solve frag=3] E_cluster (FCI) = -17.4840728442 Ha
-[solve frag=3] Wrote RDM file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/3_test_sci_sbd/rdm_t_lambda_gpu/jobs_EWF/step_004/rdm_003.h5

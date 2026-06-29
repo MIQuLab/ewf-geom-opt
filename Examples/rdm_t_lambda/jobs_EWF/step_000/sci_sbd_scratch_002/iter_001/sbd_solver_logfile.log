@@ -1,0 +1,52 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.064275 (sec) 
+ Elapsed time for init 0.00045 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.004131 (sec) 
+ Davidson iteration 0.0 (tol=0.603172784632362): -91.22339969254239
+ Davidson iteration 0.1 (tol=0.2318631209410595): -91.40007021994454 -89.68716985968909
+ Davidson iteration 0.2 (tol=0.06218345928227362): -91.42365503473758 -89.8722675257183 -89.23045515687733
+ Davidson iteration 0.3 (tol=0.01740820970186707): -91.42521669054247 -90.10325432425643 -89.23671863414641 -89.12338150388335
+ Davidson iteration 0.4 (tol=0.006520537293786184): -91.42534082892199 -90.29728621874143 -89.50576268887454 -89.23121358341115
+ Davidson iteration 0.5 (tol=0.002148691045353353): -91.4253584726176 -90.4185153555714 -89.66745729596346 -89.4836467076875
+ Davidson iteration 0.6 (tol=0.000704083552439559): -91.42536036897108 -90.51365628594918 -89.8479604020838 -89.62109100595015
+ Davidson iteration 0.7 (tol=0.0002156796389938282): -91.42536056552086 -90.56782831190658 -89.96479444540699 -89.69554992326579
+ Davidson iteration 0.8 (tol=6.134897434388076e-05): -91.42536058201853 -90.59148531623936 -90.06258351993964 -89.72097457570848
+ Davidson iteration 0.9 (tol=1.993034265730205e-05): -91.42536058340932 -90.59726820414365 -90.17572925331358 -89.72447755618785
+ Davidson iteration 0.10 (tol=6.99113627092175e-06): -91.42536058357128 -90.59919452852581 -90.37328051622453 -89.80812353057973
+ Davidson iteration 0.11 (tol=2.368210463909394e-06): -91.42536058358912 -90.60188000211492 -90.51719307768752 -89.89285206806045
+ Davidson iteration 0.12 (tol=6.932819427061717e-07): -91.42536058359102 -90.60528271503024 -90.56074010546487 -89.9228792559577
+ Davidson iteration 0.13 (tol=2.055947978944621e-07): -91.42536058359113 -90.60958769158049 -90.57093544581295 -89.94646296335992
+ Davidson iteration 0.14 (tol=6.3591767599574e-08): -91.42536058359119 -90.61242691583087 -90.57568214869539 -90.05233661499535
+ Davidson iteration 0.15 (tol=2.06622690443758e-08): -91.42536058359111 -90.61615177783041 -90.57581339681727 -90.16607943098315
+ Davidson iteration 0.16 (tol=6.25005927453466e-09): -91.42536058359114 -90.61730577448405 -90.58390136894442 -90.32357325975963
+ Elapsed time for davidson 7.458083999999999 (sec) 
+ Elapsed time for diagonalization 7.45832 (sec) 
+ Elapsed time for mult 0.49729 (sec) 
+ Energy = -91.42536058359141
+ Elapsed time for measurement 0.015547 (sec) 
+ Sample-based diagonalization: Energy = -91.42536058359141
+ Sample-based diagonalization: density = [1.999976625628483,1.998330258499583,1.981519473607414,1.976026491026263,1.974718521489512,1.982525419617727,1.970255155270701,1.969879947895614,1.873760816326109,0.1278204639140444,0.02088034280769896,0.03000204685598142,0.02559145358617018,0.013713492649522,0.01498185514322515,0.02001973534153897,0.01999790034058328
+ Sample-based diagonalization: carryover bitstrings = [], size = 0

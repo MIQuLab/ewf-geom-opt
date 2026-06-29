@@ -1,0 +1,1473 @@
+          |                                    ___       ___
+          |  _______________________________  /   \ . . /   \
+          |                                   \___/     \___/
+          |              VAYESTA                  .  V  .   .
+          |     Quantum Embedding Package          .___.  A  .___
+          |  _______________________________       /   \ . . /   \
+          |                    version 1.0.1       \___/     \___/ 
+          |
+No module named 'dyson'
+Dyson required for self-energy calculations
+[geomopt] optimizer=sella, 9 atoms, basis=sto-3g, mode=ewf, solver=multi-solver (norb<13 -> FCI, else SCI_SBD)
+[geomopt] Working directory : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF
+[geomopt] Per-step subfolder: step_{step:03d}
+[geomopt] Sella params: {'order': 0, 'internal': True}  (fmax=0.01 eV/A, steps=100)
+[geomopt] Trajectory will be written to: /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/ewf_geomopt_optim.xyz
+DEPRECATED:2026-06-29 12:25:31,470:jax._src.xla_bridge:794: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/numpy/core/getlimits.py:549: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  setattr(self, word, getattr(machar, word).flat[0])
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/numpy/core/getlimits.py:89: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  return self._float_to_str(self.smallest_subnormal)
+
+======================================================================
+[geomopt step=000] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000
+======================================================================
+[geomopt step=000] Building mol + RHF
+[geomopt step=000] HF energy: -115.5871420242
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.58714202 Ha
+          |      Calculated E(HF)=         -115.58714202 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.1 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=000] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=000] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5896507  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5896508  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5896509  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5896510  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5896511  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5896512  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5896513  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5896514  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5896515  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=000] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5896518  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5896519  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5896520  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5896521  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5896522  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5896523  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5896524  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5896525  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5896526  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_000/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=000] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0783185029 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=000] Per-cluster energies (heff + eris):
+                      C  E_cluster = -86.8263963689 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.8372161980 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -91.4338056861 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -16.6026504033 Ha  [FCI, norb=8]
+                      H  E_cluster = -16.5864904473 Ha  [FCI, norb=8]
+                      H  E_cluster = -16.6026504033 Ha  [FCI, norb=8]
+                      H  E_cluster = -16.4120447163 Ha  [FCI, norb=8]
+                      H  E_cluster = -16.4513721798 Ha  [FCI, norb=8]
+                      H  E_cluster = -16.4351691180 Ha  [FCI, norb=8]
+[geomopt step=000] Global 1-RDM shape         : (21, 21)
+[geomopt step=000] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=000] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=000] EWF-FCI/SCI_SBD energy: -115.8596413619 Ha
+[geomopt step=000] E = -115.8596413619 Ha   |grad| = 1.7453e-01
+======================================================================
+
+     Step     Time          Energy         fmax         cmax       rtrust          rho
+Sella   0 12:40:35    -3152.701426       3.4162       0.0000       0.1000       1.0000
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=001] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001
+======================================================================
+[geomopt step=001] Building mol + RHF
+[geomopt step=001] HF energy: -115.6577139294
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65771393 Ha
+          |      Calculated E(HF)=         -115.65771393 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=001] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=001] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5896647  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5896648  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5896649  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5896650  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5896651  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5896652  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5896653  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5896654  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5896655  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=001] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5896667  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5896668  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5896669  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5896670  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5896671  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5896672  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5896673  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5896674  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5896675  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_001/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=001] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0579066503 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=001] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.5395642362 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.2438842489 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.0108532728 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.4746842202 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4712145128 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4746842202 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2609362307 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3388793598 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3254186499 Ha  [FCI, norb=8]
+[geomopt step=001] Global 1-RDM shape         : (21, 21)
+[geomopt step=001] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=001] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=001] EWF-FCI/SCI_SBD energy: -115.8896968267 Ha
+[geomopt step=001] E = -115.8896968267 Ha   |grad| = 2.7172e-02
+======================================================================
+
+Sella   1 12:56:09    -3153.519277       3.4162       0.0000       0.1000       0.4735
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=002] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002
+======================================================================
+[geomopt step=002] Building mol + RHF
+[geomopt step=002] HF energy: -115.6592150798
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65921508 Ha
+          |      Calculated E(HF)=         -115.65921508 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=002] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=002] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5897074  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5897075  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5897076  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5897077  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5897078  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5897079  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5897080  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5897081  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5897082  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=2/9  running=7  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=002] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5897190  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5897191  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5897194  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5897195  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5897196  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5897197  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5897198  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5897199  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5897200  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=002] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0559339721 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=002] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.7485402150 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.5426590715 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.6535553653 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.5113082078 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5076667062 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5113095904 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3319243160 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3861676711 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3691027943 Ha  [FCI, norb=8]
+[geomopt step=002] Global 1-RDM shape         : (21, 21)
+[geomopt step=002] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=002] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=002] EWF-FCI/SCI_SBD energy: -115.8888394978 Ha
+[geomopt step=002] E = -115.8888394978 Ha   |grad| = 6.7101e-03
+======================================================================
+
+Sella   2 13:10:13    -3153.495947       0.9488       0.0000       0.0135      -2.1935
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=003] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003
+======================================================================
+[geomopt step=003] Building mol + RHF
+[geomopt step=003] HF energy: -115.6590566431
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65905664 Ha
+          |      Calculated E(HF)=         -115.65905664 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=003] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=003] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5898313  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5898314  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5898315  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5898316  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5898317  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5898318  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5898319  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5898320  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5898321  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=003] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5898355  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5898356  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5898357  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5898358  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5898359  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5898360  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5898361  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5898362  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5898363  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_003/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=9  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=003] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0563177235 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=003] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.6872720293 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.4657322844 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.7168052006 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.5007437068 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4999804433 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5007466710 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3190113265 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3831596539 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3659931308 Ha  [FCI, norb=8]
+[geomopt step=003] Global 1-RDM shape         : (21, 21)
+[geomopt step=003] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=003] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=003] EWF-FCI/SCI_SBD energy: -115.8890886086 Ha
+[geomopt step=003] E = -115.8890886086 Ha   |grad| = 2.1015e-03
+======================================================================
+
+Sella   3 13:24:16    -3153.502726       0.2206       0.0000       0.0135       3.6969
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=004] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004
+======================================================================
+[geomopt step=004] Building mol + RHF
+[geomopt step=004] HF energy: -115.6589869769
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65898698 Ha
+          |      Calculated E(HF)=         -115.65898698 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=004] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=004] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5899441  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5899442  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5899443  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5899444  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5899445  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5899446  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5899447  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5899448  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5899449  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=004] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5899457  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5899458  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5899459  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5899460  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5899461  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5899462  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5899463  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5899464  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5899465  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_004/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=004] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0564219844 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=004] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.6703560699 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.4421853899 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.7134651786 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.4996104896 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4979067626 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4996118567 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3121409322 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3736000387 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3560331087 Ha  [FCI, norb=8]
+[geomopt step=004] Global 1-RDM shape         : (21, 21)
+[geomopt step=004] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=004] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=004] EWF-FCI/SCI_SBD energy: -115.8892288630 Ha
+[geomopt step=004] E = -115.8892288630 Ha   |grad| = 1.0246e-03
+======================================================================
+
+Sella   4 13:38:05    -3153.506543       0.0723       0.0000       0.0135      21.8518
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=005] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005
+======================================================================
+[geomopt step=005] Building mol + RHF
+[geomopt step=005] HF energy: -115.6590154056
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65901541 Ha
+          |      Calculated E(HF)=         -115.65901541 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=005] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=005] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5900164  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5900165  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5900166  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5900167  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5900168  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5900169  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5900170  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5900171  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5900172  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=005] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5900189  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5900190  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5900191  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5900192  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5900193  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5900194  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5900195  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5900196  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5900197  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_005/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=005] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0563591930 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=005] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.6710115851 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.4482569530 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.7485928274 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.4963097525 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4950902138 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4963070430 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3158034477 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3764608396 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3589927845 Ha  [FCI, norb=8]
+[geomopt step=005] Global 1-RDM shape         : (21, 21)
+[geomopt step=005] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=005] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=005] EWF-FCI/SCI_SBD energy: -115.8892103748 Ha
+[geomopt step=005] E = -115.8892103748 Ha   |grad| = 4.0374e-04
+======================================================================
+
+Sella   5 13:50:09    -3153.506040       0.0262       0.0000       0.0016     -13.1494
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=006] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006
+======================================================================
+[geomopt step=006] Building mol + RHF
+[geomopt step=006] HF energy: -115.6590293321
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65902933 Ha
+          |      Calculated E(HF)=         -115.65902933 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=006] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=006] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5900387  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5900388  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5900389  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5900390  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5900391  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5900392  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5900393  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5900394  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5900395  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=006] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5900400  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5900401  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5900402  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5900403  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5900404  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5900405  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5900406  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5900407  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5900408  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_006/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=006] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0557313367 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=006] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.6748345321 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.4518301719 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.7374278311 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.4986377053 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4971281675 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4986382113 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3161429045 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3767470220 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3592033236 Ha  [FCI, norb=8]
+[geomopt step=006] Global 1-RDM shape         : (21, 21)
+[geomopt step=006] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=006] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=006] EWF-FCI/SCI_SBD energy: -115.8891978662 Ha
+[geomopt step=006] E = -115.8891978662 Ha   |grad| = 5.1744e-04
+======================================================================
+
+Sella   6 14:00:27    -3153.505699       0.0115       0.0000       0.0003     -67.6867
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=007] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007
+======================================================================
+[geomopt step=007] Building mol + RHF
+[geomopt step=007] HF energy: -115.6590471584
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65904716 Ha
+          |      Calculated E(HF)=         -115.65904716 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=007] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=007] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5900469  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5900470  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5900471  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5900472  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5900473  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5900474  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5900475  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5900476  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5900477  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=007] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5900478  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5900479  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5900480  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5900481  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5900482  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5900483  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5900484  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5900485  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5900486  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_007/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=9  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=007] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0567136801 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=007] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.6764206545 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.4385637657 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.7726594456 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.4990316883 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4974285963 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4990317784 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3167151250 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3776016059 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3600169567 Ha  [FCI, norb=8]
+[geomopt step=007] Global 1-RDM shape         : (21, 21)
+[geomopt step=007] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=007] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=007] EWF-FCI/SCI_SBD energy: -115.8891339412 Ha
+[geomopt step=007] E = -115.8891339412 Ha   |grad| = 1.0256e-03
+======================================================================
+
+Sella   7 14:10:16    -3153.503960       0.0196       0.0000       0.0002    -915.4555
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=008] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008
+======================================================================
+[geomopt step=008] Building mol + RHF
+[geomopt step=008] HF energy: -115.6590319278
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65903193 Ha
+          |      Calculated E(HF)=         -115.65903193 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=008] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=008] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5900528  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5900529  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5900530  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5900531  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5900532  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5900533  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5900534  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5900535  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5900536  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=008] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5900537  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5900538  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5900539  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5900540  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5900541  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5900542  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5900543  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5900544  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5900545  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_008/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=7/9  running=2  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=008] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0556023606 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=008] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.6580920036 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.4525847538 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.7518134286 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.4983701702 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4968785816 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4983695637 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3162997505 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3768709625 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3593081232 Ha  [FCI, norb=8]
+[geomopt step=008] Global 1-RDM shape         : (21, 21)
+[geomopt step=008] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=008] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=008] EWF-FCI/SCI_SBD energy: -115.8891989968 Ha
+[geomopt step=008] E = -115.8891989968 Ha   |grad| = 4.5439e-04
+======================================================================
+
+Sella   8 14:23:19    -3153.505730       0.0373       0.0000       0.0001     517.9588
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=009] Starting EWF-FCI/SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009
+======================================================================
+[geomopt step=009] Building mol + RHF
+[geomopt step=009] HF energy: -115.6590297647
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=    -115.65902976 Ha
+          |      Calculated E(HF)=         -115.65902976 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=   21  n(MO)=   21  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.0 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE MISS: molecule fingerprint mismatch
+          |      IAO: building IAOs from scratch (cache miss).
+          |      n(AO)=   21  n(MO)=   21  n(occ-MO)=   12  n(IAO)=   21
+          |      IAO CACHE WRITE: saved C_iao to iao_cache.h5 (shape=(21, 21))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[geomopt step=009] Discovered 9 fragment(s) at threshold=1e-05
+[geomopt step=009] === Wave 1/2 : submitting 9 DUMP job(s) ===
+[driver] Submitted dump fragment   0  -> Slurm job 5900650  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_000.sh)
+[driver] Submitted dump fragment   1  -> Slurm job 5900651  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_001.sh)
+[driver] Submitted dump fragment   2  -> Slurm job 5900652  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_002.sh)
+[driver] Submitted dump fragment   3  -> Slurm job 5900653  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_003.sh)
+[driver] Submitted dump fragment   4  -> Slurm job 5900654  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_004.sh)
+[driver] Submitted dump fragment   5  -> Slurm job 5900655  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_005.sh)
+[driver] Submitted dump fragment   6  -> Slurm job 5900656  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_006.sh)
+[driver] Submitted dump fragment   7  -> Slurm job 5900657  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_007.sh)
+[driver] Submitted dump fragment   8  -> Slurm job 5900658  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production/frag_dump_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_fragments_production'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=009] === Wave 2/2 : submitting 9 solve (FCI/SCI) job(s) ===
+[driver] Submitted fci fragment   0  -> Slurm job 5900660  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_000.sh)
+[driver] Submitted fci fragment   1  -> Slurm job 5900661  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_001.sh)
+[driver] Submitted fci fragment   2  -> Slurm job 5900662  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_002.sh)
+[driver] Submitted fci fragment   3  -> Slurm job 5900663  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_003.sh)
+[driver] Submitted fci fragment   4  -> Slurm job 5900664  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_004.sh)
+[driver] Submitted fci fragment   5  -> Slurm job 5900665  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_005.sh)
+[driver] Submitted fci fragment   6  -> Slurm job 5900666  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_006.sh)
+[driver] Submitted fci fragment   7  -> Slurm job 5900667  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_007.sh)
+[driver] Submitted fci fragment   8  -> Slurm job 5900668  (/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations/frag_solve_008.sh)
+[driver] Waiting on 9 fragment status file(s) in '/mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_009/jobs_ci_calculations'
+[driver]   done=0/9  running=0  queued=9  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=6/9  running=3  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver]   done=8/9  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[geomopt step=009] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes + CCSD Λ/Z-vector relaxed density; amplitude response, frozen-bath)
+[lagrangian] global effective-CCSD correlation energy (diagnostic): -0.0563516917 Ha
+[lagrangian] Λ-relaxed (Z-vector) global density built; amplitude response included (frozen-bath approximation)
+[geomopt step=009] Per-cluster energies (heff + eris):
+                      C  E_cluster = -89.6757064008 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -102.4524776619 Ha  [SCI_SBD, norb=17]
+                      C  E_cluster = -98.7460427122 Ha  [SCI_SBD, norb=17]
+                      H  E_cluster = -17.4990958681 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4977329543 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4990951249 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3160823892 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3765306154 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3589832644 Ha  [FCI, norb=8]
+[geomopt step=009] Global 1-RDM shape         : (21, 21)
+[geomopt step=009] Global 2-RDM cumulant shape: (21, 21, 21, 21)
+[geomopt step=009] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=009] EWF-FCI/SCI_SBD energy: -115.8891820227 Ha
+[geomopt step=009] E = -115.8891820227 Ha   |grad| = 1.6514e-04
+======================================================================
+
+Sella   9 14:33:22    -3153.505268       0.0124       0.0000       0.0001    -203.3782
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+######################################################################
+  GEOMETRY OPTIMISATION SUMMARY
+######################################################################
+  Optimizer              : sella
+  Converged              : True
+  Cycles evaluated       : 10
+  Final EWF-FCI/SCI_SBD  energy: -115.8891820227 Ha
+  Final |grad|           : 1.6514e-04 Eh/Bohr
+  Trajectory (multi-XYZ) : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/ewf_geomopt_optim.xyz
+  Per-step folders       : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/<step_subdir_fmt>/
+######################################################################
+

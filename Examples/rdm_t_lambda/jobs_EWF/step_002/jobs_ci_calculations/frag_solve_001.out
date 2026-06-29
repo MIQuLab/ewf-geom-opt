@@ -1,0 +1,7 @@
+No module named 'dyson'
+Dyson required for self-energy calculations
+[solve frag=1] Loaded Cluster(fragment_1, name=C, norb=19, nocc=10)
+[solve frag=1] Multi-solver: cluster norb=19 >= norb_threshold=13 -> SCI_SBD
+[solve frag=1] Solving cluster (norb=19) with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[solve frag=1] E_cluster (SCI_SBD) = -102.5426590715 Ha
+[solve frag=1] Wrote RDM file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/rdm_t_lambda/jobs_EWF/step_002/rdm_001.h5
