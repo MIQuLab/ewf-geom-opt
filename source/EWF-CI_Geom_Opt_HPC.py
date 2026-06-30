@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 """
-EWF-CI geometry optimization (geomeTRIC) on HPC / Slurm
-========================================================
+EWF-CI geometry optimization on HPC / Slurm
+===========================================
 
 This driver wraps the per-fragment EWF-FCI / EWF-SCI gradient workflow
-from ``2_Geom_Opt_Stage/1_Split_EWF-SCI_and_full_SCI`` inside a
-geomeTRIC geometry-optimization loop.  geomeTRIC drives the geometry
-updates; on every step the wrapped "isolated" EWF-CI gradient (built
-with the helpers from ``isolated_casci_gradient.py``) is computed and
-fed back to the optimizer.
+from ``2_Geom_Opt_Stage/1_Split_EWF-SCI_and_full_SCI`` inside a geometry-
+optimization loop.  The optimisation backend is selectable via
+``geomopt.optimizer`` -- geomeTRIC (default), PyBerny, or Sella -- and all
+three drive the geometry updates through the same per-step evaluator; on
+every step the wrapped "isolated" EWF-CI gradient (built with the helpers
+from ``isolated_casci_gradient.py``) is computed and fed back to the
+optimizer.
 
 Per-step workflow (one geomeTRIC iteration)
 -------------------------------------------
@@ -101,17 +103,10 @@ import vayesta.ewf
 from isolated_casci_gradient import build_ewf_grad, build_grad
 from embedding_lagrangian import assemble_global_rdms_rdm_t_lambda
 
-try:
-    import geometric
-    import geometric.engine
-    import geometric.molecule
-    import geometric.optimize
-    from geometric.errors import GeomOptNotConvergedError
-except ImportError as exc:  # pragma: no cover - import-time check
-    raise ImportError(
-        "This driver requires the geomeTRIC package.  Install it from "
-        "https://github.com/leeping/geomeTRIC or with `pip install geometric`."
-    ) from exc
+# Geometry-optimisation backends (geomeTRIC / PyBerny / Sella) are imported
+# lazily by the helpers below, so only the optimizer actually selected via
+# ``geomopt.optimizer`` needs to be installed.  See ``_import_geometric``,
+# ``_import_berny`` and ``_import_sella``.
 
 # Atomic units ------------------------------------------------------------
 # geomeTRIC works internally in Bohr; PySCF input geometries are in
@@ -135,6 +130,9 @@ BOHR = _lib_param.BOHR  # Angstrom per Bohr
 #              coexist under their own names.
 _VALID_SOLVERS = ("FCI", "SCI", "SCI_SBD")
 
+# Supported geometry-optimisation backends (``geomopt.optimizer``).
+_VALID_OPTIMIZERS = frozenset({"geometric", "berny", "sella"})
+
 
 # ---------------------------------------------------------------------------
 # Geometry / config helpers
@@ -154,7 +152,7 @@ def load_config(path):
     ewf = cfg.setdefault("ewf", {})
     ewf.setdefault("bath_threshold", 1.0e-8)
     ewf.setdefault("solver", "FCI")
-    ewf.setdefault("sci_select_cutoff", 1.0e-4)
+    ewf.setdefault("sci_select_cutoff", 1.0e-3)
     # ------------------------------------------------------------------
     # Per-fragment ("multi-solver") solver selection.
     #
@@ -324,16 +322,28 @@ def load_config(path):
         sl.setdefault(_solver, dict(legacy_solve) if legacy_solve else {})
 
     # ------------------------------------------------------------------
-    # geomeTRIC geometry-optimisation block
+    # Geometry-optimisation block
     # ------------------------------------------------------------------
-    # Anything inside ``geomopt.geometric`` is forwarded verbatim to
-    # ``geometric.optimize.run_optimizer(...)`` as keyword arguments
-    # (e.g. ``maxiter``, ``coordsys``, ``transition``, ``trust``,
-    # ``convergence_set``, individual ``convergence_*`` overrides, etc.).
-    # See https://geometric.readthedocs.io/en/latest/options.html for the
-    # full list of supported keys.
+    # ``geomopt.optimizer`` selects the optimisation backend:
+    #   * ``geometric`` (default) -- geomeTRIC; keys under ``geomopt.geometric``
+    #     are forwarded verbatim to ``geometric.optimize.run_optimizer(...)``
+    #     (e.g. ``maxiter``, ``coordsys``, ``convergence_set``, individual
+    #     ``convergence_*`` overrides).  See
+    #     https://geometric.readthedocs.io/en/latest/options.html
+    #   * ``berny`` -- PyBerny; keys under ``geomopt.berny`` are forwarded
+    #     verbatim to ``berny.Berny(...)`` (e.g. ``maxsteps``, ``gradientmax``,
+    #     ``gradientrms``, ``stepmax``, ``steprms``, ``trust``).
+    #   * ``sella`` -- Sella (ASE-based); keys under ``geomopt.sella`` are
+    #     forwarded to ``sella.Sella(...)``, except ``fmax`` (eV/Angstrom) and
+    #     ``steps`` which drive ``Sella.run(...)``.
     go = cfg.setdefault("geomopt", {})
     go.setdefault("enabled", True)
+    optimizer = str(go.setdefault("optimizer", "geometric")).lower()
+    go["optimizer"] = optimizer
+    if optimizer not in _VALID_OPTIMIZERS:
+        raise ValueError(
+            f"geomopt.optimizer = {optimizer!r} is not supported; choose one "
+            f"of {sorted(_VALID_OPTIMIZERS)}.")
     go.setdefault("prefix", "ewf_ci_geomopt")
     go.setdefault("step_subdir_fmt", "step_{step:03d}")
     go.setdefault("geometric", {})
@@ -341,6 +351,8 @@ def load_config(path):
     g.setdefault("maxiter", 100)
     g.setdefault("coordsys", "tric")
     g.setdefault("convergence_set", "GAU")
+    go.setdefault("berny", {})
+    go.setdefault("sella", {})
     return cfg
 
 
@@ -2029,44 +2041,81 @@ def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False):
 # Geometry optimisation (geomeTRIC)
 # ---------------------------------------------------------------------------
 
-def _make_geometric_molecule(elements, coords_angstrom):
-    """Build a minimal :class:`geometric.molecule.Molecule` carrying just
-    the element list and the initial Cartesian coordinates.  This is the
-    same trick PySCF uses in ``pyscf.geomopt.geometric_solver`` -- the
-    bond / topology graph is then auto-built by geomeTRIC from the xyz
-    distances.
+# --- optional optimizer-backend imports (lazy) -----------------------------
+# Each importer is called only when the corresponding ``geomopt.optimizer`` is
+# selected, so an installation that only uses one backend does not need the
+# others.
+
+def _import_geometric():
+    try:
+        import geometric
+        import geometric.engine
+        import geometric.molecule
+        import geometric.optimize
+        from geometric.errors import GeomOptNotConvergedError  # noqa: F401
+        return geometric
+    except ImportError as exc:  # pragma: no cover - import-time check
+        raise ImportError(
+            "geomopt.optimizer = 'geometric' requires the geomeTRIC package.  "
+            "Install it from https://github.com/leeping/geomeTRIC or with "
+            "`pip install geometric`.") from exc
+
+
+def _import_berny():
+    try:
+        import berny
+        from berny import Berny, geomlib  # noqa: F401
+        return berny
+    except ImportError as exc:  # pragma: no cover - import-time check
+        raise ImportError(
+            "geomopt.optimizer = 'berny' requires the PyBerny package.  "
+            "Install it with `pip install pyberny`.") from exc
+
+
+def _import_sella():
+    try:
+        from ase import Atoms
+        from ase.calculators.calculator import Calculator, all_changes
+        from sella import Sella
+        import ase.units
+        return Atoms, Calculator, all_changes, Sella, ase.units
+    except ImportError as exc:  # pragma: no cover - import-time check
+        raise ImportError(
+            "geomopt.optimizer = 'sella' requires the Sella package and ASE.  "
+            "Install them with `pip install sella ase`.") from exc
+
+
+def _append_xyz_frame(path, elements, coords_angstrom, energy):
+    """Append one frame to a running multi-XYZ trajectory file (Angstrom).
+
+    Used by the PyBerny and Sella backends, which (unlike geomeTRIC) do not
+    write the optimisation trajectory themselves.
     """
-    gmol = geometric.molecule.Molecule()
-    gmol.elem = list(elements)
-    gmol.xyzs = [np.asarray(coords_angstrom, dtype=float)]
-    return gmol
+    coords = np.asarray(coords_angstrom, dtype=float).reshape(-1, 3)
+    with open(path, "a") as fh:
+        fh.write(f"{len(elements)}\n")
+        fh.write(f"Energy {float(energy):.10f} Ha\n")
+        for elem, xyz in zip(elements, coords):
+            fh.write(f"{elem:<3s} {xyz[0]: .10f} {xyz[1]: .10f} {xyz[2]: .10f}\n")
 
 
-class EwfCiEngine(geometric.engine.Engine):
-    """Custom geomeTRIC engine that delegates each single-point energy +
-    gradient evaluation to the EWF-CI cycle defined in
-    :func:`_run_ewf_cycle`.
+class _GeomOptEvaluator:
+    """Optimizer-agnostic per-step (energy, gradient) evaluator for EWF-CI
+    geometry optimisation.
 
-    On every ``calc_new`` call, geomeTRIC hands us the candidate
-    Cartesian coordinates (in Bohr).  We:
+    Each candidate geometry (in **Bohr**) is materialised into its own
+    ``step_<NNN>/`` directory -- a geometry file plus a derived self-contained
+    ``config.yaml`` -- and the full DUMP + cluster-solver wave is run to
+    assemble the global EWF-CI density, energy, and analytical nuclear
+    gradient.  :meth:`evaluate` returns ``(energy_Ha, gradient_Ha_per_Bohr)``.
 
-    * convert them back to Angstrom and write a per-step geometry file
-      (``step_<NNN>/geometry.txt``) that the per-fragment Slurm workers
-      will re-read;
-    * write a derived per-step ``config.yaml`` that points at that
-      geometry file and at a per-step working directory;
-    * run the full DUMP + cluster-solver wave and assemble the global
-      EWF-CI 1-/2-RDM cumulant;
-    * compute the EWF-CI energy and the analytical EWF-CI nuclear
-      gradient via :func:`isolated_casci_gradient.build_ewf_grad`;
-    * return both back to geomeTRIC in atomic units.
+    The same evaluator is consumed by all three backends: the geomeTRIC
+    engine wrapper, the PyBerny generator loop, and the Sella/ASE calculator.
     """
 
     def __init__(self, base_cfg, base_workdir, script_path,
-                 elements, init_coords_angstrom, no_slurm=False,
+                 elements, no_slurm=False,
                  step_subdir_fmt="step_{step:03d}"):
-        super().__init__(_make_geometric_molecule(
-            elements, init_coords_angstrom))
         self.base_cfg = base_cfg
         self.base_workdir = os.path.abspath(base_workdir)
         os.makedirs(self.base_workdir, exist_ok=True)
@@ -2108,12 +2157,12 @@ class EwfCiEngine(geometric.engine.Engine):
             yaml.safe_dump(step_cfg, fh, sort_keys=False)
         return step_idx, step_cfg, os.path.abspath(cfg_file), step_dir
 
-    def calc_new(self, coords, dirname):
-        # ``dirname`` is geomeTRIC's own scratch directory (used by some
-        # engines for intermediate files).  We don't need it -- our
-        # per-step layout lives under ``self.base_workdir/step_<NNN>/``.
+    def evaluate(self, coords_bohr):
+        """Run one EWF-CI single point at ``coords_bohr`` (flat or (N,3),
+        Bohr).  Returns ``(energy_float_Ha, gradient_flat_Ha_per_Bohr)``."""
+        coords_bohr = np.asarray(coords_bohr, dtype=float).reshape(-1)
         step_idx, step_cfg, step_cfg_path, step_dir = (
-            self._materialize_step(coords))
+            self._materialize_step(coords_bohr))
 
         tag = f"geomopt step={step_idx:03d}"
         print("\n" + "=" * 70)
@@ -2126,10 +2175,10 @@ class EwfCiEngine(geometric.engine.Engine):
             no_slurm=self.no_slurm, tag=tag)
 
         gradient = np.asarray(de_ewf, dtype=float).reshape(-1)
-        if gradient.size != coords.size:
+        if gradient.size != coords_bohr.size:
             raise RuntimeError(
                 f"Gradient size mismatch: got {gradient.size} entries, "
-                f"expected {coords.size} (3 * natom).")
+                f"expected {coords_bohr.size} (3 * natom).")
 
         self.last_energy = float(e_ewf)
         self.last_gradient = gradient.copy()
@@ -2138,20 +2187,52 @@ class EwfCiEngine(geometric.engine.Engine):
         print("=" * 70 + "\n")
 
         self.cycle += 1
-        return {"energy": float(e_ewf), "gradient": gradient}
+        return float(e_ewf), gradient
+
+
+def _build_geometric_engine(evaluator, elements, init_coords_angstrom):
+    """Construct a geomeTRIC ``Engine`` that delegates every single-point to
+    ``evaluator``.  The engine class is defined here (not at module scope) so
+    the geomeTRIC import stays lazy."""
+    geometric = _import_geometric()
+
+    def _make_geometric_molecule(elem, coords_ang):
+        gmol = geometric.molecule.Molecule()
+        gmol.elem = list(elem)
+        gmol.xyzs = [np.asarray(coords_ang, dtype=float)]
+        return gmol
+
+    class _EwfCiGeometricEngine(geometric.engine.Engine):
+        def __init__(self):
+            super().__init__(_make_geometric_molecule(
+                elements, init_coords_angstrom))
+            self.evaluator = evaluator
+
+        def calc_new(self, coords, dirname):
+            # ``coords`` are in Bohr; ``dirname`` is geomeTRIC's own scratch
+            # dir, which we do not use (our layout is step_<NNN>/).
+            energy, gradient = self.evaluator.evaluate(coords)
+            return {"energy": energy, "gradient": gradient}
+
+    return _EwfCiGeometricEngine()
 
 
 def run_geomopt(cfg, config_path, script_path, no_slurm=False):
-    """Run a geomeTRIC geometry optimisation in which every step calls
-    the EWF-CI per-fragment workflow to obtain ``(E, grad)``."""
+    """Run a geometry optimisation in which every step calls the EWF-CI
+    per-fragment workflow to obtain ``(E, grad)``.
+
+    The optimisation backend is chosen by ``geomopt.optimizer``
+    (``geometric`` / ``berny`` / ``sella``); all three share the same
+    per-step :class:`_GeomOptEvaluator`."""
     base_workdir = os.path.abspath(cfg["calculation"]["workdir"])
     os.makedirs(base_workdir, exist_ok=True)
 
-    # Read the initial geometry once (Angstrom) to seed the engine.
+    # Read the initial geometry once (Angstrom) to seed the optimizer.
     geo = read_geometry(cfg["calculation"]["geometry_file"])
     elements = [g[0] for g in geo]
     init_xyz = np.array([g[1] for g in geo], dtype=float)  # Angstrom
 
+    optimizer_name = cfg["geomopt"].get("optimizer", "geometric")
     ms = cfg["ewf"].get("multi_solver", {})
     run_mode = cfg["calculation"].get("run_mode", "ewf")
     if run_mode in ("unfragmented_EWF_limit", "true_unfragmented"):
@@ -2162,36 +2243,52 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
             f"{ms['high_accuracy_solver']}, else {ms['approximate_solver']})")
     else:
         solver_desc = cfg["ewf"]["solver"]
-    print(f"[geomopt] {len(elements)} atoms, basis={cfg['calculation']['basis']}, "
-          f"mode={run_mode}, solver={solver_desc}")
+    print(f"[geomopt] optimizer={optimizer_name}, {len(elements)} atoms, "
+          f"basis={cfg['calculation']['basis']}, mode={run_mode}, "
+          f"solver={solver_desc}")
     print(f"[geomopt] Working directory : {base_workdir}")
     step_subdir_fmt = cfg["geomopt"]["step_subdir_fmt"]
     print(f"[geomopt] Per-step subfolder: {step_subdir_fmt}")
 
-    engine = EwfCiEngine(
+    evaluator = _GeomOptEvaluator(
         base_cfg=cfg,
         base_workdir=base_workdir,
         script_path=script_path,
         elements=elements,
-        init_coords_angstrom=init_xyz,
         no_slurm=no_slurm,
         step_subdir_fmt=step_subdir_fmt,
     )
 
-    # All keys under ``geomopt.geometric`` are forwarded verbatim to
-    # ``geometric.optimize.run_optimizer``.
+    if optimizer_name == "geometric":
+        progress, converged, xyzout = _run_geometric_opt(
+            evaluator, cfg, base_workdir, elements, init_xyz)
+    elif optimizer_name == "berny":
+        progress, converged, xyzout = _run_berny_opt(
+            evaluator, cfg, base_workdir, elements, init_xyz)
+    elif optimizer_name == "sella":
+        progress, converged, xyzout = _run_sella_opt(
+            evaluator, cfg, base_workdir, elements, init_xyz)
+    else:  # pragma: no cover - validated in load_config
+        raise ValueError(f"Unsupported geomopt.optimizer: {optimizer_name!r}")
+
+    _print_geomopt_summary(cfg, evaluator, converged, optimizer_name,
+                           xyzout, base_workdir)
+    return progress
+
+
+def _run_geometric_opt(evaluator, cfg, base_workdir, elements, init_xyz):
+    """geomeTRIC backend.  Keys under ``geomopt.geometric`` are forwarded
+    verbatim to ``geometric.optimize.run_optimizer``."""
+    geometric = _import_geometric()
+    from geometric.errors import GeomOptNotConvergedError
+
+    engine = _build_geometric_engine(evaluator, elements, init_xyz)
     geom_kwargs = dict(cfg["geomopt"].get("geometric", {}) or {})
 
-    # geomeTRIC expects an "input file" path; with ``customengine`` it
-    # is only used to derive the prefix for output filenames (xyzout,
-    # log file, scratch dirname).  We anchor it inside ``base_workdir``
-    # so the trajectory and log land next to the per-step subfolders.
+    # geomeTRIC expects an "input file" path; with ``customengine`` it is only
+    # used to derive output-filename prefixes.  Anchor it in ``base_workdir``.
     prefix = cfg["geomopt"].get("prefix", "ewf_ci_geomopt")
     pseudo_input = os.path.join(base_workdir, f"{prefix}.xyz")
-    # geomeTRIC will not actually read this file (customengine is set),
-    # but ``run_optimizer`` calls ``os.path.splitext(input)[0]`` so the
-    # path needs to exist on disk in some implementations -- create an
-    # empty placeholder to be safe.
     if not os.path.exists(pseudo_input):
         with open(pseudo_input, "w") as fh:
             fh.write("")
@@ -2203,14 +2300,9 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
     if os.path.exists(log_ini) and "logIni" not in geom_kwargs:
         geom_kwargs["logIni"] = log_ini
 
-    # Force the trajectory output filename so it is deterministic and
-    # lives inside ``base_workdir``.  geomeTRIC always derives the
-    # output XYZ filename from the ``prefix`` (see run_optimizer:
-    # ``params.xyzout = prefix + "_optim.xyz"``), so passing ``xyzout``
-    # via kwargs would be silently ignored -- we just predict the
-    # filename here for the summary printout below.
+    # geomeTRIC always derives the trajectory filename from ``prefix``
+    # (``params.xyzout = prefix + "_optim.xyz"``); predict it for the summary.
     xyzout = os.path.join(base_workdir, f"{prefix}_optim.xyz")
-
     print(f"[geomopt] geomeTRIC kwargs: {geom_kwargs}")
     print(f"[geomopt] Trajectory will be written to: {xyzout}")
 
@@ -2224,24 +2316,110 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
         )
         converged = True
     except GeomOptNotConvergedError:
-        print(f"[geomopt] *** Geometry optimisation did NOT converge "
-              f"within {geom_kwargs.get('maxiter')} steps. ***")
+        print(f"[geomopt] *** geomeTRIC did NOT converge within "
+              f"{geom_kwargs.get('maxiter')} steps. ***")
         progress = None
+    return progress, converged, xyzout
 
+
+def _run_berny_opt(evaluator, cfg, base_workdir, elements, init_xyz):
+    """PyBerny backend.  Keys under ``geomopt.berny`` are forwarded verbatim
+    to ``berny.Berny(...)`` (e.g. ``maxsteps``, ``gradientmax``,
+    ``gradientrms``, ``stepmax``, ``steprms``, ``trust``)."""
+    berny = _import_berny()
+    Berny, geomlib = berny.Berny, berny.geomlib
+
+    params = dict(cfg["geomopt"].get("berny", {}) or {})
+    prefix = cfg["geomopt"].get("prefix", "ewf_ci_geomopt")
+    xyzout = os.path.join(base_workdir, f"{prefix}_optim.xyz")
+    open(xyzout, "w").close()  # start a fresh trajectory
+    print(f"[geomopt] PyBerny params: {params}")
+    print(f"[geomopt] Trajectory will be written to: {xyzout}")
+
+    geom0 = geomlib.Geometry(list(elements), np.asarray(init_xyz, dtype=float))
+    optimizer = Berny(geom0, **params)
+    for geom in optimizer:
+        coords_ang = np.asarray(geom.coords, dtype=float)
+        energy, gradient = evaluator.evaluate(coords_ang / BOHR)
+        _append_xyz_frame(xyzout, elements, coords_ang, energy)
+        # PyBerny consumes (energy [Ha], gradient [Ha/Bohr]) -- the same a.u.
+        # convention PySCF's berny_solver feeds it (gradient passed verbatim).
+        optimizer.send((energy, gradient.reshape(-1, 3)))
+
+    converged = bool(getattr(optimizer, "converged", False))
+    if not converged:
+        print(f"[geomopt] *** PyBerny did NOT converge within "
+              f"{params.get('maxsteps', '?')} steps. ***")
+    return optimizer, converged, xyzout
+
+
+def _run_sella_opt(evaluator, cfg, base_workdir, elements, init_xyz):
+    """Sella backend (ASE-based).  Keys under ``geomopt.sella`` are forwarded
+    to ``sella.Sella(...)``, except ``fmax`` (eV/Angstrom) and ``steps``
+    which drive ``Sella.run(...)``."""
+    Atoms, Calculator, all_changes, Sella, ase_units = _import_sella()
+
+    params = dict(cfg["geomopt"].get("sella", {}) or {})
+    fmax = float(params.pop("fmax", 0.01))                       # eV/Angstrom
+    steps = int(params.pop("steps", params.pop("maxiter", 100)))
+    prefix = cfg["geomopt"].get("prefix", "ewf_ci_geomopt")
+    xyzout = os.path.join(base_workdir, f"{prefix}_optim.xyz")
+    open(xyzout, "w").close()  # start a fresh trajectory
+
+    Ha = ase_units.Hartree      # eV per Hartree
+    Bohr_ang = ase_units.Bohr   # Angstrom per Bohr
+
+    class _EwfAseCalculator(Calculator):
+        """ASE calculator bridging Sella to the EWF-CI evaluator.  Energy and
+        forces are computed together and cached, so ASE never triggers more
+        than one EWF cycle per geometry."""
+        implemented_properties = ["energy", "forces"]
+
+        def calculate(self, atoms=None, properties=("energy",),
+                      system_changes=all_changes):
+            super().calculate(atoms, properties, system_changes)
+            coords_ang = self.atoms.get_positions()
+            energy_ha, grad_bohr = evaluator.evaluate(coords_ang / BOHR)
+            self.results["energy"] = energy_ha * Ha
+            # ASE forces are -dE/dx in eV/Angstrom; convert from Ha/Bohr.
+            self.results["forces"] = (
+                -grad_bohr.reshape(-1, 3) * (Ha / Bohr_ang))
+
+    atoms = Atoms(symbols=list(elements),
+                  positions=np.asarray(init_xyz, dtype=float))
+    atoms.calc = _EwfAseCalculator()
+
+    def _write_frame():
+        e_ha = evaluator.last_energy if evaluator.last_energy is not None else 0.0
+        _append_xyz_frame(xyzout, elements, atoms.get_positions(), e_ha)
+
+    print(f"[geomopt] Sella params: {params}  (fmax={fmax} eV/A, steps={steps})")
+    print(f"[geomopt] Trajectory will be written to: {xyzout}")
+
+    opt = Sella(atoms, **params)
+    opt.attach(_write_frame, interval=1)
+    converged = bool(opt.run(fmax=fmax, steps=steps))
+    if not converged:
+        print(f"[geomopt] *** Sella did NOT converge within {steps} steps. ***")
+    return opt, converged, xyzout
+
+
+def _print_geomopt_summary(cfg, evaluator, converged, optimizer_name,
+                           xyzout, base_workdir):
     print("\n" + "#" * 70)
     print("  GEOMETRY OPTIMISATION SUMMARY")
     print("#" * 70)
+    print(f"  Optimizer              : {optimizer_name}")
     print(f"  Converged              : {converged}")
-    print(f"  Cycles evaluated       : {engine.cycle}")
-    if engine.last_energy is not None:
+    print(f"  Cycles evaluated       : {evaluator.cycle}")
+    if evaluator.last_energy is not None:
         print(f"  Final {method_label_for_cfg(cfg):<16s} energy: "
-              f"{engine.last_energy:.10f} Ha")
+              f"{evaluator.last_energy:.10f} Ha")
         print(f"  Final |grad|           : "
-              f"{np.linalg.norm(engine.last_gradient):.4e} Eh/Bohr")
+              f"{np.linalg.norm(evaluator.last_gradient):.4e} Eh/Bohr")
     print(f"  Trajectory (multi-XYZ) : {xyzout}")
     print(f"  Per-step folders       : {base_workdir}/<step_subdir_fmt>/")
     print("#" * 70 + "\n")
-    return progress
 
 
 # ---------------------------------------------------------------------------
@@ -2250,8 +2428,8 @@ def run_geomopt(cfg, config_path, script_path, no_slurm=False):
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
-        description=("EWF-CI geometry optimisation with geomeTRIC, driven "
-                     "by per-fragment Slurm jobs."))
+        description=("EWF-CI geometry optimisation (geomeTRIC / PyBerny / "
+                     "Sella), driven by per-fragment Slurm jobs."))
     p.add_argument("--config", default="config.yaml",
                    help="Path to YAML config (default: config.yaml).")
     p.add_argument("--mode",
