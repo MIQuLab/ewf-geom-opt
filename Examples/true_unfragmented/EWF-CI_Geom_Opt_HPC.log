@@ -1,0 +1,187 @@
+          |                                    ___       ___
+          |  _______________________________  /   \ . . /   \
+          |                                   \___/     \___/
+          |              VAYESTA                  .  V  .   .
+          |     Quantum Embedding Package          .___.  A  .___
+          |  _______________________________       /   \ . . /   \
+          |                    version 1.0.1       \___/     \___/ 
+          |
+No module named 'dyson'
+Dyson required for self-energy calculations
+[geomopt] optimizer=sella, 9 atoms, basis=sto-3g, mode=true_unfragmented, solver=SCI_SBD (full system)
+[geomopt] Working directory : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG
+[geomopt] Per-step subfolder: step_{step:03d}
+[geomopt] Sella params: {'order': 0, 'internal': True}  (fmax=0.01 eV/A, steps=100)
+[geomopt] Trajectory will be written to: /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/true_unfragmented_geomopt_optim.xyz
+DEPRECATED:2026-06-29 14:48:31,393:jax._src.xla_bridge:794: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/numpy/core/getlimits.py:549: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  setattr(self, word, getattr(machar, word).flat[0])
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/numpy/core/getlimits.py:89: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  return self._float_to_str(self.smallest_subnormal)
+
+======================================================================
+[geomopt step=000] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_000
+======================================================================
+[geomopt step=000] True unfragmented full-system calculation
+[geomopt step=000] HF energy: -115.5871420242
+[geomopt step=000] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=000] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=000] Full-system E (SCI_SBD) = -181.5650368778 Ha (electronic); total = -115.8545321552 Ha (eigenvalue + E_nuc)
+[geomopt step=000] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=000] TrueUnfrag-SCI_SBD energy (exact total): -115.8545321552 Ha
+[geomopt step=000] E = -115.8545321552 Ha   |grad| = 1.4497e-01
+======================================================================
+
+     Step     Time          Energy         fmax         cmax       rtrust          rho
+Sella   0 15:12:17    -3152.562397       3.0398       0.0000       0.1000       1.0000
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=001] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_001
+======================================================================
+[geomopt step=001] True unfragmented full-system calculation
+[geomopt step=001] HF energy: -115.6554173806
+[geomopt step=001] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=001] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=001] Full-system E (SCI_SBD) = -185.5771294039 Ha (electronic); total = -115.8867831189 Ha (eigenvalue + E_nuc)
+[geomopt step=001] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=001] TrueUnfrag-SCI_SBD energy (exact total): -115.8867831189 Ha
+[geomopt step=001] E = -115.8867831189 Ha   |grad| = 2.3792e-02
+======================================================================
+
+Sella   1 15:33:34    -3153.439991       3.0398       0.0000       0.1000       0.7008
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=002] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_002
+======================================================================
+[geomopt step=002] True unfragmented full-system calculation
+[geomopt step=002] HF energy: -115.6555109743
+[geomopt step=002] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=002] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=002] Full-system E (SCI_SBD) = -185.5777147221 Ha (electronic); total = -115.8872206085 Ha (eigenvalue + E_nuc)
+[geomopt step=002] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=002] TrueUnfrag-SCI_SBD energy (exact total): -115.8872206085 Ha
+[geomopt step=002] E = -115.8872206085 Ha   |grad| = 7.2660e-03
+======================================================================
+
+Sella   2 15:53:08    -3153.451895       0.7804       0.0000       0.1000       1.3676
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=003] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_003
+======================================================================
+[geomopt step=003] True unfragmented full-system calculation
+[geomopt step=003] HF energy: -115.6554236805
+[geomopt step=003] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=003] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=003] Full-system E (SCI_SBD) = -185.5191010908 Ha (electronic); total = -115.8872598567 Ha (eigenvalue + E_nuc)
+[geomopt step=003] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=003] TrueUnfrag-SCI_SBD energy (exact total): -115.8872598567 Ha
+[geomopt step=003] E = -115.8872598567 Ha   |grad| = 2.1185e-03
+======================================================================
+
+Sella   3 16:13:30    -3153.452963       0.1897       0.0000       0.1000       0.7208
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=004] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_004
+======================================================================
+[geomopt step=004] True unfragmented full-system calculation
+[geomopt step=004] HF energy: -115.6555593850
+[geomopt step=004] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=004] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=004] Full-system E (SCI_SBD) = -185.5381267231 Ha (electronic); total = -115.8872454218 Ha (eigenvalue + E_nuc)
+[geomopt step=004] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=004] TrueUnfrag-SCI_SBD energy (exact total): -115.8872454218 Ha
+[geomopt step=004] E = -115.8872454218 Ha   |grad| = 1.5133e-03
+======================================================================
+
+Sella   4 16:36:14    -3153.452570       0.0480       0.0000       0.0030      -1.9506
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=005] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_005
+======================================================================
+[geomopt step=005] True unfragmented full-system calculation
+[geomopt step=005] HF energy: -115.6555766995
+[geomopt step=005] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=005] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=005] Full-system E (SCI_SBD) = -185.5423822437 Ha (electronic); total = -115.8846727940 Ha (eigenvalue + E_nuc)
+[geomopt step=005] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=005] TrueUnfrag-SCI_SBD energy (exact total): -115.8846727940 Ha
+[geomopt step=005] E = -115.8846727940 Ha   |grad| = 1.9137e-03
+======================================================================
+
+Sella   5 16:57:20    -3153.382566       0.0504       0.0000       0.0009   -2114.6636
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=006] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_006
+======================================================================
+[geomopt step=006] True unfragmented full-system calculation
+[geomopt step=006] HF energy: -115.6556754021
+[geomopt step=006] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=006] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=006] Full-system E (SCI_SBD) = -185.5600512410 Ha (electronic); total = -115.8872158043 Ha (eigenvalue + E_nuc)
+[geomopt step=006] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=006] TrueUnfrag-SCI_SBD energy (exact total): -115.8872158043 Ha
+[geomopt step=006] E = -115.8872158043 Ha   |grad| = 1.5678e-03
+======================================================================
+
+Sella   6 17:17:39    -3153.451765       0.0702       0.0000       0.0008     987.4049
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=007] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_007
+======================================================================
+[geomopt step=007] True unfragmented full-system calculation
+[geomopt step=007] HF energy: -115.6556433138
+[geomopt step=007] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=007] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=007] Full-system E (SCI_SBD) = -185.5539551382 Ha (electronic); total = -115.8872337064 Ha (eigenvalue + E_nuc)
+[geomopt step=007] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=007] TrueUnfrag-SCI_SBD energy (exact total): -115.8872337064 Ha
+[geomopt step=007] E = -115.8872337064 Ha   |grad| = 7.9401e-04
+======================================================================
+
+Sella   7 17:38:14    -3153.452252       0.0607       0.0000       0.0008      30.1824
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+======================================================================
+[geomopt step=008] Starting TrueUnfrag-SCI_SBD single-point in /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/step_008
+======================================================================
+[geomopt step=008] True unfragmented full-system calculation
+[geomopt step=008] HF energy: -115.6555938824
+[geomopt step=008] Full active space: norb=21, nocc=12, nelec=24
+[geomopt step=008] Solving full system with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[geomopt step=008] Full-system E (SCI_SBD) = -185.5466834976 Ha (electronic); total = -115.8872378862 Ha (eigenvalue + E_nuc)
+[geomopt step=008] Tr(dm1) = 24.000000 (expected: nelec = 24)
+[geomopt step=008] TrueUnfrag-SCI_SBD energy (exact total): -115.8872378862 Ha
+[geomopt step=008] E = -115.8872378862 Ha   |grad| = 2.8382e-04
+======================================================================
+
+Sella   8 17:58:19    -3153.452365       0.0290       0.0000       0.0008      12.5227
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/ase/optimize/optimize.py:92: FutureWarning: Log flushes by default now.  Please do not call flush().  If you want a different flushing behaviour please open logfile yourself and choose buffering mode as appropriate.  This flush() method currently does nothing.
+  warnings.warn('Log flushes by default now.  Please do not call '
+
+######################################################################
+  GEOMETRY OPTIMISATION SUMMARY
+######################################################################
+  Optimizer              : sella
+  Converged              : True
+  Cycles evaluated       : 9
+  Final TrueUnfrag-SCI_SBD energy: -115.8872378862 Ha
+  Final |grad|           : 2.8382e-04 Eh/Bohr
+  Trajectory (multi-XYZ) : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/true_unfragmented_geomopt_optim.xyz
+  Per-step folders       : /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/4_test_Sella/true_unfragmented/jobs_TRUEUNFRAG/<step_subdir_fmt>/
+######################################################################
+
