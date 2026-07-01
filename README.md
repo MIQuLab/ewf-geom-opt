@@ -2,7 +2,7 @@
 
 Deployment of **geometry optimization driven by Embedded Wave Function (EWF) analytic nuclear gradients**, built on [Vayesta](https://github.com/BoothGroup/Vayesta)-style quantum embedding with FCI / Selected-CI / SCI-SBD / **SQD** (Sample-based Quantum Diagonalization) cluster solvers, [PySCF](https://pyscf.org/) integrals, and a choice of geometry optimizer — [geomeTRIC](https://geometric.readthedocs.io/), [PyBerny](https://github.com/jhrmnn/pyberny), or [Sella](https://github.com/zadorlab/sella). The workflow distributes per-fragment cluster solves over Slurm on an HPC cluster and assembles a global density-matrix whose analytic gradient feeds each optimization step.
 
-The central contribution of this project is a pair of density-assembly routes — **`rdm_t`** and its Λ-relaxed extension **`rdm_t_lambda`** (`embedding_lagrangian.py`) — that make it possible to further reduce the energy and gradient fluctuations associated with the approximations introduced by fragmentation. At present, geometry convergence is only possible with loose criteria, but this project is dedicated to the gradual improvement of the methodology of EWF-based geometry optimization.
+The central contribution of this project is a pair of density-assembly routes — **`rdm_t`** and its Λ-relaxed extension **`rdm_t_lambda`** (`embedding_lagrangian.py`) — that make it possible to further reduce the energy and gradient fluctuations associated with the approximations introduced by fragmentation. These gradient fluctuations limit the gradient accuracy, but this project is dedicated to the gradual improvement of the methodology of EWF-based geometry optimization.
 
 ---
 
@@ -42,11 +42,15 @@ The EWF energy is a functional of global density matrices assembled from indepen
 E[γ1, λ2] = E_HF + Tr(F · Δγ1) + ½ Tr( (pq|rs) · λ2 ),     Δγ1 = γ1 − γ1^HF
 ```
 
+Here `E_HF` is the reference Hartree–Fock total energy at the current geometry; `F` is the closed-shell Fock matrix in the MO basis; `γ1` is the assembled global **one-particle** correlated density matrix in the MO basis (occupied + virtual blocks); `γ1^HF` is the HF reference one-particle density (diagonal with `2` on occupied MOs, `0` on virtual); `Δγ1 = γ1 − γ1^HF` is the correlation correction to the one-particle density (the object that couples to `F`); `λ2` is the assembled global **two-particle** cumulant (the connected part of the 2-RDM); and `(pq|rs)` are the two-electron repulsion integrals in the MO basis (chemists' notation).
+
 The chain of geometry (`x`) dependence runs from the AO integrals through the HF orbitals, the IAO fragments and DMET bath, the cluster Hamiltonians, and finally the cluster amplitudes — all of which feed the assembly map:
 
 ```
 γ = (γ1, λ2) = 𝒜( {T_x}, {C_x}, {P_x}, C )
 ```
+
+Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster CI/CCSD amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
 
 ### The density-response term `(∂E/∂γ)·(dγ/dx)`
 
@@ -58,6 +62,8 @@ dE/dx  =  ∂E/∂x |_(γ fixed)        +     (∂E/∂γ) : (dγ/dx)
         (a) frozen-density gradient      (b) density-response term
 ```
 
+Here `d/dx` is the *total* derivative with respect to a nuclear coordinate `x` (i.e. the physical gradient we want), `∂/∂x|_(γ fixed)` is the *partial* derivative that treats the assembled density `γ` as constant while differentiating the integrals only, and `:` denotes the full-tensor contraction on all indices of the density (matrix trace for `γ1`, four-index contraction for `λ2`).
+
 `build_ewf_grad` computes **(a)** exactly — including the HF orbital (CPHF) relaxation of the integrals — by treating `γ1`, `λ2` as constants in the MO basis.
 
 What is `∂E/∂γ`, concretely? Differentiating the functional at fixed integrals gives
@@ -67,14 +73,16 @@ What is `∂E/∂γ`, concretely? Differentiating the functional at fixed integr
 ∂E/∂λ2_pqrs  =  ½ (pq|rs)      (the two-electron integrals)
 ```
 
-— the one- and two-body Hamiltonian matrices, which are emphatically **not zero**. And `dγ/dx` collects every way the assembled density moves with the nuclei:
+— the one- and two-body Hamiltonian matrices, which are emphatically **not zero**. Here `p, q, r, s` are MO indices, and `∂E/∂γ` denotes the functional derivative of the energy with respect to each element of the assembled density (the object that gets contracted with `dγ/dx`). And `dγ/dx` collects every way the assembled density moves with the nuclei:
 
 ```
-dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← cluster amplitudes re-solve
-       + Σ_x (∂𝒜/∂C_x)(dC_x/dx)     ← bath/cluster orbitals redefine
-       + Σ_x (∂𝒜/∂P_x)(dP_x/dx)     ← fragment projectors shift
-       +     (∂𝒜/∂C )(dC /dx)        ← HF orbitals relax
+dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← (i)   cluster amplitudes re-solve
+       + Σ_x (∂𝒜/∂C_x)(dC_x/dx)     ← (ii)  bath/cluster orbitals redefine
+       + Σ_x (∂𝒜/∂P_x)(dP_x/dx)     ← (iii) fragment projectors shift
+       +     (∂𝒜/∂C )(dC /dx)        ← (iv)  HF orbitals relax
 ```
+
+`dT_x/dx`, `dC_x/dx`, `dP_x/dx`, `dC/dx` are the total geometry derivatives of the same per-cluster quantities introduced under the assembly map above; each is coupled to the geometry through its own defining equation (the cluster amplitude equations, the DMET bath construction, the fragment projector definition, the HF/SCF stationarity condition), so `dγ/dx` in full generality requires four coupled response solves.
 
 **Why term (b) is nonzero for EWF but zero for a variational method:** for a variational wavefunction (FCI, optimized CASSCF, HF) the density extremizes `E` for the given integrals, so the response `dγ/dx` lies along directions in which `E` is flat and the contraction `(∂E/∂γ):(dγ/dx)` vanishes identically — this is the Hellmann–Feynman theorem. EWF breaks this: the assembled `γ` is built by projection of independent cluster solutions and is *not* the density that extremizes `E[γ]` for the global integrals. Even when each cluster solver returns an exact eigenstate (each *cluster* energy stationary), the projected *global* energy is not stationary with respect to the cluster amplitudes:
 
@@ -82,7 +90,7 @@ dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← cluster amplitudes re-solve
 ∂E_global/∂T_x  ≠ 0        ← projection breaks cluster-level Hellmann–Feynman
 ```
 
-so the density-response term contributes a real piece of `dE/dx`.
+so the density-response term contributes a real piece of `dE/dx` (here `E_global` is the assembled `E[γ1, λ2]` from the very first equation of this section, and the inequality reads *for at least one cluster `x`*).
 
 **The Lagrangian trick:** computing `dγ/dx` head-on would require solving the four response equations above for each of the 3N nuclear coordinates — 3N embedding re-solves. The Z-vector / Lagrangian method instead augments `E` with each defining equation times a multiplier, chooses the multipliers to make the augmented functional stationary in all internal variables, and then
 
@@ -90,7 +98,9 @@ so the density-response term contributes a real piece of `dE/dx`.
 (∂E/∂γ):(dγ/dx)  ≡  Σ_x Λ_x (∂H_x/∂x)|_explicit  +  (projector overlap terms)  +  (Z-vector terms)
 ```
 
-The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
+Here `Λ_x` is the per-cluster set of Lagrange multipliers (Z-vectors) — one adjoint solve per defining equation (amplitude Λ for the amplitude equations, orbital Z for the bath/HF orbital rotations, projector multipliers for the fragment projectors) — and `H_x` is the effective cluster Hamiltonian on fragment `x` (its explicit `x`-derivative is the only *nuclear* derivative that appears on the right-hand side). The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
+
+**Scope of this project — one line of `dγ/dx` at a time.** In principle the full density-response term (b) requires closing **all four** lines of the `dγ/dx` expansion above — cluster amplitudes (i), bath/cluster orbitals (ii), fragment projectors (iii), and HF orbitals (iv). This project addresses **only line (i)** as an initial effort: `rdm_t_lambda` builds the amplitude response `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density by solving the proper CCSD Λ equations on a global effective wavefunction (`embedding_lagrangian.py` — see its Stage-1 docstring). Lines (ii)–(iv) — the geometry response of the DMET bath, of the occupied-fragment projectors, and of the HF/SCF orbitals — are **not yet closed**; they remain folded into the frozen-density (a) piece under the "frozen-bath" approximation (with the HF CPHF response of the *integrals* included there, but not the response of `γ` itself to the HF-orbital rotations). Closing lines (ii)–(iv) is the natural next stage of the methodology development: it requires adjoint solves for each of the remaining coupling equations (DMET bath overlap, fragment projector, HF stationarity) and is what would eventually let geometry optimization reach tight convergence in the fragmented EWF regime. The current gradient floor observed in propylene (~1e-3 Eh/Bohr) is a direct signature of these three missing response lines.
 
 ---
 
@@ -147,7 +157,7 @@ is the new feature introduced in this project; it was not previously available i
 | `make_relaxed_global_rdms` | Builds `pyscf.cc.CCSD(mf)`, injects `(T1, T2)`, solves Λ (`solve_lambda`), returns the relaxed `(γ1, λ2)` — amplitudes are **not** re-optimized |
 | `assemble_global_rdms_rdm_t_lambda` | Driver-facing assembler, same signature as the other `assemble_global_rdms_*` |
 
-Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds the cluster-amplitude line of the density response — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` — into the assembled density itself, recovering the part of the gradient that drives the gradient zero toward the energy minimum.
+Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective CCSD amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding CCSD Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard CCSD relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds line **(i)** of the density-response expansion above — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)`, the cluster-amplitude line — into the assembled density itself. The remaining lines **(ii)–(iv)** (bath / cluster orbitals, fragment projectors, HF orbitals) are still left approximated by the frozen-bath treatment in `build_ewf_grad`, so `rdm_t_lambda` closes one of the four density-response contributions and is the starting point — not the endpoint — of the Lagrangian programme.
 
 ---
 
