@@ -92,11 +92,11 @@ sqd:
   # per_fragment_samples:
   #   0: /path/to/cluster_0_count_dict.txt
   #   1: /path/to/cluster_1_count_dict.txt
-   qiskit_backend: ibm_cleveland
-   default_shots: 100000
-   n_reps: 1
-   thresh_two_q: 1.0
-   thresh_meas: 0.10
+  qiskit_backend: ibm_cleveland
+  default_shots: 100000
+  n_reps: 1
+  thresh_two_q: 1.0
+  thresh_meas: 0.10
   # Slurm for each SBD sub-job (one per SQD batch + one for ext-SQD).
   # --ntasks/--gpus-per-node/--cpus-per-task are auto-derived from the
   # knobs above; set only placement / mem / time (and optional extra.exclude).
@@ -111,8 +111,8 @@ sqd:
     sbatch:
       partition: merzk-a100
       mem: 500G
-       extra:
-         exclude: m002   # skip nodes that fail mpirun
+      extra:
+        exclude: m002   # skip nodes that fail mpirun
 
 geomopt:
   enabled: true                  # set false for a single-point energy + gradient
@@ -121,6 +121,6 @@ geomopt:
   step_subdir_fmt: "step_{step:03d}"
   sella:
     fmax:  0.01           # eV / Angstrom (max-force convergence)
-    steps: 100            # max optimizer steps
+    steps: 20            # max optimizer steps
     order: 0            # 0 = minimisation (default), 1 = saddle
     internal: true      # use internal coordinates

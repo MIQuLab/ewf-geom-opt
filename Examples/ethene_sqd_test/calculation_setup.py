@@ -225,8 +225,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# single-solver value"
           f" (ignored when multi_solver.enabled is true)")
-        a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff"
-          " (ignored by SQD, which draws its subspace from quantum samples)")
+        a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD / SQD determinant-selection cutoff")
         if multi:
             a("  multi_solver:")
             a("    enabled: true")
@@ -385,10 +384,8 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             a("  cpus_per_batch: 96      # MPI ranks (-np / --ntasks) for the CPU run")
         a("  sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)")
         a("  sbd_block: 20")
-        a("  sbd_dav_iteration: 10   # SQD: relaxed vs SCI_SBD's 100 (per-batch SBD"
-          " is much more expensive)")
-        a("  sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this"
-          " exact '1.e-5' notation")
+        a("  sbd_dav_iteration: 100")
+        a("  sbd_tolerance: 1.e-8    # keep this exact '1.e-8' notation")
         if not gpu:
             a("  sbd_adet_comm_size: 2   # 'comm_size' options apply to CPU runs only")
             a("  sbd_bdet_comm_size: 2")
