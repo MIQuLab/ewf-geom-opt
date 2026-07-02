@@ -22,6 +22,14 @@ Questions
 5. External eigensolver none | SCI-SBD | SQD
 6. (SBD/SQD only) ...... GPU or CPU
 
+Notes
+-----
+* Workflow-level restart is NOT a prompt: the emitted template carries
+  ``calculation.restart: false`` and the CLI ``--restart`` / ``--no-restart``
+  flags of ``EWF-CI_Geom_Opt_HPC.py`` override it per invocation.  Restart
+  applies uniformly to every solver (FCI / SCI / SCI_SBD / SQD) -- the SQD
+  block therefore no longer carries its own ``sqd_restart`` knob.
+
 HPC-specific Slurm handling
 ---------------------------
 * CCF : every #SBATCH block uses ``partition`` and NO ``time``.
@@ -252,6 +260,13 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a("  symmetry: false")
     a("  workdir: jobs")
     a("  fci_conv_tol: 1.0e-12")
+    a("  # Workflow-level restart: when true (or when the driver is invoked with")
+    a("  # --restart) the driver scans the workdir and reuses every artefact that")
+    a("  # is already complete -- step_<NNN>/result.json (cached E + gradient),")
+    a("  # per-fragment cluster_<i>.h5 / rdm_<i>.h5, and completed SCI_SBD / SQD")
+    a("  # sub-jobs (iter_*/[batch_*/]sbd_job.status == DONE, plus any existing")
+    a("  # sqd_scratch_*/count_dict.txt).  Default off: wipe stale files and rerun.")
+    a("  restart: false                 # true | false  (or use --restart on CLI)")
     a("")
 
     # --- slurm block (EWF only: DUMP + per-solver solve waves) --------------
@@ -406,7 +421,10 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  symmetrize_spin: true    # symmetrise alpha/beta when n_alpha == n_beta")
         a("  add_hf_string: true      # always include the Hartree-Fock determinant in each batch")
         a("  ext_sqd_dprime_cutoff: 1.0e-5  # |c| cutoff for the ext-SQD PyCI determinant set")
-        a("  # sqd_restart: false     # resume from existing iter_*/ scratch dirs")
+        a("  # NOTE: restart across SQD iterations is driven by the workflow-level")
+        a("  # calculation.restart flag (or --restart on the CLI); per-solver")
+        a("  # restart knobs are intentionally not exposed here.  See the header of")
+        a("  # calculation.restart in the 'calculation:' block above.")
         a("  # seed: 42                # RNG seed for sub-sampling reproducibility")
         a("  # max_dim: 200000         # cap on selected determinants per spin sector")
         a("  # --- quantum-sampling source --------------------------------------")

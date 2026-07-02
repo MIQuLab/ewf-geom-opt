@@ -74,6 +74,7 @@ runs is decided per fragment.)
 
 import argparse
 import copy
+import json
 import os
 import shlex
 import subprocess
@@ -296,6 +297,31 @@ def load_config(path):
     if marker.lower() not in str(calc["workdir"]).lower():
         calc["workdir"] = f"{calc['workdir']}_{marker}"
     calc.setdefault("fci_conv_tol", 1.0e-12)
+
+    # Workflow-level restart flag.  When enabled, the driver scans the on-disk
+    # ``jobs_EWF``-style workdir and skips every artefact that is already
+    # complete: per-geometry ``step_<NNN>/result.json`` (cached E + gradient),
+    # per-fragment ``cluster_<i>.h5`` / ``rdm_<i>.h5`` (DUMP + solve waves),
+    # completed SCI_SBD / SQD sub-jobs (``iter_*/sbd_job.status`` or
+    # ``iter_*/batch_*/sbd_job.status`` == DONE), and -- for SQD -- an existing
+    # ``sqd_scratch_*/count_dict.txt`` (skip resampling).  The default is off,
+    # matching the historical wipe-and-rerun behaviour.  Accepts a boolean or
+    # the shorthand strings ``on``/``off``/``auto``/``true``/``false``.
+    _RESTART_TRUE = {"true", "on", "auto", "yes", "1", True}
+    _RESTART_FALSE = {"false", "off", "no", "0", "", None, False}
+    raw = calc.setdefault("restart", False)
+    if isinstance(raw, str):
+        key = raw.strip().lower()
+    else:
+        key = raw
+    if key in _RESTART_TRUE:
+        calc["restart"] = True
+    elif key in _RESTART_FALSE:
+        calc["restart"] = False
+    else:
+        raise ValueError(
+            f"Unsupported calculation.restart = {raw!r}; expected one of "
+            f"true/false, on/off, auto/no, yes/no.")
 
     # The 'sbd:' / 'sqd:' blocks (SBD executable paths, proc_type, per-cycle
     # slurm resources, etc.) are required whenever a solver that will actually
@@ -1024,6 +1050,23 @@ def fragment_paths(workdir, frag_idx):
     return cluster_h5, rdm_h5
 
 
+def _is_valid_h5(path):
+    """True iff ``path`` is a readable HDF5 file with at least one group.
+
+    Cheap sanity check used by the workflow-level restart to decide whether
+    a previous run's ``cluster_<i>.h5`` / ``rdm_<i>.h5`` can be trusted; a
+    truncated write from a killed job (0-byte file or corrupt HDF5 header)
+    is treated as missing and the fragment is resubmitted.
+    """
+    if not os.path.isfile(path):
+        return False
+    try:
+        with h5py.File(path, "r") as h5:
+            return len(list(h5.keys())) > 0
+    except (OSError, RuntimeError):
+        return False
+
+
 def status_file_path(workdir, frag_idx, stage, cfg):
     """Per-fragment / per-stage status file written by the Slurm job itself.
 
@@ -1068,6 +1111,11 @@ def run_dump_worker(frag_idx, cfg):
     workdir = cfg["calculation"]["workdir"]
     os.makedirs(workdir, exist_ok=True)
     cluster_h5, _ = fragment_paths(workdir, frag_idx)
+    restart = bool(cfg["calculation"].get("restart", False))
+    if restart and _is_valid_h5(cluster_h5):
+        print(f"[dump frag={frag_idx}] Restart: {cluster_h5} already present "
+              f"-- skipping DUMP.")
+        return
     if os.path.exists(cluster_h5):
         os.remove(cluster_h5)
 
@@ -1126,6 +1174,11 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     workdir = cfg["calculation"]["workdir"]
     os.makedirs(workdir, exist_ok=True)
     cluster_h5, rdm_h5 = fragment_paths(workdir, frag_idx)
+    restart = bool(cfg["calculation"].get("restart", False))
+    if restart and _is_valid_h5(rdm_h5):
+        print(f"[solve frag={frag_idx}] Restart: {rdm_h5} already present "
+              f"-- skipping solve.")
+        return
     # The DUMP stage may have written this file from a *different* node; on a
     # clustered filesystem its directory entry can lag, so settle before
     # declaring it missing (see wait_for_files_visible).
@@ -1750,14 +1803,34 @@ def discover_n_fragments(mf, threshold):
     return len(list(emb.fragments))
 
 
-def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path):
+def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
+                  skip_indices=None):
     """sbatch one job per fragment for ``stage`` and return the list of
-    per-fragment status-file paths (in fragment-index order)."""
+    per-fragment status-file paths (in fragment-index order).
+
+    ``skip_indices`` is an optional iterable of fragment indices whose
+    output is already present on disk (workflow-level restart); those
+    fragments are NOT submitted but their existing status file (written
+    ``DONE`` by a previous run, or synthetically stamped here if the file
+    is missing but the output artefact is present) is still returned in
+    the list, so :func:`wait_for_slurm_jobs` treats them as terminal.
+    """
+    skip_set = set(skip_indices or ())
     status_files = []
     for i in range(nfrag):
+        status_path = status_file_path(workdir, i, stage, cfg)
+        if i in skip_set:
+            # Fragment already complete on disk from an earlier run.  Stamp a
+            # DONE status file so the wait loop skips it and the log stays
+            # consistent with the fresh-submission branch.
+            with open(status_path, "w") as fh:
+                fh.write("DONE\n")
+            print(f"[driver] Restart: reusing {stage} fragment {i:>3d} "
+                  f"(output already on disk)")
+            status_files.append(status_path)
+            continue
         sh = write_slurm_script(
             stage, i, cfg, workdir, config_path, script_path)
-        status_path = status_file_path(workdir, i, stage, cfg)
         # Seed the status file BEFORE sbatch so we never see a missing
         # file during the brief gap between submission and job start-up.
         with open(status_path, "w") as fh:
@@ -1811,31 +1884,68 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     cluster_files = [fragment_paths(workdir, i)[0] for i in range(nfrag)]
     rdm_files = [fragment_paths(workdir, i)[1] for i in range(nfrag)]
     poll = int(cfg["slurm"]["poll_interval"])
+    restart = bool(cfg["calculation"].get("restart", False))
 
     # Wipe stale status files (and any pre-existing per-fragment data
     # files) from a previous run inside the SAME workdir so we never
-    # mistake an old DONE for the current step's result.
-    for i in range(nfrag):
-        for stage in ("dump", "fci"):
-            sp = status_file_path(workdir, i, stage, cfg)
-            if os.path.exists(sp):
-                os.remove(sp)
-        for f in fragment_paths(workdir, i):
-            if os.path.exists(f):
-                os.remove(f)
+    # mistake an old DONE for the current step's result -- UNLESS
+    # workflow-level restart is enabled, in which case we WANT to keep
+    # (and reuse) the on-disk artefacts and only rerun the missing ones.
+    if not restart:
+        for i in range(nfrag):
+            for stage in ("dump", "fci"):
+                sp = status_file_path(workdir, i, stage, cfg)
+                if os.path.exists(sp):
+                    os.remove(sp)
+            for f in fragment_paths(workdir, i):
+                if os.path.exists(f):
+                    os.remove(f)
+    else:
+        # Under restart, valid cluster/rdm dumps let us skip the corresponding
+        # wave for that fragment.  Stale status files that survive from a
+        # crashed run are cleared so the wait loop starts from a clean state
+        # (the actual data-file check below is what determines skippability).
+        for i in range(nfrag):
+            for stage in ("dump", "fci"):
+                sp = status_file_path(workdir, i, stage, cfg)
+                if os.path.exists(sp):
+                    os.remove(sp)
+        dump_done = [i for i in range(nfrag)
+                     if _is_valid_h5(cluster_files[i])]
+        solve_done = [i for i in range(nfrag)
+                      if _is_valid_h5(rdm_files[i])]
+        if dump_done:
+            print(f"[{tag}] Restart: DUMP already complete for "
+                  f"{len(dump_done)}/{nfrag} fragment(s): {dump_done}")
+        if solve_done:
+            print(f"[{tag}] Restart: SOLVE already complete for "
+                  f"{len(solve_done)}/{nfrag} fragment(s): {solve_done}")
 
     if no_slurm:
         print(f"[{tag}] --no-slurm: running DUMP stage inline")
         for i in range(nfrag):
+            if restart and _is_valid_h5(cluster_files[i]):
+                print(f"[dump frag={i}] Restart: reusing existing "
+                      f"{cluster_files[i]}")
+                continue
             run_dump_worker(i, cfg)
         print(f"[{tag}] --no-slurm: running solve stage (FCI/SCI) inline")
         for i in range(nfrag):
+            if restart and _is_valid_h5(rdm_files[i]):
+                print(f"[solve frag={i}] Restart: reusing existing "
+                      f"{rdm_files[i]}")
+                continue
             run_fci_worker(i, cfg)
     else:
         # ---------------- WAVE 1 : DUMP --------------------------------
-        print(f"[{tag}] === Wave 1/2 : submitting {nfrag} DUMP job(s) ===")
+        skip_dump = ([i for i in range(nfrag) if _is_valid_h5(cluster_files[i])]
+                     if restart else [])
+        n_dump_new = nfrag - len(skip_dump)
+        print(f"[{tag}] === Wave 1/2 : submitting {n_dump_new} DUMP job(s)"
+              f"{f' (skipping {len(skip_dump)} already complete)' if skip_dump else ''} ===")
         dump_status_files = _submit_stage(
-            "dump", nfrag, cfg, workdir, config_path, script_path)
+            "dump", nfrag, cfg, workdir, config_path, script_path,
+            skip_indices=skip_dump)
         wait_for_slurm_jobs(dump_status_files, poll_interval=poll)
         missing = wait_for_files_visible(cluster_files, label="cluster dump")
         if missing:
@@ -1845,10 +1955,15 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
                 f"'{stage_workdir(workdir, 'dump')}'): {missing}")
 
         # ---------------- WAVE 2 : FCI ---------------------------------
-        print(f"[{tag}] === Wave 2/2 : submitting {nfrag} solve "
-              f"(FCI/SCI) job(s) ===")
+        skip_solve = ([i for i in range(nfrag) if _is_valid_h5(rdm_files[i])]
+                      if restart else [])
+        n_solve_new = nfrag - len(skip_solve)
+        print(f"[{tag}] === Wave 2/2 : submitting {n_solve_new} solve "
+              f"(FCI/SCI) job(s)"
+              f"{f' (skipping {len(skip_solve)} already complete)' if skip_solve else ''} ===")
         fci_status_files = _submit_stage(
-            "fci", nfrag, cfg, workdir, config_path, script_path)
+            "fci", nfrag, cfg, workdir, config_path, script_path,
+            skip_indices=skip_solve)
         wait_for_slurm_jobs(fci_status_files, poll_interval=poll)
 
     missing = wait_for_files_visible(rdm_files, label="RDM")
@@ -2233,6 +2348,53 @@ class _GeomOptEvaluator:
         cfg_file = os.path.join(step_dir, "config.yaml")
         return step_dir, geom_file, cfg_file
 
+    @staticmethod
+    def _result_json_path(step_dir):
+        """Location of the per-step (E, gradient, coords) cache."""
+        return os.path.join(step_dir, "result.json")
+
+    def _try_load_cached_result(self, step_dir, coords_bohr, tol=1.0e-8):
+        """Return the cached ``(energy, gradient)`` for ``step_dir`` if its
+        ``result.json`` matches ``coords_bohr`` within ``tol`` (Bohr), else
+        ``None``.  Guards against the optimizer having chosen a *different*
+        coordinate for this step index after a restart.
+        """
+        rpath = self._result_json_path(step_dir)
+        if not os.path.isfile(rpath):
+            return None
+        try:
+            with open(rpath, "r") as fh:
+                data = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            return None
+        try:
+            cached = np.asarray(data["coords_bohr"], dtype=float).reshape(-1)
+            energy = float(data["energy"])
+            gradient = np.asarray(data["gradient"], dtype=float).reshape(-1)
+        except (KeyError, TypeError, ValueError):
+            return None
+        if cached.size != coords_bohr.size:
+            return None
+        if not np.allclose(cached, coords_bohr, atol=tol, rtol=0.0):
+            return None
+        return energy, gradient
+
+    def _save_cached_result(self, step_dir, coords_bohr, energy, gradient):
+        """Persist ``(energy, gradient, coords)`` next to the step so a
+        later run with ``calculation.restart: true`` (or ``--restart``) can
+        skip this step entirely."""
+        rpath = self._result_json_path(step_dir)
+        payload = {
+            "coords_bohr": np.asarray(coords_bohr, dtype=float).reshape(-1).tolist(),
+            "energy": float(energy),
+            "gradient": np.asarray(gradient, dtype=float).reshape(-1).tolist(),
+        }
+        # Atomic write: rename over any stale content.
+        tmp = rpath + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, rpath)
+
     def _materialize_step(self, coords_bohr):
         """Write geometry.txt + config.yaml for this step and return the
         per-step config dict + path to its config file."""
@@ -2258,6 +2420,29 @@ class _GeomOptEvaluator:
         """Run one EWF-CI single point at ``coords_bohr`` (flat or (N,3),
         Bohr).  Returns ``(energy_float_Ha, gradient_flat_Ha_per_Bohr)``."""
         coords_bohr = np.asarray(coords_bohr, dtype=float).reshape(-1)
+
+        # --- Restart short-circuit --------------------------------------
+        # If the workflow-level restart flag is on and this step_idx has a
+        # cached ``result.json`` matching the current coordinates within a
+        # tight tolerance, return the cached (E, grad) without running any
+        # DUMP / solve waves.  This lets a killed geom-opt resume from the
+        # exact step it left off without re-doing completed cycles.
+        restart = bool(self.base_cfg.get("calculation", {}).get("restart", False))
+        step_idx = self.cycle
+        step_dir, _, _ = self._step_paths(step_idx)
+        if restart:
+            cached = self._try_load_cached_result(step_dir, coords_bohr)
+            if cached is not None:
+                energy, gradient = cached
+                self.last_energy = energy
+                self.last_gradient = gradient.copy()
+                gnorm = float(np.linalg.norm(gradient))
+                print(f"[geomopt step={step_idx:03d}] Restart: reusing cached "
+                      f"result from {self._result_json_path(step_dir)} "
+                      f"(E={energy:.10f} Ha, |grad|={gnorm:.4e} Eh/Bohr)")
+                self.cycle += 1
+                return energy, gradient
+
         step_idx, step_cfg, step_cfg_path, step_dir = (
             self._materialize_step(coords_bohr))
 
@@ -2282,6 +2467,13 @@ class _GeomOptEvaluator:
         gnorm = float(np.linalg.norm(gradient))
         print(f"[{tag}] E = {e_ewf:.10f} Ha   |grad| = {gnorm:.4e}")
         print("=" * 70 + "\n")
+
+        # Persist so a subsequent restart can skip this step.
+        try:
+            self._save_cached_result(step_dir, coords_bohr,
+                                     float(e_ewf), gradient)
+        except OSError as exc:
+            print(f"[{tag}] warning: failed to cache result.json: {exc}")
 
         self.cycle += 1
         return float(e_ewf), gradient
@@ -2557,6 +2749,18 @@ def parse_args(argv=None):
                         "gradient evaluation at the input geometry and "
                         "skip geometry optimisation, regardless of the "
                         "geomopt.enabled flag in the config.")
+    restart_group = p.add_mutually_exclusive_group()
+    restart_group.add_argument(
+        "--restart", dest="restart", action="store_true", default=None,
+        help="(driver mode) Enable workflow-level restart: scan the workdir "
+             "for existing artefacts (cached step results, per-fragment "
+             "cluster/RDM dumps, completed SCI_SBD / SQD sub-jobs, saved "
+             "count_dict.txt) and resume from wherever the previous run "
+             "left off.  Overrides `calculation.restart` in the config.")
+    restart_group.add_argument(
+        "--no-restart", dest="restart", action="store_false",
+        help="(driver mode) Force a from-scratch run even if the config sets "
+             "`calculation.restart: true`.")
     return p.parse_args(argv)
 
 
@@ -2564,6 +2768,18 @@ def main(argv=None):
     args = parse_args(argv)
     cfg = load_config(args.config)
     script_path = os.path.abspath(__file__)
+
+    # CLI ``--restart`` / ``--no-restart`` override ``calculation.restart`` for
+    # this invocation; propagate the resolved value back into the cfg dict so
+    # every downstream helper (driver, workers, sub-solvers) sees the same flag.
+    if args.restart is not None:
+        cfg["calculation"]["restart"] = bool(args.restart)
+    restart = bool(cfg["calculation"].get("restart", False))
+    if restart:
+        print(f"[driver] Restart mode: ON -- reusing existing artefacts in "
+              f"{cfg['calculation']['workdir']!r} where possible "
+              f"(step_<NNN>/result.json, cluster_<i>.h5, rdm_<i>.h5, "
+              f"iter_*/sbd_job.status, count_dict.txt).")
 
     if args.mode in ("dump", "solve"):
         if args.frag_idx is None:

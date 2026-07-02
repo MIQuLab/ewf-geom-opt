@@ -622,174 +622,129 @@ def _hf_address(norb: int, nelec_spin: int) -> Optional[int]:
     return int(bitstring, 2)
 
 
-def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
-                        nelec, fcidump_path: str, count_dict_path: str,
-                        verbose=None) -> dict:
-    """Reproduce ``run-sqd.py``: configuration recovery + per-batch SBD jobs.
-
-    Returns the lowest-energy-batch outputs (strings + sci vector +
-    occupancies) of the best iteration, plus the per-iteration history for
-    diagnostics.  All intermediate files live under
-    ``sqd_workdir/iter_<NNN>/``.
+def _iter_all_batches_done(iter_dir, n_batches):
+    """True iff every ``batch_0 .. batch_(n_batches-1)`` under ``iter_dir``
+    has a DONE ``sbd_job.status`` file *and* a ``matrixformwf.txt`` output
+    (so a re-parse call is guaranteed to succeed).  Used by the workflow-
+    level restart to identify fully-complete SQD iterations from disk.
     """
-    n_alpha, n_beta = nelec
-    if sqd_cfg.get("symmetrize_spin", True) and n_alpha != n_beta:
-        raise ValueError(
-            "sqd.symmetrize_spin is only supported when n_alpha == n_beta")
+    for j in range(n_batches):
+        w = os.path.join(iter_dir, f"batch_{j:03d}")
+        status_file = os.path.join(w, "sbd_job.status")
+        mwf_file = os.path.join(w, "matrixformwf.txt")
+        if not _read_status(status_file).startswith("DONE"):
+            return False
+        if not os.path.isfile(mwf_file):
+            return False
+    return True
 
-    iterations = int(sqd_cfg.get("iterations", 5))
-    n_batches = int(sqd_cfg.get("n_batches", 2))
-    samples_per_batch = int(sqd_cfg.get("samples_per_batch", 200))
-    energy_tol = float(sqd_cfg.get("energy_tol", 1.0e-8))
-    occupancies_tol = float(sqd_cfg.get("occupancies_tol", 1.0e-5))
-    carryover_threshold = float(sqd_cfg.get("carryover_threshold", 1.0e-4))
-    symmetrize_spin = bool(sqd_cfg.get("symmetrize_spin", True))
-    add_hf_string = bool(sqd_cfg.get("add_hf_string", True))
-    sqd_restart = bool(sqd_cfg.get("sqd_restart", False))
-    seed = sqd_cfg.get("seed", None)
 
-    max_dim = sqd_cfg.get("max_dim", None)
-    if max_dim is None:
-        max_dim_a = max_dim_b = None
-    elif isinstance(max_dim, (list, tuple)):
-        max_dim_a, max_dim_b = int(max_dim[0]), int(max_dim[1])
-    else:
-        max_dim_a = max_dim_b = int(max_dim)
-
-    # --- starting strings & occupancies (mirrors run-sqd.py) ---------------
-    include_a: np.ndarray = np.array([], dtype=np.int64)
-    include_b: np.ndarray = np.array([], dtype=np.int64)
-    initial_occupancies = None
-    if sqd_restart:
-        addr_a = np.loadtxt(os.path.join(
-            sqd_workdir, "address_alpha_for_lowest_energy_batch.txt")).astype(int)
-        addr_b = np.loadtxt(os.path.join(
-            sqd_workdir, "address_beta_for_lowest_energy_batch.txt")).astype(int)
-        vec = np.loadtxt(os.path.join(
-            sqd_workdir, "sci_vector_for_lowest_energy_batch.txt"))
-        keep = np.abs(vec) > carryover_threshold
-        include_a = np.unique(addr_a[keep]).astype(np.int64)
-        include_b = np.unique(addr_b[keep]).astype(np.int64)
-        initial_occupancies = np.loadtxt(os.path.join(
-            sqd_workdir, "current_orbital_occupancies.txt"))
-    elif add_hf_string:
-        hf_a = _hf_address(norb, n_alpha)
-        hf_b = _hf_address(norb, n_beta)
-        if hf_a is None or hf_b is None:
-            raise ValueError(
-                f"SQD: cannot build HF string for (norb={norb}, "
-                f"nelec={nelec}); a cluster cannot host more electrons than orbitals.")
-        include_a = np.array([hf_a], dtype=np.int64)
-        include_b = np.array([hf_b], dtype=np.int64)
-
-    # --- parse the counts dictionary -> raw bitstrings + probabilities -----
-    with open(count_dict_path, "r") as fh:
-        count_text = fh.read().replace("\n", "")
-    counts = json.loads(count_text.replace("'", '"'))
-
-    try:
-        from qiskit_addon_sqd.counts import counts_to_arrays
-    except ImportError as exc:
-        raise ImportError(
-            "SQD post-processing requires the `qiskit_addon_sqd` package.  "
-            "Install it with `pip install qiskit_addon_sqd`."
-        ) from exc
-    raw_bitstrings, raw_probs = counts_to_arrays(counts)
-
-    rng = np.random.default_rng(seed)
-    current_occupancies = initial_occupancies
-    current_energy = None
-    best_energy = None
-    best_outputs = None
-    history = []
-    # Carryover strings start empty and are populated at the end of every
-    # successful (non-final) iteration.  They are explicitly initialised
-    # here so the first iteration's `_select_ci_strings` call always sees
-    # a defined array (no NameError if iterations==1).
-    carryover_a: np.ndarray = np.array([], dtype=np.int64)
-    carryover_b: np.ndarray = np.array([], dtype=np.int64)
-
+def _scan_completed_sqd_iterations(sqd_workdir, iterations, n_batches):
+    """Walk ``iter_001, iter_002, ...`` and return the number of CONSECUTIVE
+    fully-DONE iterations at the start of the sequence.  Restart resumes
+    from ``it_done + 1``; iterations after the first partial one are
+    ignored (they would carry stale batch outputs incompatible with the
+    resumed RNG state).
+    """
+    it_done = 0
     for it in range(1, iterations + 1):
         iter_dir = os.path.join(sqd_workdir, f"iter_{it:03d}")
-        os.makedirs(iter_dir, exist_ok=True)
-
-        if verbose:
-            verbose.info("[SQD] iteration %d/%d in %s", it, iterations, iter_dir)
-
-        ci_strings = _select_ci_strings(
-            raw_bitstrings, raw_probs, current_occupancies,
-            n_alpha, n_beta, samples_per_batch, n_batches,
-            symmetrize_spin, max_dim_a, max_dim_b,
-            include_a, include_b,
-            carryover_a, carryover_b,
-            rng, norb)
-
-        # --- per-batch SBD jobs, submitted concurrently ----------------
-        batch_workdirs = [os.path.join(iter_dir, f"batch_{j:03d}")
-                          for j in range(n_batches)]
-        _submit_batches_in_parallel(
-            sqd_cfg, batch_workdirs, ci_strings, norb,
-            with_rdm=False, verbose=verbose,
-            job_label=f"i{it:03d}_b")
-
-        # --- parse + identify the lowest-energy batch ------------------
-        batch_outputs = []
-        for j, w in enumerate(batch_workdirs):
-            out = _parse_sbd_batch_outputs(w, norb, nelec, with_rdm=False)
-            out["batch_idx"] = j
-            batch_outputs.append(out)
-            if verbose:
-                verbose.info("  SQD iter %d batch %d: E=%.10f Ha, dim=%d",
-                             it, j, out["energy"],
-                             out["ci_strs_a_unique"].size *
-                             out["ci_strs_b_unique"].size)
-
-        best_in_iter = min(batch_outputs, key=lambda o: o["energy"])
-        history.append({
-            "iteration": it,
-            "best_batch": best_in_iter["batch_idx"],
-            "best_energy": best_in_iter["energy"],
-            "energies": [o["energy"] for o in batch_outputs],
-        })
-
-        if best_energy is None or best_in_iter["energy"] < best_energy:
-            best_energy = best_in_iter["energy"]
-            best_outputs = best_in_iter
-
-        # --- write the best-batch artefacts at the SQD workdir root ----
-        # (these are the inputs ext-SQD reads via the original code path)
-        np.savetxt(os.path.join(sqd_workdir, "address_alpha_for_lowest_energy_batch.txt"),
-                   best_in_iter["ci_strs_a_nonunique"])
-        np.savetxt(os.path.join(sqd_workdir, "address_beta_for_lowest_energy_batch.txt"),
-                   best_in_iter["ci_strs_b_nonunique"])
-        np.savetxt(os.path.join(sqd_workdir, "sci_vector_for_lowest_energy_batch.txt"),
-                   best_in_iter["sci_coeff_flat"])
-
-        # --- convergence check (energy + occupancies, like run-sqd.py) -
-        if (current_energy is not None
-                and abs(current_energy - best_in_iter["energy"]) < energy_tol
-                and current_occupancies is not None
-                and np.linalg.norm(
-                    np.ravel(current_occupancies)
-                    - np.ravel(best_in_iter["occupancies"]),
-                    ord=np.inf) < occupancies_tol):
-            if verbose:
-                verbose.info("[SQD] converged at iteration %d "
-                             "(dE=%.2e, docc=%.2e)",
-                             it,
-                             abs(current_energy - best_in_iter["energy"]),
-                             np.linalg.norm(
-                                 np.ravel(current_occupancies)
-                                 - np.ravel(best_in_iter["occupancies"]),
-                                 ord=np.inf))
+        if not os.path.isdir(iter_dir):
             break
+        if not _iter_all_batches_done(iter_dir, n_batches):
+            break
+        it_done = it
+    return it_done
 
-        current_energy = best_in_iter["energy"]
-        current_occupancies = best_in_iter["occupancies"]
+
+def _reparse_iteration_batches(sqd_workdir, it, n_batches, norb, nelec):
+    """Parse the SBD outputs of every batch in ``iter_<it>/`` and return
+    the ``batch_outputs`` list in the shape produced by the fresh
+    iteration loop.  Used by the restart path to reconstruct loop state
+    without resubmitting the SBD jobs.
+    """
+    iter_dir = os.path.join(sqd_workdir, f"iter_{it:03d}")
+    batch_outputs = []
+    for j in range(n_batches):
+        w = os.path.join(iter_dir, f"batch_{j:03d}")
+        out = _parse_sbd_batch_outputs(w, norb, nelec, with_rdm=False)
+        out["batch_idx"] = j
+        batch_outputs.append(out)
+    return batch_outputs
+
+
+def _apply_iteration_outputs(batch_outputs, it, sqd_workdir,
+                             current_energy, current_occupancies,
+                             best_energy, best_outputs,
+                             energy_tol, occupancies_tol,
+                             carryover_threshold, symmetrize_spin,
+                             verbose=None):
+    """Given one iteration's ``batch_outputs`` list, update the loop state:
+
+    * write the best-batch artefacts at the workdir root
+      (``address_alpha/beta_...txt``, ``sci_vector_...txt``);
+    * run the convergence check against the previous iteration;
+    * on non-terminal iterations, refresh ``current_orbital_occupancies.txt``
+      and recompute the carryover strings.
+
+    Returns a dict with the new ``current_energy``, ``current_occupancies``,
+    ``best_energy``, ``best_outputs``, ``carryover_a``, ``carryover_b``,
+    ``best_in_iter``, and ``converged`` fields.  Shared between the fresh
+    submission branch and the workflow-restart re-parse branch so both
+    paths produce identical on-disk state and identical loop invariants.
+    """
+    best_in_iter = min(batch_outputs, key=lambda o: o["energy"])
+    if verbose:
+        for out in batch_outputs:
+            verbose.info("  SQD iter %d batch %d: E=%.10f Ha, dim=%d",
+                         it, out["batch_idx"], out["energy"],
+                         out["ci_strs_a_unique"].size *
+                         out["ci_strs_b_unique"].size)
+
+    if best_energy is None or best_in_iter["energy"] < best_energy:
+        best_energy = best_in_iter["energy"]
+        best_outputs = best_in_iter
+
+    # --- write the best-batch artefacts at the SQD workdir root -----------
+    # (these are the inputs ext-SQD reads via the original code path)
+    np.savetxt(os.path.join(sqd_workdir, "address_alpha_for_lowest_energy_batch.txt"),
+               best_in_iter["ci_strs_a_nonunique"])
+    np.savetxt(os.path.join(sqd_workdir, "address_beta_for_lowest_energy_batch.txt"),
+               best_in_iter["ci_strs_b_nonunique"])
+    np.savetxt(os.path.join(sqd_workdir, "sci_vector_for_lowest_energy_batch.txt"),
+               best_in_iter["sci_coeff_flat"])
+
+    # --- convergence check (energy + occupancies, like run-sqd.py) --------
+    converged = False
+    if (current_energy is not None
+            and abs(current_energy - best_in_iter["energy"]) < energy_tol
+            and current_occupancies is not None
+            and np.linalg.norm(
+                np.ravel(current_occupancies)
+                - np.ravel(best_in_iter["occupancies"]),
+                ord=np.inf) < occupancies_tol):
+        if verbose:
+            verbose.info("[SQD] converged at iteration %d "
+                         "(dE=%.2e, docc=%.2e)",
+                         it,
+                         abs(current_energy - best_in_iter["energy"]),
+                         np.linalg.norm(
+                             np.ravel(current_occupancies)
+                             - np.ravel(best_in_iter["occupancies"]),
+                             ord=np.inf))
+        converged = True
+
+    new_current_energy = current_energy
+    new_current_occupancies = current_occupancies
+    carryover_a: np.ndarray = np.array([], dtype=np.int64)
+    carryover_b: np.ndarray = np.array([], dtype=np.int64)
+    if not converged:
+        new_current_energy = best_in_iter["energy"]
+        new_current_occupancies = best_in_iter["occupancies"]
         np.savetxt(os.path.join(sqd_workdir, "current_orbital_occupancies.txt"),
-                   current_occupancies)
+                   new_current_occupancies)
 
-        # --- carryover strings for the next iteration ------------------
+        # --- carryover strings for the next iteration ---------------------
         amps = best_in_iter["sci_coeff_flat"].reshape(
             best_in_iter["ci_strs_a_unique"].size,
             best_in_iter["ci_strs_b_unique"].size)
@@ -814,6 +769,221 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
             carryover_a = car_a[np.argsort(weights_a)[::-1]]
             carryover_b = car_b[np.argsort(weights_b)[::-1]]
 
+    return {
+        "best_in_iter": best_in_iter,
+        "best_energy": best_energy,
+        "best_outputs": best_outputs,
+        "current_energy": new_current_energy,
+        "current_occupancies": new_current_occupancies,
+        "carryover_a": carryover_a,
+        "carryover_b": carryover_b,
+        "converged": converged,
+    }
+
+
+def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
+                        nelec, fcidump_path: str, count_dict_path: str,
+                        verbose=None, restart: bool = False) -> dict:
+    """Reproduce ``run-sqd.py``: configuration recovery + per-batch SBD jobs.
+
+    Returns the lowest-energy-batch outputs (strings + sci vector +
+    occupancies) of the best iteration, plus the per-iteration history for
+    diagnostics.  All intermediate files live under
+    ``sqd_workdir/iter_<NNN>/``.
+
+    Restart behaviour
+    -----------------
+    When ``restart`` is true the driver-level workflow-restart flag
+    (``calculation.restart``) is on.  The routine scans
+    ``sqd_workdir/iter_<NNN>/`` for iterations whose *every* batch has a
+    ``sbd_job.status`` file of value ``DONE`` and a ``matrixformwf.txt``
+    output on disk, re-parses them to rebuild the loop state
+    (``best_outputs``, ``current_energy``, ``current_occupancies``, the
+    carryover strings), and resumes submission from the first
+    NOT-fully-DONE iteration.  Any partial ``iter_<K>/`` directory
+    beyond the last fully-DONE iteration is deleted before submitting,
+    so stale batch outputs from a crashed run do not shadow the fresh
+    re-randomised batches produced by ``_select_ci_strings`` on the
+    resumed side.  Note that the RNG (``sqd.seed``) advances only on the
+    resumed iterations; a mid-loop restart therefore produces a
+    slightly different (but equally valid) sequence than a fresh run
+    would.
+    """
+    n_alpha, n_beta = nelec
+    if sqd_cfg.get("symmetrize_spin", True) and n_alpha != n_beta:
+        raise ValueError(
+            "sqd.symmetrize_spin is only supported when n_alpha == n_beta")
+
+    iterations = int(sqd_cfg.get("iterations", 5))
+    n_batches = int(sqd_cfg.get("n_batches", 2))
+    samples_per_batch = int(sqd_cfg.get("samples_per_batch", 200))
+    energy_tol = float(sqd_cfg.get("energy_tol", 1.0e-8))
+    occupancies_tol = float(sqd_cfg.get("occupancies_tol", 1.0e-5))
+    carryover_threshold = float(sqd_cfg.get("carryover_threshold", 1.0e-4))
+    symmetrize_spin = bool(sqd_cfg.get("symmetrize_spin", True))
+    add_hf_string = bool(sqd_cfg.get("add_hf_string", True))
+    seed = sqd_cfg.get("seed", None)
+
+    max_dim = sqd_cfg.get("max_dim", None)
+    if max_dim is None:
+        max_dim_a = max_dim_b = None
+    elif isinstance(max_dim, (list, tuple)):
+        max_dim_a, max_dim_b = int(max_dim[0]), int(max_dim[1])
+    else:
+        max_dim_a = max_dim_b = int(max_dim)
+
+    # --- starting strings ---------------------------------------------------
+    # include_a / include_b are ALWAYS-included strings (across every
+    # iteration).  With the workflow-level restart in place the SQD block no
+    # longer takes an explicit sqd_restart flag; on restart the routine picks
+    # up where the crashed run stopped iteration-by-iteration from disk,
+    # so include_a/include_b are seeded the same way as on a fresh run
+    # (the HF determinant, if requested).
+    include_a: np.ndarray = np.array([], dtype=np.int64)
+    include_b: np.ndarray = np.array([], dtype=np.int64)
+    if add_hf_string:
+        hf_a = _hf_address(norb, n_alpha)
+        hf_b = _hf_address(norb, n_beta)
+        if hf_a is None or hf_b is None:
+            raise ValueError(
+                f"SQD: cannot build HF string for (norb={norb}, "
+                f"nelec={nelec}); a cluster cannot host more electrons than orbitals.")
+        include_a = np.array([hf_a], dtype=np.int64)
+        include_b = np.array([hf_b], dtype=np.int64)
+
+    # --- parse the counts dictionary -> raw bitstrings + probabilities -----
+    with open(count_dict_path, "r") as fh:
+        count_text = fh.read().replace("\n", "")
+    counts = json.loads(count_text.replace("'", '"'))
+
+    try:
+        from qiskit_addon_sqd.counts import counts_to_arrays
+    except ImportError as exc:
+        raise ImportError(
+            "SQD post-processing requires the `qiskit_addon_sqd` package.  "
+            "Install it with `pip install qiskit_addon_sqd`."
+        ) from exc
+    raw_bitstrings, raw_probs = counts_to_arrays(counts)
+
+    rng = np.random.default_rng(seed)
+    current_occupancies = None
+    current_energy = None
+    best_energy = None
+    best_outputs = None
+    history = []
+    converged = False
+    # Carryover strings start empty and are populated at the end of every
+    # successful (non-final) iteration.  They are explicitly initialised
+    # here so the first iteration's `_select_ci_strings` call always sees
+    # a defined array (no NameError if iterations==1).
+    carryover_a: np.ndarray = np.array([], dtype=np.int64)
+    carryover_b: np.ndarray = np.array([], dtype=np.int64)
+
+    # ---------------- Restart: re-parse fully-DONE iterations --------------
+    resume_from = 1
+    if restart:
+        it_done = _scan_completed_sqd_iterations(
+            sqd_workdir, iterations, n_batches)
+        if it_done > 0:
+            if verbose:
+                verbose.info(
+                    "[SQD] restart: iter_001..iter_%03d already complete on "
+                    "disk; re-parsing (no resubmission)", it_done)
+            for it in range(1, it_done + 1):
+                batch_outputs = _reparse_iteration_batches(
+                    sqd_workdir, it, n_batches, norb, nelec)
+                state = _apply_iteration_outputs(
+                    batch_outputs, it, sqd_workdir,
+                    current_energy, current_occupancies,
+                    best_energy, best_outputs,
+                    energy_tol, occupancies_tol,
+                    carryover_threshold, symmetrize_spin,
+                    verbose=verbose)
+                current_energy = state["current_energy"]
+                current_occupancies = state["current_occupancies"]
+                best_energy = state["best_energy"]
+                best_outputs = state["best_outputs"]
+                carryover_a = state["carryover_a"]
+                carryover_b = state["carryover_b"]
+                converged = state["converged"]
+                best_in_iter = state["best_in_iter"]
+                history.append({
+                    "iteration": it,
+                    "best_batch": best_in_iter["batch_idx"],
+                    "best_energy": best_in_iter["energy"],
+                    "energies": [o["energy"] for o in batch_outputs],
+                })
+                if converged:
+                    break
+            resume_from = it_done + 1
+
+            # Clear any partial `iter_<resume_from>/` from a killed run so
+            # its stale batch outputs cannot be mistaken for the fresh
+            # re-randomised batches we are about to submit.
+            if not converged and resume_from <= iterations:
+                partial = os.path.join(sqd_workdir,
+                                       f"iter_{resume_from:03d}")
+                if os.path.isdir(partial):
+                    shutil.rmtree(partial, ignore_errors=True)
+                    if verbose:
+                        verbose.info(
+                            "[SQD] cleared partial %s (stale batches from "
+                            "a killed run)", partial)
+
+    # ---------------- Fresh iterations (submit + parse + apply) ------------
+    for it in range(resume_from, iterations + 1):
+        if converged:
+            break
+        iter_dir = os.path.join(sqd_workdir, f"iter_{it:03d}")
+        os.makedirs(iter_dir, exist_ok=True)
+
+        if verbose:
+            verbose.info("[SQD] iteration %d/%d in %s", it, iterations, iter_dir)
+
+        ci_strings = _select_ci_strings(
+            raw_bitstrings, raw_probs, current_occupancies,
+            n_alpha, n_beta, samples_per_batch, n_batches,
+            symmetrize_spin, max_dim_a, max_dim_b,
+            include_a, include_b,
+            carryover_a, carryover_b,
+            rng, norb)
+
+        # --- per-batch SBD jobs, submitted concurrently ----------------
+        batch_workdirs = [os.path.join(iter_dir, f"batch_{j:03d}")
+                          for j in range(n_batches)]
+        _submit_batches_in_parallel(
+            sqd_cfg, batch_workdirs, ci_strings, norb,
+            with_rdm=False, verbose=verbose,
+            job_label=f"i{it:03d}_b")
+
+        # --- parse + apply ---------------------------------------------
+        batch_outputs = []
+        for j, w in enumerate(batch_workdirs):
+            out = _parse_sbd_batch_outputs(w, norb, nelec, with_rdm=False)
+            out["batch_idx"] = j
+            batch_outputs.append(out)
+
+        state = _apply_iteration_outputs(
+            batch_outputs, it, sqd_workdir,
+            current_energy, current_occupancies,
+            best_energy, best_outputs,
+            energy_tol, occupancies_tol,
+            carryover_threshold, symmetrize_spin,
+            verbose=verbose)
+        current_energy = state["current_energy"]
+        current_occupancies = state["current_occupancies"]
+        best_energy = state["best_energy"]
+        best_outputs = state["best_outputs"]
+        carryover_a = state["carryover_a"]
+        carryover_b = state["carryover_b"]
+        converged = state["converged"]
+        history.append({
+            "iteration": it,
+            "best_batch": state["best_in_iter"]["batch_idx"],
+            "best_energy": state["best_in_iter"]["energy"],
+            "energies": [o["energy"] for o in batch_outputs],
+        })
+
     if best_outputs is None:
         raise RuntimeError("SQD produced no batch outputs (iterations <= 0?)")
     return {"best": best_outputs, "history": history}
@@ -823,11 +993,39 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
 # ext-SQD: dominant-config augmentation + single SBD run with --rdm 1
 # ---------------------------------------------------------------------------
 def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
-                 verbose=None) -> dict:
+                 verbose=None, restart: bool = False) -> dict:
     """Reproduce ``ext-SQD-run.py``: filter the SQD best-batch wavefunction
     by ``dprime_cutoff``, augment by single excitations via PyCI, and submit
     a SINGLE SBD job (with ``--rdm 1``) to produce the final energy + RDMs.
+
+    When ``restart`` is true and the ext-SQD SBD job from a previous run
+    is complete on disk (``ext_sqd_iter/sbd_job.status == DONE`` together
+    with ``matrixformwf.txt`` and both ``1pRDM.txt`` / ``2pRDM.txt``),
+    the SBD submission is skipped and the existing outputs are re-parsed
+    into the same return dict.  This makes the very last (and often the
+    most expensive) SBD job in the SQD workflow resumable without
+    rerunning it.
     """
+    ext_dir = os.path.join(sqd_workdir, "ext_sqd_iter")
+    if restart:
+        status_ok = _read_status(
+            os.path.join(ext_dir, "sbd_job.status")).startswith("DONE")
+        outputs_ok = all(os.path.isfile(os.path.join(ext_dir, fn))
+                         for fn in ("matrixformwf.txt",
+                                    "1pRDM.txt", "2pRDM.txt"))
+        if status_ok and outputs_ok:
+            if verbose:
+                verbose.info("[ext-SQD] restart: reusing completed SBD job in "
+                             "%s (status DONE + RDM outputs present)", ext_dir)
+            out = _parse_sbd_batch_outputs(ext_dir, norb, nelec, with_rdm=True)
+            if "rdm1" not in out or "rdm2" not in out:
+                raise RuntimeError(
+                    f"ext-SQD restart: parse of {ext_dir} returned no RDMs "
+                    f"despite the status/output files being present.  "
+                    f"Delete {ext_dir} and rerun (or use --no-restart) to "
+                    f"force a fresh ext-SQD SBD job.")
+            return out
+
     try:
         import pyci  # type: ignore
     except ImportError as exc:
@@ -874,7 +1072,6 @@ def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
 
     # Single SBD job (mirrors the single-batch ext-SQD submission); RDM=1 so
     # we can hand 1- and 2-RDMs back to the EWF assembly routes.
-    ext_dir = os.path.join(sqd_workdir, "ext_sqd_iter")
     os.makedirs(ext_dir, exist_ok=True)
     _submit_one_sbd_job(
         sqd_cfg, ext_dir, addresses_alpha_aug, addresses_beta_aug, norb,
@@ -940,6 +1137,12 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
             "Cluster solver 'SQD' was requested but config.yaml has no 'sqd:' "
             "block (sampling source, SBD eigensolver options, per-job 'sqd.slurm').")
 
+    # Workflow-level restart flag lives under ``calculation:``.  When true the
+    # SQD solver reuses on-disk artefacts wherever possible: an existing
+    # count_dict.txt in ``sqd_workdir``, per-iteration ``batch_*/sbd_job.status``
+    # == DONE files, and the ext-SQD SBD job outputs.
+    restart = bool((cfg.get("calculation") or {}).get("restart", False))
+
     # Work on a shallow copy so we can stash transient fields like the FCIDUMP
     # path without polluting the user's config.
     sqd_cfg = dict(sqd_cfg_user)
@@ -956,7 +1159,7 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
         sqd_quantum_sampling.provision_quantum_sample(
             cluster_h5_path=cluster_h5_path,
             workdir=sqd_workdir, sqd_cfg=sqd_cfg, frag_idx=frag_idx,
-            verbose=verbose)
+            verbose=verbose, restart=restart)
     else:
         # Unfragmented / synthetic cluster (no Vayesta dump).  Write the
         # FCIDUMP directly from the cluster integrals, then ask the sampler
@@ -980,12 +1183,13 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
                 grp.create_dataset("eris", data=np.asarray(cluster.eris))
             sqd_quantum_sampling.provision_quantum_sample(
                 cluster_h5_path=fake_cluster_h5, workdir=sqd_workdir,
-                sqd_cfg=sqd_cfg, frag_idx=frag_idx, verbose=verbose)
+                sqd_cfg=sqd_cfg, frag_idx=frag_idx, verbose=verbose,
+                restart=restart)
         else:
             sqd_quantum_sampling.provision_quantum_sample(
                 cluster_h5_path=fcidump_path,  # not actually read in this branch
                 workdir=sqd_workdir, sqd_cfg=sqd_cfg, frag_idx=frag_idx,
-                verbose=verbose)
+                verbose=verbose, restart=restart)
 
     count_dict_path = os.path.abspath(os.path.join(sqd_workdir, "count_dict.txt"))
 
@@ -993,13 +1197,14 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
     sqd_result = _run_sqd_iterations(
         sqd_cfg=sqd_cfg, sqd_workdir=sqd_workdir, norb=norb, nelec=nelec,
         fcidump_path=fcidump_path, count_dict_path=count_dict_path,
-        verbose=verbose)
+        verbose=verbose, restart=restart)
     if verbose:
         verbose.info("[SQD] best-iteration energy: %.10f Ha (over %d iter)",
                      sqd_result["best"]["energy"], len(sqd_result["history"]))
 
     # --- 3) ext-SQD single SBD job with RDM dumping -------------------------
-    ext = _run_ext_sqd(sqd_cfg, sqd_workdir, norb, nelec, verbose=verbose)
+    ext = _run_ext_sqd(sqd_cfg, sqd_workdir, norb, nelec, verbose=verbose,
+                       restart=restart)
 
     # --- 4) Pack into the FCI/SCI return contract ---------------------------
     # The SBD energy includes the nuclear repulsion (FCIDUMP `nuc=0` so this
