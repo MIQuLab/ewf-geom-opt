@@ -301,6 +301,7 @@ def load_config(path):
     # Workflow-level restart flag.  When enabled, the driver scans the on-disk
     # ``jobs_EWF``-style workdir and skips every artefact that is already
     # complete: per-geometry ``step_<NNN>/result.json`` (cached E + gradient),
+    # ``step_<NNN>/hf.chk`` (cached converged RHF -- one SCF saved per step),
     # per-fragment ``cluster_<i>.h5`` / ``rdm_<i>.h5`` (DUMP + solve waves),
     # completed SCI_SBD / SQD sub-jobs (``iter_*/sbd_job.status`` or
     # ``iter_*/batch_*/sbd_job.status`` == DONE), and -- for SQD -- an existing
@@ -410,9 +411,98 @@ def write_geometry_file(elements, coords_angstrom, path):
             fh.write(f"{elem:<3s}  {x: .12f}  {y: .12f}  {z: .12f}\n")
 
 
+def _hf_chkfile_path(cfg):
+    """Location of the RHF chkfile shared by driver + workers of one
+    optimisation step.  Sitting inside ``calculation.workdir`` (which is
+    redirected per-step by :meth:`_GeomOptEvaluator._materialize_step`)
+    means every ``step_<NNN>/`` gets its own ``hf.chk`` and workers
+    dispatched by the driver of that step see the same file.
+    """
+    return os.path.join(cfg["calculation"]["workdir"], "hf.chk")
+
+
+def _mol_matches(mol_a, mol_b, atol=1.0e-10):
+    """Return True iff two ``gto.Mole`` objects describe the same system
+    (atom count/order/symbols, coords within ``atol`` Bohr, and same
+    basis / charge / spin / symmetry).  Used to guard the HF-chkfile
+    restart against a cached result from a *different* geometry or a
+    different config that happens to share the workdir.
+    """
+    if mol_a.natm != mol_b.natm:
+        return False
+    if int(mol_a.charge) != int(mol_b.charge):
+        return False
+    if int(mol_a.spin) != int(mol_b.spin):
+        return False
+    if bool(mol_a.symmetry) != bool(mol_b.symmetry):
+        return False
+    for i in range(mol_a.natm):
+        if mol_a.atom_symbol(i) != mol_b.atom_symbol(i):
+            return False
+    if not np.allclose(mol_a.atom_coords(), mol_b.atom_coords(),
+                       atol=atol, rtol=0.0):
+        return False
+    # ``mol._basis`` is the fully-parsed per-atom basis dict; equality on
+    # it catches basis-set changes (e.g. sto-3g -> cc-pVDZ) even when the
+    # user-facing ``mol.basis`` string is identical.
+    try:
+        if mol_a._basis != mol_b._basis:
+            return False
+    except Exception:  # pragma: no cover -- defensive against exotic basis
+        return False
+    return True
+
+
+def _try_load_hf(mol, chkfile):
+    """If ``chkfile`` contains a converged RHF result for a mol matching
+    ``mol``, return a populated ``scf.RHF(mol)`` object with
+    ``mo_coeff / mo_energy / mo_occ / e_tot`` restored and
+    ``converged=True``.  Returns ``None`` on any of: missing file,
+    unreadable / truncated chkfile, mol mismatch, or missing SCF keys --
+    in which case the caller falls back to a fresh ``mf.kernel()``.
+    """
+    if not os.path.isfile(chkfile):
+        return None
+    try:
+        mol_saved, scf_dict = scf.chkfile.load_scf(chkfile)
+    except Exception:
+        # Truncated file, bad HDF5, or older PySCF layout -- treat as miss.
+        return None
+    if not _mol_matches(mol, mol_saved):
+        return None
+    try:
+        mo_coeff = np.asarray(scf_dict["mo_coeff"])
+        mo_energy = np.asarray(scf_dict["mo_energy"])
+        mo_occ = np.asarray(scf_dict["mo_occ"])
+        e_tot = float(scf_dict["e_tot"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    mf = scf.RHF(mol)
+    mf.chkfile = chkfile   # keep pointing at the same file for downstream writes
+    mf.mo_coeff = mo_coeff
+    mf.mo_energy = mo_energy
+    mf.mo_occ = mo_occ
+    mf.e_tot = e_tot
+    mf.converged = True
+    return mf
+
+
 def build_mol_and_mf(cfg):
     """Build the molecule and run RHF.  Same recipe in driver and worker so
-    that mo_coeff / cluster orbitals are reproducible across processes."""
+    that mo_coeff / cluster orbitals are reproducible across processes.
+
+    Workflow-level restart integration
+    ----------------------------------
+    When ``calculation.restart`` is on (or the driver was invoked with
+    ``--restart``) and ``<workdir>/hf.chk`` contains a converged RHF
+    result for a matching mol (same atoms, coords within 1e-10 Bohr,
+    same basis / charge / spin / symmetry), the routine reuses that
+    cached HF instead of calling ``mf.kernel()`` -- saving one full SCF
+    per step and per DUMP worker.  On any mismatch (or when restart is
+    off) a fresh RHF is run and the chkfile is written for future
+    restarts: ``mf.chkfile`` is attached before ``kernel()``, so PySCF
+    persists ``mo_coeff / mo_energy / mo_occ / e_tot`` automatically.
+    """
     calc = cfg["calculation"]
     geo = read_geometry(calc["geometry_file"])
     mol = gto.Mole()
@@ -424,7 +514,27 @@ def build_mol_and_mf(cfg):
         spin=calc["spin"],
         symmetry=calc["symmetry"],
     )
+    chkfile = _hf_chkfile_path(cfg)
+    restart = bool(calc.get("restart", False))
+    if restart:
+        cached = _try_load_hf(mol, chkfile)
+        if cached is not None:
+            print(f"[HF] Restart: reused converged RHF from {chkfile} "
+                  f"(E_HF={cached.e_tot:.10f} Ha)")
+            return mol, cached
+
     mf = scf.RHF(mol)
+    # Attach chkfile so PySCF writes mol + MO coeffs + e_tot at the end
+    # of ``kernel()`` (and periodically during large SCFs).  Making the
+    # workdir first so a killed driver does not leave PySCF with an
+    # unwritable path -- but any write failure is non-fatal, we just
+    # forfeit the chkfile speedup on the next restart.
+    try:
+        os.makedirs(os.path.dirname(chkfile), exist_ok=True)
+        mf.chkfile = chkfile
+    except OSError as exc:  # pragma: no cover -- filesystem-specific
+        print(f"[HF] warning: cannot attach chkfile {chkfile}: {exc}; "
+              f"HF result will not be cached this step.")
     mf.kernel()
     return mol, mf
 
@@ -2778,8 +2888,8 @@ def main(argv=None):
     if restart:
         print(f"[driver] Restart mode: ON -- reusing existing artefacts in "
               f"{cfg['calculation']['workdir']!r} where possible "
-              f"(step_<NNN>/result.json, cluster_<i>.h5, rdm_<i>.h5, "
-              f"iter_*/sbd_job.status, count_dict.txt).")
+              f"(step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, "
+              f"rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).")
 
     if args.mode in ("dump", "solve"):
         if args.frag_idx is None:

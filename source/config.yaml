@@ -3,7 +3,7 @@
 #   HPC type           : CCF
 #   run_mode           : ewf
 #   multi-solver       : yes
-#   SCI-SBD            : yes (GPU)
+#   external eigsolver : SQD (GPU)
 #
 # FOCUSED template -- only the options relevant to this run type are shown;
 # everything else uses the driver defaults.  Review and UPDATE every line
@@ -14,12 +14,12 @@
 ewf:
   bath_threshold: 1.0e-5      # DMET bath truncation threshold
   solver: SCI             # single-solver value (ignored when multi_solver.enabled is true)
-  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff
+  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff (ignored by SQD, which draws its subspace from quantum samples)
   multi_solver:
     enabled: true
     norb_threshold: 13        # clusters with norb < this -> high_accuracy_solver
     high_accuracy_solver: FCI
-    approximate_solver: SCI_SBD
+    approximate_solver: SQD
   assembly: rdm_t_lambda      # density-assembly route (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)
 
 calculation:
@@ -31,6 +31,13 @@ calculation:
   symmetry: false
   workdir: jobs
   fci_conv_tol: 1.0e-12
+  # Workflow-level restart: when true (or when the driver is invoked with
+  # --restart) the driver scans the workdir and reuses every artefact that
+  # is already complete -- step_<NNN>/result.json (cached E + gradient),
+  # per-fragment cluster_<i>.h5 / rdm_<i>.h5, and completed SCI_SBD / SQD
+  # sub-jobs (iter_*/[batch_*/]sbd_job.status == DONE, plus any existing
+  # sqd_scratch_*/count_dict.txt).  Default off: wipe stale files and rerun.
+  restart: false                 # true | false  (or use --restart on CLI)
 
 # Slurm resources for the fragmented DUMP + solve waves.
 slurm:
@@ -46,29 +53,65 @@ slurm:
     partition: defq
     ntasks: 2
     mem: 10G
-  SCI_SBD:
+  SQD:
     partition: defq
     ntasks: 2
     mem: 100G
 
-# External SBD eigensolver (present because a solver is SCI_SBD).
-sbd:
+# Sample-based Quantum Diagonalization (SQD) -- present because a solver
+# is SQD.  Each SQD iteration submits 'n_batches' parallel SBD Slurm jobs
+# (the SBD binary is the same one used by SCI_SBD); a final ext-SQD Slurm
+# job augments the recovered subspace with PyCI single excitations and
+# runs SBD with --rdm 1 to produce the per-fragment 1- and 2-RDMs.
+sqd:
   sbd_exe_path_cpu: '/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag'
   sbd_exe_path_gpu: '/home/liz7/isilon/Zhen/sbd-main/apps/test/diag'
   mpi_launcher: '/home/liz7/isilon/Zhen/mpich/bin/mpirun'   # absolute path (PATH-independent)
   proc_type: 1            # 1 = GPU (CPUs as support)
-  gpus_per_batch: 4       # GPUs per SBD job -> --gpus-per-node
+  gpus_per_batch: 4       # GPUs per SBD batch -> --gpus-per-node
   cpus_per_gpu: 16      # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
   sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)
   sbd_block: 20
-  sbd_dav_iteration: 100
-  sbd_tolerance: 1.e-8    # keep this exact '1.e-8' notation
+  sbd_dav_iteration: 10   # SQD: relaxed vs SCI_SBD's 100 (per-batch SBD is much more expensive)
+  sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this exact '1.e-5' notation
   sbd_init: 0
   sbd_shuffle: 0
   sbd_carryover_ratio: 0.5
-  # Slurm for each per-cycle SBD sub-job.  --ntasks/--gpus-per-node/
-  # --cpus-per-task are auto-derived from the knobs above; set only
-  # placement / mem / time (and optional extra.exclude).
+  # --- SQD recovery loop --------------------------------------------
+  iterations: 5            # number of SQD configuration-recovery cycles
+  n_batches: 2             # parallel SBD batches submitted per iteration
+  samples_per_batch: 2000   # bitstrings sampled per batch
+  energy_tol: 1.0e-8       # energy convergence between SQD iterations
+  occupancies_tol: 1.0e-5  # orbital-occupancy convergence between iterations
+  carryover_threshold: 1.0e-4  # |c| above which a determinant survives to the next iteration
+  symmetrize_spin: true    # symmetrise alpha/beta when n_alpha == n_beta
+  add_hf_string: true      # always include the Hartree-Fock determinant in each batch
+  ext_sqd_dprime_cutoff: 1.0e-5  # |c| cutoff for the ext-SQD PyCI determinant set
+  # NOTE: restart across SQD iterations is driven by the workflow-level
+  # calculation.restart flag (or --restart on the CLI); per-solver
+  # restart knobs are intentionally not exposed here.  See the header of
+  # calculation.restart in the 'calculation:' block above.
+  # seed: 42                # RNG seed for sub-sampling reproducibility
+  # max_dim: 200000         # cap on selected determinants per spin sector
+  # --- quantum-sampling source --------------------------------------
+  # EITHER run ffsim + Qiskit SamplerV2 on an IBM backend each time
+  # (sample_on_the_fly: true, the default -- requires qiskit-ibm-runtime,
+  # ffsim, and an IBM Quantum account in the compute-node environment),
+  # OR point to a pre-collected count_dict.txt (single path or a per-
+  # fragment mapping) and set sample_on_the_fly: false.
+  sample_on_the_fly: true
+  # count_dict_path: /path/to/count_dict.txt
+  # per_fragment_samples:
+  #   0: /path/to/cluster_0_count_dict.txt
+  #   1: /path/to/cluster_1_count_dict.txt
+  qiskit_backend: ibm_cleveland   # IBM backend name for SamplerV2
+  default_shots: 100000           # shots per Qiskit SamplerV2 job
+  n_reps: 1                       # LUCJ ansatz repetitions
+  thresh_two_q: 1.0               # ffsim two-qubit-gate threshold
+  thresh_meas: 0.10               # ffsim measurement threshold
+  # Slurm for each SBD sub-job (one per SQD batch + one for ext-SQD).
+  # --ntasks/--gpus-per-node/--cpus-per-task are auto-derived from the
+  # knobs above; set only placement / mem / time (and optional extra.exclude).
   slurm:
     poll_interval: 15
     max_node_retries: 5       # resubmit on another node if mpirun is missing
@@ -85,13 +128,11 @@ sbd:
 
 geomopt:
   enabled: true                  # set false for a single-point energy + gradient
+  optimizer: sella            # geometric | berny | sella
   prefix: ewf_geomopt
   step_subdir_fmt: "step_{step:03d}"
-  geometric:
-    maxiter: 100
-    coordsys: tric
-    convergence_energy: 1.0e-3   # Eh
-    convergence_grms:   5.0e-3   # Eh / Bohr
-    convergence_gmax:   5.0e-3   # Eh / Bohr
-    convergence_drms:   1.2e-2   # Angstrom
-    convergence_dmax:   1.8e-2   # Angstrom
+  sella:
+    fmax:  0.01           # eV / Angstrom (max-force convergence)
+    steps: 25            # max optimizer steps
+    order: 0            # 0 = minimisation (default), 1 = saddle
+    internal: true      # use internal coordinates

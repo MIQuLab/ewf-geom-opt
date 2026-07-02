@@ -263,9 +263,10 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a("  # Workflow-level restart: when true (or when the driver is invoked with")
     a("  # --restart) the driver scans the workdir and reuses every artefact that")
     a("  # is already complete -- step_<NNN>/result.json (cached E + gradient),")
-    a("  # per-fragment cluster_<i>.h5 / rdm_<i>.h5, and completed SCI_SBD / SQD")
-    a("  # sub-jobs (iter_*/[batch_*/]sbd_job.status == DONE, plus any existing")
-    a("  # sqd_scratch_*/count_dict.txt).  Default off: wipe stale files and rerun.")
+    a("  # step_<NNN>/hf.chk (cached converged RHF), per-fragment cluster_<i>.h5")
+    a("  # / rdm_<i>.h5, and completed SCI_SBD / SQD sub-jobs (iter_*/[batch_*/]")
+    a("  # sbd_job.status == DONE, plus any existing sqd_scratch_*/count_dict.txt).")
+    a("  # Default off: wipe stale files and rerun.")
     a("  restart: false                 # true | false  (or use --restart on CLI)")
     a("")
 
