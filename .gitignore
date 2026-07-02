@@ -42,3 +42,6 @@ matrixformwf.txt          # SBD wavefunction dumps (hundreds of MB each)
 
 # SCI-SBD initial exploration folder
 SBD-in-PySCF-SCI-Exploration/
+
+# Source code of packages used for building of SQD solver
+Code_for_SQD_incorporation/

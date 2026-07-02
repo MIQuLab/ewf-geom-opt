@@ -1,0 +1,15 @@
+No module named 'dyson'
+Dyson required for self-energy calculations
+[solve frag=0] Loaded Cluster(fragment_0, name=C, norb=13, nocc=7)
+[solve frag=0] Multi-solver: cluster norb=13 >= norb_threshold=13 -> SQD
+[solve frag=0] Solving cluster (norb=13) with SQD (quantum sampling + SBD configuration recovery + ext-SQD; iterations=5, n_batches=3; submits one Slurm job per SBD batch and a final ext-SQD job)
+Parsing /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/5_test_SQD_deployment/ethene_sqd_test/jobs_EWF/step_007/sqd_scratch_000/fci_dump.txt
+converged SCF energy = -70.967004442891
+E(CCSD) = -71.12636646039253  E_corr = -0.159362017501491
+  >> removing node: 12 | Readout err: 0.1431
+num edges after node removal: 174
+num edges before: 174
+num edges after: 172
+The best layout has a total error of: 0.22548018312771684
+[solve frag=0] E_cluster (SQD) = -71.1275042920 Ha
+[solve frag=0] Wrote RDM file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/5_test_SQD_deployment/ethene_sqd_test/jobs_EWF/step_007/rdm_000.h5

@@ -1,8 +1,8 @@
 # EWF-Based Geometry Optimization
 
-Deployment of **geometry optimization driven by Embedded Wave Function (EWF) analytic nuclear gradients**, built on [Vayesta](https://github.com/BoothGroup/Vayesta)-style quantum embedding with FCI/Selected-CI cluster solvers, [PySCF](https://pyscf.org/) integrals, and a choice of geometry optimizer — [geomeTRIC](https://geometric.readthedocs.io/), [PyBerny](https://github.com/jhrmnn/pyberny), or [Sella](https://github.com/zadorlab/sella). The workflow distributes per-fragment cluster solves over Slurm on an HPC cluster and assembles a global density-matrix whose analytic gradient feeds each optimization step.
+Deployment of **geometry optimization driven by Embedded Wave Function (EWF) analytic nuclear gradients**, built on [Vayesta](https://github.com/BoothGroup/Vayesta)-style quantum embedding with FCI / Selected-CI / SCI-SBD / **SQD** (Sample-based Quantum Diagonalization) cluster solvers, [PySCF](https://pyscf.org/) integrals, and a choice of geometry optimizer — [geomeTRIC](https://geometric.readthedocs.io/), [PyBerny](https://github.com/jhrmnn/pyberny), or [Sella](https://github.com/zadorlab/sella). The workflow distributes per-fragment cluster solves over Slurm on an HPC cluster and assembles a global density-matrix whose analytic gradient feeds each optimization step.
 
-The central contribution of this project is a pair of density-assembly routes — **`rdm_t`** and its Λ-relaxed extension **`rdm_t_lambda`** (`embedding_lagrangian.py`) — that make it possible to further reduce the energy and gradient fluctuations associated with the approximations introduced by fragmentation. At present, geometry convergence is only possible with loose criteria, but this project is dedicated to the gradual improvement of the methodology of EWF-based geometry optimization.
+The central contribution of this project is a pair of density-assembly routes — **`rdm_t`** and its Λ-relaxed extension **`rdm_t_lambda`** (`embedding_lagrangian.py`) — that make it possible to further reduce the energy and gradient fluctuations associated with the approximations introduced by fragmentation. These gradient fluctuations limit the gradient accuracy, but this project is dedicated to the gradual improvement of the methodology of EWF-based geometry optimization.
 
 ---
 
@@ -23,6 +23,9 @@ The central contribution of this project is a pair of density-assembly routes �
 | `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + proper CCSD Λ (Z-vector) relaxed density |
 | `isolated_casci_gradient.py` | Analytic gradients: the EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) and the full-system CASCI gradient `build_grad` |
 | `external_sci.py` | `SCI_SBD` solver: PySCF Selected-CI growth with the external SBD eigensolver (CPU or GPU), driven through files and per-cycle Slurm sub-jobs |
+| `sqd_solver.py` | `SQD` solver: sample-based quantum diagonalization — quantum-sampled bitstrings drive an iterative SBD subspace-recovery loop (one Slurm job per parallel batch) followed by a final ext-SQD SBD job with PyCI single-excitation augmentation |
+| `sqd_quantum_sampling.py` | Quantum-sampling source for `SQD`: either reuses a pre-collected `count_dict.txt` or runs an LUCJ ansatz on an IBM Quantum backend via Qiskit IBM Runtime + ffsim |
+| `zigzag_layout.py` | Heavy-hex zigzag physical-qubit layout selector used by the LUCJ ansatz when `SQD` samples on the fly |
 | `calculation_setup.py` | Interactive generator for a focused `config.yaml` (see *Usage → Generating a config*) |
 | `slurm_jobs_check.py` | Post-mortem Slurm diagnostic for the workflow's multi-layer jobs (see below) |
 | `config.yaml` | Calculation, embedding, Slurm, and optimizer settings |
@@ -39,11 +42,15 @@ The EWF energy is a functional of global density matrices assembled from indepen
 E[γ1, λ2] = E_HF + Tr(F · Δγ1) + ½ Tr( (pq|rs) · λ2 ),     Δγ1 = γ1 − γ1^HF
 ```
 
+Here `E_HF` is the reference Hartree–Fock total energy at the current geometry; `F` is the closed-shell Fock matrix in the MO basis; `γ1` is the assembled global **one-particle** correlated density matrix in the MO basis (occupied + virtual blocks); `γ1^HF` is the HF reference one-particle density (diagonal with `2` on occupied MOs, `0` on virtual); `Δγ1 = γ1 − γ1^HF` is the correlation correction to the one-particle density (the object that couples to `F`); `λ2` is the assembled global **two-particle** cumulant (the connected part of the 2-RDM); and `(pq|rs)` are the two-electron repulsion integrals in the MO basis (chemists' notation).
+
 The chain of geometry (`x`) dependence runs from the AO integrals through the HF orbitals, the IAO fragments and DMET bath, the cluster Hamiltonians, and finally the cluster amplitudes — all of which feed the assembly map:
 
 ```
 γ = (γ1, λ2) = 𝒜( {T_x}, {C_x}, {P_x}, C )
 ```
+
+Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster CI/CCSD amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
 
 ### The density-response term `(∂E/∂γ)·(dγ/dx)`
 
@@ -55,6 +62,8 @@ dE/dx  =  ∂E/∂x |_(γ fixed)        +     (∂E/∂γ) : (dγ/dx)
         (a) frozen-density gradient      (b) density-response term
 ```
 
+Here `d/dx` is the *total* derivative with respect to a nuclear coordinate `x` (i.e. the physical gradient we want), `∂/∂x|_(γ fixed)` is the *partial* derivative that treats the assembled density `γ` as constant while differentiating the integrals only, and `:` denotes the full-tensor contraction on all indices of the density (matrix trace for `γ1`, four-index contraction for `λ2`).
+
 `build_ewf_grad` computes **(a)** exactly — including the HF orbital (CPHF) relaxation of the integrals — by treating `γ1`, `λ2` as constants in the MO basis.
 
 What is `∂E/∂γ`, concretely? Differentiating the functional at fixed integrals gives
@@ -64,14 +73,16 @@ What is `∂E/∂γ`, concretely? Differentiating the functional at fixed integr
 ∂E/∂λ2_pqrs  =  ½ (pq|rs)      (the two-electron integrals)
 ```
 
-— the one- and two-body Hamiltonian matrices, which are emphatically **not zero**. And `dγ/dx` collects every way the assembled density moves with the nuclei:
+— the one- and two-body Hamiltonian matrices, which are emphatically **not zero**. Here `p, q, r, s` are MO indices, and `∂E/∂γ` denotes the functional derivative of the energy with respect to each element of the assembled density (the object that gets contracted with `dγ/dx`). And `dγ/dx` collects every way the assembled density moves with the nuclei:
 
 ```
-dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← cluster amplitudes re-solve
-       + Σ_x (∂𝒜/∂C_x)(dC_x/dx)     ← bath/cluster orbitals redefine
-       + Σ_x (∂𝒜/∂P_x)(dP_x/dx)     ← fragment projectors shift
-       +     (∂𝒜/∂C )(dC /dx)        ← HF orbitals relax
+dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← (i)   cluster amplitudes re-solve
+       + Σ_x (∂𝒜/∂C_x)(dC_x/dx)     ← (ii)  bath/cluster orbitals redefine
+       + Σ_x (∂𝒜/∂P_x)(dP_x/dx)     ← (iii) fragment projectors shift
+       +     (∂𝒜/∂C )(dC /dx)        ← (iv)  HF orbitals relax
 ```
+
+`dT_x/dx`, `dC_x/dx`, `dP_x/dx`, `dC/dx` are the total geometry derivatives of the same per-cluster quantities introduced under the assembly map above; each is coupled to the geometry through its own defining equation (the cluster amplitude equations, the DMET bath construction, the fragment projector definition, the HF/SCF stationarity condition), so `dγ/dx` in full generality requires four coupled response solves.
 
 **Why term (b) is nonzero for EWF but zero for a variational method:** for a variational wavefunction (FCI, optimized CASSCF, HF) the density extremizes `E` for the given integrals, so the response `dγ/dx` lies along directions in which `E` is flat and the contraction `(∂E/∂γ):(dγ/dx)` vanishes identically — this is the Hellmann–Feynman theorem. EWF breaks this: the assembled `γ` is built by projection of independent cluster solutions and is *not* the density that extremizes `E[γ]` for the global integrals. Even when each cluster solver returns an exact eigenstate (each *cluster* energy stationary), the projected *global* energy is not stationary with respect to the cluster amplitudes:
 
@@ -79,7 +90,7 @@ dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← cluster amplitudes re-solve
 ∂E_global/∂T_x  ≠ 0        ← projection breaks cluster-level Hellmann–Feynman
 ```
 
-so the density-response term contributes a real piece of `dE/dx`.
+so the density-response term contributes a real piece of `dE/dx` (here `E_global` is the assembled `E[γ1, λ2]` from the very first equation of this section, and the inequality reads *for at least one cluster `x`*).
 
 **The Lagrangian trick:** computing `dγ/dx` head-on would require solving the four response equations above for each of the 3N nuclear coordinates — 3N embedding re-solves. The Z-vector / Lagrangian method instead augments `E` with each defining equation times a multiplier, chooses the multipliers to make the augmented functional stationary in all internal variables, and then
 
@@ -87,7 +98,9 @@ so the density-response term contributes a real piece of `dE/dx`.
 (∂E/∂γ):(dγ/dx)  ≡  Σ_x Λ_x (∂H_x/∂x)|_explicit  +  (projector overlap terms)  +  (Z-vector terms)
 ```
 
-The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
+Here `Λ_x` is the per-cluster set of Lagrange multipliers (Z-vectors) — one adjoint solve per defining equation (amplitude Λ for the amplitude equations, orbital Z for the bath/HF orbital rotations, projector multipliers for the fragment projectors) — and `H_x` is the effective cluster Hamiltonian on fragment `x` (its explicit `x`-derivative is the only *nuclear* derivative that appears on the right-hand side). The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
+
+**Scope of this project — one line of `dγ/dx` at a time.** In principle the full density-response term (b) requires closing **all four** lines of the `dγ/dx` expansion above — cluster amplitudes (i), bath/cluster orbitals (ii), fragment projectors (iii), and HF orbitals (iv). This project addresses **only line (i)** as an initial effort: `rdm_t_lambda` builds the amplitude response `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density by solving the proper CCSD Λ equations on a global effective wavefunction (`embedding_lagrangian.py` — see its Stage-1 docstring). Lines (ii)–(iv) — the geometry response of the DMET bath, of the occupied-fragment projectors, and of the HF/SCF orbitals — are **not yet closed**; they remain folded into the frozen-density (a) piece under the "frozen-bath" approximation (with the HF CPHF response of the *integrals* included there, but not the response of `γ` itself to the HF-orbital rotations). Closing lines (ii)–(iv) is the natural next stage of the methodology development: it requires adjoint solves for each of the remaining coupling equations (DMET bath overlap, fragment projector, HF stationarity) and is what would eventually let geometry optimization reach tight convergence in the fragmented EWF regime. The current gradient floor observed in propylene (~1e-3 Eh/Bohr) is a direct signature of these three missing response lines.
 
 ---
 
@@ -144,7 +157,7 @@ is the new feature introduced in this project; it was not previously available i
 | `make_relaxed_global_rdms` | Builds `pyscf.cc.CCSD(mf)`, injects `(T1, T2)`, solves Λ (`solve_lambda`), returns the relaxed `(γ1, λ2)` — amplitudes are **not** re-optimized |
 | `assemble_global_rdms_rdm_t_lambda` | Driver-facing assembler, same signature as the other `assemble_global_rdms_*` |
 
-Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds the cluster-amplitude line of the density response — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` — into the assembled density itself, recovering the part of the gradient that drives the gradient zero toward the energy minimum.
+Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective CCSD amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding CCSD Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard CCSD relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds line **(i)** of the density-response expansion above — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)`, the cluster-amplitude line — into the assembled density itself. The remaining lines **(ii)–(iv)** (bath / cluster orbitals, fragment projectors, HF orbitals) are still left approximated by the frozen-bath treatment in `build_ewf_grad`, so `rdm_t_lambda` closes one of the four density-response contributions and is the starting point — not the endpoint — of the Lagrangian programme.
 
 ---
 
@@ -171,7 +184,7 @@ Together the three modes let the fragmentation error be measured separately agai
 
 ### Generating a config (`calculation_setup.py`)
 
-`config.yaml` spans many options across run modes, solvers, the CPU/GPU SBD eigensolver, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — the target compute environment, the geometry optimizer (geomeTRIC / Sella / PyBerny), the run mode, the geometry file, whether to use per-fragment multi-solver, and whether to use the SCI-SBD eigensolver and on **CPU or GPU** — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
+`config.yaml` spans many options across run modes, solvers, the CPU/GPU SBD eigensolver, the SQD quantum-sampling source, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — the target compute environment, the geometry optimizer (geomeTRIC / Sella / PyBerny), the run mode, the geometry file, whether to use per-fragment multi-solver, and which external eigensolver to use (**none / SCI-SBD / SQD**) on **CPU or GPU** — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
 
 ```bash
 cd Source
@@ -187,15 +200,15 @@ All settings live in [`Source/config.yaml`](Source/config.yaml):
 ```yaml
 ewf:
   bath_threshold: 1.0e-5      # stable, non-full DMET bath
-  solver: SCI                 # FCI, SCI, or SCI_SBD cluster solver (single-solver mode)
-  sci_select_cutoff: 1.0e-3   # determinant-selection cutoff for SCI / SCI_SBD
+  solver: SCI                 # FCI, SCI, SCI_SBD, or SQD cluster solver (single-solver mode)
+  sci_select_cutoff: 1.0e-3   # determinant-selection cutoff for SCI / SCI_SBD (ignored by FCI / SQD)
   assembly: rdm_t_lambda      # density-assembly route (see table above)
 
   multi_solver:               # per-fragment solver selection (see below)
     enabled: true
     norb_threshold: 13        # cluster-size cutoff (total active orbitals)
     high_accuracy_solver: FCI # used when norb <  norb_threshold
-    approximate_solver: SCI   # used when norb >= norb_threshold  (FCI/SCI/SCI_SBD)
+    approximate_solver: SCI   # used when norb >= norb_threshold  (FCI / SCI / SCI_SBD / SQD)
 
 calculation:
   run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented (see Run modes)
@@ -208,8 +221,12 @@ slurm:                        # Slurm resources: dump wave + PER-SOLVER solve bl
   FCI:  { ... }               # solve job for FCI fragments      (light)
   SCI:  { ... }               # solve job for SCI fragments      (light)
   SCI_SBD: { ... }            # solve job for SCI_SBD fragments  (outer orchestrator; more RAM)
+  SQD: { ... }                # solve job for SQD fragments      (outer orchestrator; more RAM)
 
 sbd:                          # only used when a cluster solver is SCI_SBD (see below)
+  ...
+
+sqd:                          # only used when a cluster solver is SQD (see below)
   ...
 
 geomopt:
@@ -230,7 +247,7 @@ norb <  norb_threshold   →   high_accuracy_solver   (default FCI)
 norb >= norb_threshold   →   approximate_solver     (default SCI)
 ```
 
-With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, or `SCI_SBD` (see below), and SCI/SCI_SBD clusters continue to use `sci_select_cutoff`. The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
+With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, `SCI_SBD`, or `SQD` (see below), and SCI / SCI_SBD clusters continue to use `sci_select_cutoff` (the `SQD` solver ignores it and is configured through the dedicated `sqd:` block). The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
 
 Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the driver then falls back to single-solver mode and applies `ewf.solver` to every fragment, exactly as before. Existing configs without a `multi_solver` block default to this behavior, so they are unaffected.
 
@@ -241,6 +258,26 @@ In addition to FCI and SCI, any solver role (`ewf.solver`, or either `multi_solv
 The SBD eigensolver runs on either **CPU or GPU**, selected by `sbd.proc_type` (`0` = CPU, `1` = GPU). The per-cycle MPI launch layout — rank counts, GPU binding, and the launcher's environment-passing flags — is derived automatically for the chosen backend, so switching between CPU and GPU is a one-line config change.
 
 SBD is an external binary driven through files, and it submits **one Slurm job per SCI growth cycle** (resources from the `sbd.slurm` block), blocking until each finishes. This nests inside the per-fragment `solve` job, whose own resources come from the per-solver `slurm.SCI_SBD` block — that outer job only orchestrates/waits (few tasks) but needs enough RAM to drive the sub-jobs, while the heavy compute is sized separately via `sbd.slurm`. Selecting `SCI_SBD` therefore **requires** an `sbd:` block in `config.yaml` (executable paths, `proc_type`, performance options, and the per-cycle `sbd.slurm` resources) plus Slurm and the compiled SBD binary; the driver raises a clear error if `SCI_SBD` is selected without it. The SBD-specific options, file-transfer mechanics, and correctness notes (e.g. `ecore` bookkeeping, alpha/beta column orientation) are documented in [`SBD-in-PySCF-SCI-Exploration/README.md`](SBD-in-PySCF-SCI-Exploration/README.md).
+
+### `SQD`: Sample-based Quantum Diagonalization
+
+Any solver role (`ewf.solver`, or either `multi_solver` role) may also be set to **`SQD`** — [Sample-based Quantum Diagonalization](https://github.com/Qiskit/qiskit-addon-sqd) implemented on top of the same SBD eigensolver as `SCI_SBD`. Where `SCI_SBD` grows its determinant subspace classically (PySCF's `enlarge_space`), `SQD` instead **seeds and grows the subspace from quantum samples** — bitstrings collected from a hardware-efficient LUCJ ansatz on an IBM Quantum backend (or supplied as a pre-collected `count_dict.txt`) — and recovers electron-conserving configurations from them through an iterative configuration-recovery loop. It is intended for clusters whose CI subspace structure is poorly captured by single-reference SCI growth but well-represented by a quantum-sampled trial state.
+
+The driver implementation lives in [`Source/sqd_solver.py`](Source/sqd_solver.py) (orchestration), [`Source/sqd_quantum_sampling.py`](Source/sqd_quantum_sampling.py) (sample source), and [`Source/zigzag_layout.py`](Source/zigzag_layout.py) (heavy-hex qubit placement). For each `SQD` cluster the solver runs a two-stage workflow:
+
+1. **SQD configuration-recovery loop** — over `sqd.iterations` cycles, sub-sample the bitstring counts into `sqd.n_batches` independent batches (Hamming-symmetric post-selection + electron-number recovery), submit **one SBD Slurm sub-job per batch in parallel** to diagonalize each batch's subspace, then carry the high-weight determinants across all batches forward to the next iteration. The loop terminates on energy / orbital-occupancy convergence (`sqd.energy_tol`, `sqd.occupancies_tol`) or after `sqd.iterations` cycles.
+2. **ext-SQD finalization** — the recovered subspace is augmented with PyCI single excitations from each surviving determinant (`sqd.ext_sqd_dprime_cutoff` filters by amplitude), and a final SBD Slurm job runs with `--rdm 1` to produce the per-fragment 1- and 2-RDMs consumed by the assembly routes (`rdm_t`, `rdm_t_lambda`, `ci`, `democratic`, `projected_lambda`) — i.e. `SQD` is supported by every density-assembly route.
+
+Like `SCI_SBD`, the SBD sub-jobs run on either **CPU or GPU** (`sqd.proc_type`, with the same `gpus_per_batch` / `cpus_per_gpu` / `cpus_per_batch` knobs and per-cycle `sqd.slurm.sbatch` resources), and the per-cycle MPI launch layout is derived automatically from the chosen backend.
+
+The **quantum-sampling source** is selected by the `sqd:` block:
+
+- `sqd.count_dict_path` (single path) or `sqd.per_fragment_samples: {0: ..., 1: ...}` (per-fragment mapping) — reuses a pre-collected `count_dict.txt` written e.g. by [`Code_for_SQD_incorporation/Quantum_Sampling/produce_quantum_sample.py`](Code_for_SQD_incorporation/Quantum_Sampling/produce_quantum_sample.py). Recommended for production runs where the same quantum sample drives many geometry steps.
+- `sqd.sample_on_the_fly: true` (plus `sqd.qiskit_backend`, `sqd.default_shots`, `sqd.n_reps`, `sqd.thresh_two_q`, `sqd.thresh_meas`) — every cluster solve runs a fresh LUCJ ansatz + Qiskit `SamplerV2` job on the IBM backend, using the heavy-hex zigzag layout selected by `zigzag_layout.get_zigzag_physical_layout`. Requires `qiskit-ibm-runtime`, `ffsim`, and the IBM account to be configured in the worker's environment.
+
+Selecting `SQD` therefore **requires** an `sqd:` block in `config.yaml` (SBD-binary paths and performance options *and* either a pre-collected sample source or live-sampling credentials, plus the per-batch `sqd.slurm` resources) and the compiled SBD binary; the driver raises a clear error if `SQD` is selected without one. On disk, each cluster's SQD scratch is laid out as `sqd_scratch_<frag>/{fci_dump.txt, count_dict.txt, iter_<cycle>/batch_<b>/{sbd_job.sh, sbd_job.status, slurm.out, slurm.err, matrixformwf.txt}, ext_sqd_iter/{...same files... + 1pRDM.txt, 2pRDM.txt}}` — the same `sbd_job.{sh,status}` artifact naming as `SCI_SBD`, so the diagnostic tool below discovers and explains SQD failures the same way.
+
+The original Quantum_Sampling and SQD_Post_Process scripts that this implementation is built on are preserved verbatim under [`Code_for_SQD_incorporation/`](Code_for_SQD_incorporation/) for reference (sampling: [`Quantum_Sampling/`](Code_for_SQD_incorporation/Quantum_Sampling/); post-processing: [`SQD_Post_Process/`](Code_for_SQD_incorporation/SQD_Post_Process/)).
 
 ### Optimizer backend (`geomopt.optimizer`)
 
@@ -280,11 +317,11 @@ Each optimization step writes its geometry, derived per-step config, and fragmen
 ### Worker modes (invoked by the generated batch scripts)
 
 ```bash
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                        # integrals/cluster dump
-python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI|SCI_SBD] # cluster solve
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode dump  --frag-idx <i>                            # integrals/cluster dump
+python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solver FCI|SCI|SCI_SBD|SQD] # cluster solve
 ```
 
-`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI, SCI, or SCI_SBD runs is decided per fragment. In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
+`--mode solve` names the cluster-solve *stage*, not a solver — whether FCI, SCI, SCI_SBD, or SQD runs is decided per fragment. In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
 
 ---
 
@@ -308,12 +345,13 @@ python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solv
 [`Source/slurm_jobs_check.py`](Source/slurm_jobs_check.py) is a post-mortem diagnostic for the workflow's **multi-layer** Slurm jobs, written for the memory-orchestration problem that comes with nesting them. A single optimization spawns jobs on several layers:
 
 - **DUMP wave** — one job per fragment (`jobs_fragments_production/frag_dump_*`);
-- **SOLVE wave** — one job per fragment (`jobs_ci_calculations/frag_*`), whose resolved solver (FCI / SCI / SCI_SBD) decides which `slurm.<SOLVER>` block it used;
-- **SBD sub-jobs** — for `SCI_SBD` fragments, one job per SCI growth cycle (`sci_sbd_scratch_<frag>/iter_<cycle>/sbd_job*`);
+- **SOLVE wave** — one job per fragment (`jobs_ci_calculations/frag_*`), whose resolved solver (FCI / SCI / SCI_SBD / SQD) decides which `slurm.<SOLVER>` block it used;
+- **SBD sub-jobs (SCI_SBD)** — one job per SCI growth cycle (`sci_sbd_scratch_<frag>/iter_<cycle>/sbd_job*`);
+- **SBD sub-jobs (SQD)** — one job per SQD batch (`sqd_scratch_<frag>/iter_<cycle>/batch_<b>/sbd_job*`) plus one final ext-SQD job (`sqd_scratch_<frag>/ext_sqd_iter/sbd_job*`);
 
-all of them grouped per `step_<NNN>/` under geometry optimization. With memory sized independently at each layer (`slurm.dump.mem`, the per-solver `slurm.FCI/SCI/SCI_SBD.mem`, and `sbd.slurm.sbatch.mem`), an out-of-memory kill on one layer is easy to misattribute.
+all of them grouped per `step_<NNN>/` under geometry optimization. With memory sized independently at each layer (`slurm.dump.mem`, the per-solver `slurm.FCI/SCI/SCI_SBD/SQD.mem`, and `sbd.slurm.sbatch.mem` / `sqd.slurm.sbatch.mem`), an out-of-memory kill on one layer is easy to misattribute.
 
-The tool walks the working directory, discovers every job from its on-disk artifacts, resolves each Slurm JobID (from the `.status` file while a job is queued/running, otherwise via `sacct` matched by job name and submit time), runs **`seff`** on each, and reports failures with an *explained* reason. Out-of-memory is detected from `State: OUT_OF_MEMORY`, exit code 137, or near-100% memory efficiency, and each OOM points at the exact config knob to raise (including a note that an SBD sub-job is sized by `sbd.slurm.sbatch.mem`, not the outer `slurm.SCI_SBD` block). It also prints a per-layer **memory-orchestration table** (peak used vs. requested, with `TIGHT` / `over-provisioned` / `OOM` verdicts) to help right-size each block.
+The tool walks the working directory, discovers every job from its on-disk artifacts, resolves each Slurm JobID (from the `.status` file while a job is queued/running, otherwise via `sacct` matched by job name and submit time), runs **`seff`** on each, and reports failures with an *explained* reason. Out-of-memory is detected from `State: OUT_OF_MEMORY`, exit code 137, or near-100% memory efficiency, and each OOM points at the exact config knob to raise (including a note that an SBD sub-job is sized by `sbd.slurm.sbatch.mem` not `slurm.SCI_SBD.mem`, and that an SQD sub-job is sized by `sqd.slurm.sbatch.mem` not `slurm.SQD.mem`). It also prints a per-layer **memory-orchestration table** (peak used vs. requested, with `TIGHT` / `over-provisioned` / `OOM` verdicts) to help right-size each block.
 
 ```bash
 cd Source

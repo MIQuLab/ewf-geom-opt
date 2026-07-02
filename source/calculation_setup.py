@@ -19,8 +19,8 @@ Questions
 2. Geometry optimizer . GeomeTRIC | Sella | Berny (PyBerny)
 3. Fragmentation type . EWF | unfragmented_EWF_limit | true_unfragmented
 4. (EWF only) .......... use multi-solver?            yes / no
-5. Use SCI-SBD? ........ yes / no
-6. (SCI-SBD only) ...... GPU or CPU
+5. External eigensolver none | SCI-SBD | SQD
+6. (SBD/SQD only) ...... GPU or CPU
 
 HPC-specific Slurm handling
 ---------------------------
@@ -151,19 +151,28 @@ def _sbatch_lines(indent, hpc, partition, ntasks=None, mem=None):
     return out
 
 
-def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
+def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
                  gpu_type=None, optimizer="geometric"):
     """Assemble the focused config.yaml text for the chosen options.
 
-    ``gpu_type`` ('a100' / 'v100') is only meaningful for an MSU GPU SBD run;
-    it selects the default ``cpus_per_gpu`` and SBD-job ``mem`` (a100 -> 16 /
-    350G, v100 -> 8 / 170G).  It is ignored elsewhere.
+    ``external`` is one of ``'NONE'`` (no external eigensolver -- pure
+    FCI/SCI), ``'SCI_SBD'`` (PySCF SCI growth + external SBD eigensolver), or
+    ``'SQD'`` (sample-based quantum diagonalization built on top of SBD).
+    Both ``'SCI_SBD'`` and ``'SQD'`` emit an SBD-style sub-job block
+    (``sbd:`` or ``sqd:`` respectively) sharing the same processor / GPU /
+    Slurm machinery.
+
+    ``gpu_type`` ('a100' / 'v100') is only meaningful for an MSU GPU run of
+    SCI-SBD or SQD; it selects the default ``cpus_per_gpu`` and SBD-job
+    ``mem`` (a100 -> 16 / 350G, v100 -> 8 / 170G).  It is ignored elsewhere.
 
     ``optimizer`` ('geometric' / 'berny' / 'sella') selects the geometry-
     optimisation backend; only that backend's options block is emitted.
     """
     is_ewf = (run_mode == "ewf")
     gpu = (proc == "GPU")
+    sbd = (external == "SCI_SBD")
+    sqd = (external == "SQD")
     # MSU GPU runs pick resources by GPU model; default to a100 if unspecified.
     msu_gpu = (hpc == "MSU" and gpu)
     if msu_gpu and gpu_type is None:
@@ -172,12 +181,18 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
 
     # --- solver selection from the answers ---------------------------------
     plain_solver = "SCI"                       # non-SBD default (FCI / SCI)
+    if sbd:
+        external_solver = "SCI_SBD"
+    elif sqd:
+        external_solver = "SQD"
+    else:
+        external_solver = plain_solver
     if multi:
         high_solver = "FCI"
-        approx_solver = "SCI_SBD" if sbd else "SCI"
+        approx_solver = external_solver        # SCI / SCI_SBD / SQD
         single_solver = plain_solver           # ewf.solver (ignored in multi)
     else:
-        single_solver = "SCI_SBD" if sbd else plain_solver
+        single_solver = external_solver
 
     L = []
     a = L.append
@@ -189,7 +204,12 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
     a(f"#   run_mode           : {run_mode}")
     if is_ewf:
         a(f"#   multi-solver       : {'yes' if multi else 'no'}")
-    a(f"#   SCI-SBD            : {'yes (' + proc + ')' if sbd else 'no'}")
+    if sbd:
+        a(f"#   external eigsolver : SCI-SBD ({proc})")
+    elif sqd:
+        a(f"#   external eigsolver : SQD ({proc})")
+    else:
+        a("#   external eigsolver : none")
     a("#")
     a("# FOCUSED template -- only the options relevant to this run type are shown;")
     a("# everything else uses the driver defaults.  Review and UPDATE every line")
@@ -205,7 +225,8 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# single-solver value"
           f" (ignored when multi_solver.enabled is true)")
-        a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff")
+        a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff"
+          " (ignored by SQD, which draws its subspace from quantum samples)")
         if multi:
             a("  multi_solver:")
             a("    enabled: true")
@@ -216,8 +237,8 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
           " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
     else:
         a(f"  solver: {single_solver}"
-          f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD")
-        a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI)")
+          f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / SQD")
+        a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI / SQD)")
     a("")
 
     # --- calculation block --------------------------------------------------
@@ -256,9 +277,9 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
         a("  # Per-solver solve-wave blocks (one job per fragment uses the block named")
         a("  # after the solver that runs in it).")
         solvers_needed = ({high_solver, approx_solver} if multi else {single_solver})
-        for s in ("FCI", "SCI", "SCI_SBD"):
+        for s in ("FCI", "SCI", "SCI_SBD", "SQD"):
             if s in solvers_needed:
-                mem = "100G" if s == "SCI_SBD" else "10G"
+                mem = "100G" if s in ("SCI_SBD", "SQD") else "10G"
                 a(f"  {s}:")
                 L.extend(_sbatch_lines(4, hpc, CCF_CPU_PARTITION, ntasks=2, mem=mem))
         a("")
@@ -331,6 +352,106 @@ def build_config(hpc, run_mode, multi, sbd, proc, geometry="geometry.txt",
         a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
         a("")
 
+    # --- sqd block (only when SQD external eigensolver is selected) --------
+    if sqd:
+        a("# Sample-based Quantum Diagonalization (SQD) -- present because a solver")
+        a("# is SQD.  Each SQD iteration submits 'n_batches' parallel SBD Slurm jobs")
+        a("# (the SBD binary is the same one used by SCI_SBD); a final ext-SQD Slurm")
+        a("# job augments the recovered subspace with PyCI single excitations and")
+        a("# runs SBD with --rdm 1 to produce the per-fragment 1- and 2-RDMs.")
+        a("sqd:")
+        if hpc == "CCF":
+            ccf_launcher = CCF_MPI_LAUNCHER_GPU if gpu else CCF_MPI_LAUNCHER_CPU
+            a(f"  sbd_exe_path_cpu: '{CCF_SBD_EXE_CPU}'")
+            a(f"  sbd_exe_path_gpu: '{CCF_SBD_EXE_GPU}'")
+            a(f"  mpi_launcher: '{ccf_launcher}'   # absolute path (PATH-independent)")
+        else:  # MSU
+            msu_gpu_exe = MSU_SBD_EXE_V100 if is_v100 else MSU_SBD_EXE
+            a(f"  sbd_exe_path_cpu: '{MSU_SBD_EXE_CPU}'")
+            a(f"  sbd_exe_path_gpu: '{msu_gpu_exe}'")
+            a(f"  mpi_launcher: '{MSU_MPI_LAUNCHER}'   # absolute path (PATH-independent)")
+        a(f"  proc_type: {1 if gpu else 0}            # {'1 = GPU (CPUs as support)' if gpu else '0 = CPU-only'}")
+        if gpu:
+            a("  gpus_per_batch: 4       # GPUs per SBD batch -> --gpus-per-node")
+            cpus_per_gpu = 8 if is_v100 else 16
+            a(f"  cpus_per_gpu: {cpus_per_gpu}"
+              f"{' ' * max(1, 8 - len(str(cpus_per_gpu)))}"
+              "# support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)")
+            if hpc == "MSU":
+                a(f"  gpu_type: {gpu_type}"
+                  f"{' ' * max(1, 9 - len(str(gpu_type)))}"
+                  f"# MSU GPU model -> --gpus-per-node={gpu_type}:<n>")
+        else:
+            a("  cpus_per_batch: 96      # MPI ranks (-np / --ntasks) for the CPU run")
+        a("  sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)")
+        a("  sbd_block: 20")
+        a("  sbd_dav_iteration: 10   # SQD: relaxed vs SCI_SBD's 100 (per-batch SBD"
+          " is much more expensive)")
+        a("  sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this"
+          " exact '1.e-5' notation")
+        if not gpu:
+            a("  sbd_adet_comm_size: 2   # 'comm_size' options apply to CPU runs only")
+            a("  sbd_bdet_comm_size: 2")
+            a("  sbd_task_comm_size: 2")
+        a("  sbd_init: 0")
+        a("  sbd_shuffle: 0")
+        a("  sbd_carryover_ratio: 0.5")
+        a("  # --- SQD recovery loop --------------------------------------------")
+        a("  iterations: 5            # number of SQD configuration-recovery cycles")
+        a("  n_batches: 2             # parallel SBD batches submitted per iteration")
+        a("  samples_per_batch: 200   # bitstrings sampled per batch")
+        a("  energy_tol: 1.0e-8       # energy convergence between SQD iterations")
+        a("  occupancies_tol: 1.0e-5  # orbital-occupancy convergence between iterations")
+        a("  carryover_threshold: 1.0e-4  # |c| above which a determinant survives to the next iteration")
+        a("  symmetrize_spin: true    # symmetrise alpha/beta when n_alpha == n_beta")
+        a("  add_hf_string: true      # always include the Hartree-Fock determinant in each batch")
+        a("  ext_sqd_dprime_cutoff: 1.0e-5  # |c| cutoff for the ext-SQD PyCI determinant set")
+        a("  # sqd_restart: false     # resume from existing iter_*/ scratch dirs")
+        a("  # seed: 42                # RNG seed for sub-sampling reproducibility")
+        a("  # max_dim: 200000         # cap on selected determinants per spin sector")
+        a("  # --- quantum-sampling source --------------------------------------")
+        a("  # EITHER run ffsim + Qiskit SamplerV2 on an IBM backend each time")
+        a("  # (sample_on_the_fly: true, the default -- requires qiskit-ibm-runtime,")
+        a("  # ffsim, and an IBM Quantum account in the compute-node environment),")
+        a("  # OR point to a pre-collected count_dict.txt (single path or a per-")
+        a("  # fragment mapping) and set sample_on_the_fly: false.")
+        a("  sample_on_the_fly: true")
+        a("  # count_dict_path: /path/to/count_dict.txt")
+        a("  # per_fragment_samples:")
+        a("  #   0: /path/to/cluster_0_count_dict.txt")
+        a("  #   1: /path/to/cluster_1_count_dict.txt")
+        a("  qiskit_backend: ibm_cleveland   # IBM backend name for SamplerV2")
+        a("  default_shots: 100000           # shots per Qiskit SamplerV2 job")
+        a("  n_reps: 1                       # LUCJ ansatz repetitions")
+        a("  thresh_two_q: 1.0               # ffsim two-qubit-gate threshold")
+        a("  thresh_meas: 0.10               # ffsim measurement threshold")
+        a("  # Slurm for each SBD sub-job (one per SQD batch + one for ext-SQD).")
+        a("  # --ntasks/--gpus-per-node/--cpus-per-task are auto-derived from the")
+        a("  # knobs above; set only placement / mem / time (and optional extra.exclude).")
+        a("  slurm:")
+        a("    poll_interval: 15")
+        a("    max_node_retries: 5       # resubmit on another node if mpirun is missing")
+        a("    preamble: |               # <-- UPDATE if your environment changes")
+        if hpc == "CCF":
+            preamble = CCF_SBD_PREAMBLE_GPU if gpu else CCF_SBD_PREAMBLE_CPU
+        else:
+            preamble = MSU_SBD_PREAMBLE
+        for ln in preamble:
+            a(f"      {ln}")
+        a("    sbatch:")
+        sqd_partition = CCF_GPU_PARTITION if gpu else CCF_CPU_SBD_PARTITION
+        if gpu:
+            if msu_gpu:
+                sqd_mem = "170G" if is_v100 else "350G"
+            else:  # CCF GPU
+                sqd_mem = "500G"
+        else:  # CPU
+            sqd_mem = "760G" if hpc == "MSU" else "1T"
+        L.extend(_sbatch_lines(6, hpc, sqd_partition, ntasks=None, mem=sqd_mem))
+        a("      # extra:")
+        a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
+        a("")
+
     # --- geomopt block ------------------------------------------------------
     a("geomopt:")
     a("  enabled: true                  # set false for a single-point energy + gradient")
@@ -394,18 +515,27 @@ def main():
     if run_mode == "ewf":
         multi = ask_yesno("5) Utilize the per-fragment multi-solver?")
 
-    sbd = ask_yesno("6) Use the SCI-SBD external eigensolver?")
+    # 3-way external-eigensolver choice (SCI-SBD and SQD share the SBD binary).
+    external_label = ask_choice(
+        "6) External eigensolver?", ["none", "SCI-SBD", "SQD"])
+    if external_label == "SCI-SBD":
+        external = "SCI_SBD"
+    elif external_label == "SQD":
+        external = "SQD"
+    else:
+        external = "NONE"
 
     proc = None
     gpu_type = None
-    if sbd:
-        proc = ask_choice("7) GPU or CPU-only SCI-SBD calculation?", ["GPU", "CPU"])
+    if external in ("SCI_SBD", "SQD"):
+        proc = ask_choice(
+            f"7) GPU or CPU-only {external_label} calculation?", ["GPU", "CPU"])
         if hpc == "MSU" and proc == "GPU":
             # MSU GPU model sets the default cpus_per_gpu + SBD-job mem
             # (a100 -> 16 / 350G, v100 -> 8 / 170G).
             gpu_type = ask_choice("8) MSU GPU type?", ["a100", "v100"])
 
-    text = build_config(hpc, run_mode, multi, sbd, proc, geometry,
+    text = build_config(hpc, run_mode, multi, external, proc, geometry,
                         gpu_type=gpu_type, optimizer=optimizer)
 
     # Optional sanity check: the produced text must be valid YAML.
@@ -442,11 +572,20 @@ def main():
         print("   * the Slurm 'partition' in every sbatch block")
     if run_mode == "ewf":
         print("   * the per-solver / dump Slurm resources (ntasks, mem)")
-    if sbd:
+    if external == "SCI_SBD":
         print("   * the SBD executable paths, mpi_launcher, and the sbd.slurm.preamble")
         print(f"     ({'GPU' if proc == 'GPU' else 'CPU'} run: check gpus_per_batch / "
               "cpus_per_gpu / cpus_per_batch vs your node)")
-    print(f"   * the solver choice (FCI / SCI / SCI_SBD) if the default does not fit")
+    elif external == "SQD":
+        print("   * the SBD executable paths, mpi_launcher, and the sqd.slurm.preamble")
+        print(f"     ({'GPU' if proc == 'GPU' else 'CPU'} run: check gpus_per_batch / "
+              "cpus_per_gpu / cpus_per_batch vs your node)")
+        print("   * the quantum-sampling source -- either sqd.count_dict_path / "
+              "sqd.per_fragment_samples (pre-collected counts) or sqd.sample_on_the_fly"
+              " + sqd.qiskit_backend / default_shots / n_reps (live Qiskit sampling)")
+        print("   * sqd.iterations / n_batches / samples_per_batch (recovery loop) and")
+        print("     sqd.ext_sqd_dprime_cutoff (final ext-SQD subspace)")
+    print("   * the solver choice (FCI / SCI / SCI_SBD / SQD) if the default does not fit")
     print("\nRun it with:")
     print(f"   python EWF-CI_Geom_Opt_HPC.py --config {out}")
     return 0
