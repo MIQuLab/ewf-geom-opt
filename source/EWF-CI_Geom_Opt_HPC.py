@@ -613,7 +613,8 @@ def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
     ``dm2`` are spin-summed in chemist's notation (matching
     :func:`solve_cluster_fci`) and ``civec`` is the SCI sparse vector
     (an ``_SCIvector`` carrying ``._strs``); the CI-amplitude assembly
-    path densifies it on the fly via ``selected_ci.to_fci``.
+    path reads the CISD amplitudes straight off the sparse vector via
+    :func:`cisd_amplitudes_from_sci` (no dense ``selected_ci.to_fci``).
 
     Parameters
     ----------
@@ -657,8 +658,8 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     Returns ``(E, dm1, dm2, civec)`` matching
     :func:`solve_cluster_sci`: ``dm1``/``dm2`` are spin-summed in chemist's
     notation and ``civec`` is the selected-CI ``_SCIvector`` (carrying
-    ``._strs``), which the CI-amplitude assembly path densifies via
-    ``selected_ci.to_fci``.
+    ``._strs``), which the CI-amplitude assembly path reads directly via
+    :func:`cisd_amplitudes_from_sci` (no dense ``selected_ci.to_fci``).
 
     Parameters
     ----------
@@ -1269,6 +1270,112 @@ def run_dump_worker(frag_idx, cfg):
     print(f"[dump frag={frag_idx}] Wrote cluster file {cluster_h5}")
 
 
+def cisd_amplitudes_from_sci(civec, norb, nelec):
+    """Extract the closed-shell CISD amplitudes ``(c0, c1, c2)`` *directly*
+    from a selected-CI vector, without densifying it to the full ``(na, nb)``
+    FCI array.
+
+    This is a drop-in, memory-frugal replacement for the
+
+        fcivec_dense = selected_ci.to_fci(civec, norb, nelec)
+        cisdvec      = ci.cisd.from_fcivec(fcivec_dense, norb, nelec)
+        c0, c1, c2   = ci.cisd.cisdvec_to_amplitudes(cisdvec, norb, nocc)
+
+    chain.  ``to_fci`` allocates a dense ``(na, nb)`` matrix (with
+    ``na = nb = C(norb, nocc)``), which for large clusters is astronomically
+    big -- e.g. a 12.9-PiB request for ``na = 40_116_600``.  Yet
+    ``ci.cisd.from_fcivec`` only ever *reads* the reference determinant and
+    the single-/double-excitation determinants relative to the HF reference:
+
+        c0 = ci0[0, 0]
+        c1 = ci0[0, t1addr] * t1sign             (and the symmetric ci0[t1addr, 0])
+        c2 = t1sign_i t1sign_j ci0[t1addr, t1addr]
+
+    where ``t1addr`` are the ``nocc * nvir`` single-excitation addresses.  So
+    the CISD amplitudes depend on at most a ``(1 + nocc*nvir)`` x
+    ``(1 + nocc*nvir)`` block of the FCI array -- tiny and independent of the
+    exponential FCI dimension.
+
+    We reconstruct exactly that block from the sparse SCI vector: every
+    determinant PySCF stores in ``civec`` carries its own alpha/beta bit
+    strings (``civec._strs``); we map those strings to FCI addresses (the same
+    ``str2addr`` mapping ``to_fci`` uses internally), look up which of the
+    needed reference/single addresses are present, and copy their coefficients
+    into the small block.  Determinants absent from the SCI expansion
+    contribute a zero coefficient -- identical to what ``to_fci`` would have
+    written into the dense array.  The result is bit-for-bit the same
+    ``(c0, c1, c2)`` the dense path produced, at ``O(nocc^2 nvir^2)`` memory.
+
+    Parameters
+    ----------
+    civec : pyscf.fci.selected_ci.SCIvector
+        The selected-CI vector returned by the SCI / SCI_SBD / SQD solvers
+        (carries ``._strs = (strs_a, strs_b)``).
+    norb, nelec : int, (int, int)
+        Cluster orbital count and ``(neleca, nelecb)`` (closed shell).
+
+    Returns
+    -------
+    (c0, c1, c2) : float, ndarray(nocc, nvir), ndarray(nocc, nocc, nvir, nvir)
+        Closed-shell CISD amplitudes in PySCF's convention -- exactly what
+        ``ci.cisd.cisdvec_to_amplitudes(ci.cisd.from_fcivec(...))`` returns.
+    """
+    from pyscf.fci import cistring as _cistring
+    from pyscf.ci.cisd import t1strs as _t1strs
+
+    ci_coeff, (neleca, nelecb), ci_strs = _selected_ci._unpack(civec, nelec)
+    if ci_strs is None:
+        raise ValueError(
+            "cisd_amplitudes_from_sci expects a selected-CI vector carrying "
+            "its determinant strings (._strs); got a plain array.  Use the "
+            "dense FCI path for a full-CI vector.")
+    if neleca != nelecb:
+        raise NotImplementedError(
+            "cisd_amplitudes_from_sci is restricted to closed-shell clusters "
+            f"(neleca == nelecb); got nelec={(neleca, nelecb)}.")
+    nocc = neleca
+    nvir = norb - nocc
+
+    strs_a, strs_b = ci_strs
+    ci_coeff = np.asarray(ci_coeff)
+
+    # Map each stored determinant string -> its FCI address (identical mapping
+    # to selected_ci.to_fci's ``str2addr``), then to its row/column index in
+    # the sparse coefficient matrix.
+    addr_a = _cistring.strs2addr(norb, nocc, np.asarray(strs_a))
+    addr_b = _cistring.strs2addr(norb, nocc, np.asarray(strs_b))
+    pos_a = {int(a): i for i, a in enumerate(addr_a)}
+    pos_b = {int(a): i for i, a in enumerate(addr_b)}
+
+    # FCI addresses (and HF-vacuum signs) of the reference + single excitations
+    # -- exactly the rows/cols ci.cisd.from_fcivec touches.
+    t1addr, t1sign = _t1strs(norb, nocc)
+    t1addr = np.asarray(t1addr, dtype=np.int64)
+    t1sign = np.asarray(t1sign)
+    need = np.concatenate([[0], t1addr]).astype(np.int64)   # [ref, singles...]
+
+    idx_a = np.fromiter((pos_a.get(int(a), -1) for a in need),
+                        dtype=np.int64, count=need.size)
+    idx_b = np.fromiter((pos_b.get(int(a), -1) for a in need),
+                        dtype=np.int64, count=need.size)
+
+    # Dense (1 + nocc*nvir) x (1 + nocc*nvir) block; absent dets stay zero.
+    small = np.zeros((need.size, need.size))
+    have_a = np.nonzero(idx_a >= 0)[0]
+    have_b = np.nonzero(idx_b >= 0)[0]
+    if have_a.size and have_b.size:
+        small[np.ix_(have_a, have_b)] = ci_coeff[
+            np.ix_(idx_a[have_a], idx_b[have_b])]
+
+    # Reproduce ci.cisd.from_fcivec on the compacted block: column/row 0 is the
+    # reference, columns/rows 1.. are the singles (in t1addr order).
+    c0 = small[0, 0]
+    c1 = (small[0, 1:] * t1sign).reshape(nocc, nvir)
+    c2 = np.einsum('i,j,ij->ij', t1sign, t1sign, small[1:, 1:])
+    c2 = c2.reshape(nocc, nvir, nocc, nvir).transpose(0, 2, 1, 3)
+    return c0, c1, c2
+
+
 def run_fci_worker(frag_idx, cfg, solver_override=None):
     """Solve stage: read ``cluster_<i>.h5`` produced by the DUMP stage,
     solve the cluster Hamiltonian with FCI or SCI, and write the cluster
@@ -1358,36 +1465,53 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     # Extract CISD (c0, c1, c2) and CCSD (t1, t2) amplitudes for the
     # *CI-coefficient* (TCCSD-style) assembly path described in the
     # README.  We reuse the civec from the single FCI/SCI solve above
-    # (no redundant re-solve).  For SCI, the sparse civec is densified
-    # with pyscf.fci.selected_ci.to_fci so the CISD extraction sees the
-    # full (na x nb) matrix it expects -- identical to the FCI path.
+    # (no redundant re-solve).
+    #
+    # This CISD->CCSD conversion feeds ONLY the 'ci' assembly route (it is the
+    # sole consumer of the c0/c1/c2 datasets written below).  Every other route
+    # -- 'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'democratic' -- derives
+    # its effective amplitudes from the full-vector RDMs (dm1/dm2) instead, so
+    # we skip the extraction entirely unless the 'ci' route was requested.
+    #
+    # FCI returns a dense (na x nb) vector, so we read the CISD amplitudes
+    # straight off it with PySCF's helper.  The SCI / SCI_SBD / SQD solvers
+    # instead return a *sparse* selected-CI vector; densifying it with
+    # ``selected_ci.to_fci`` would allocate the full (na x nb) FCI matrix
+    # (e.g. 11.4 PiB for na = 40_116_600) even though only the reference and
+    # single/double-excitation determinants are needed.  ``cisd_amplitudes_
+    # from_sci`` pulls exactly those coefficients out of the sparse vector,
+    # yielding the identical (c0, c1, c2) at O(nocc^2 nvir^2) memory.
+    assembly = str(cfg["ewf"].get("assembly", "rdm_t")).lower()
+    need_ci_amplitudes = (assembly == "ci")
     nelec_t = (cluster.nocc, cluster.nocc)
-    if solver == "FCI":
-        fcivec_dense = np.asarray(civec)
+    if need_ci_amplitudes:
+        if solver == "FCI":
+            # FCI -> CISD (closed-shell): mirrors Vayesta's
+            # RFCI_WaveFunction.as_cisd() but using PySCF's helper directly.
+            cisdvec = _ci_cisd.from_fcivec(
+                np.asarray(civec), cluster.norb, nelec_t)
+            c0, c1, c2 = _ci_cisd.cisdvec_to_amplitudes(
+                cisdvec, cluster.norb, cluster.nocc)
+        else:
+            c0, c1, c2 = cisd_amplitudes_from_sci(
+                civec, cluster.norb, nelec_t)
+        # CISD -> CCSD T-amplitudes (Vayesta's RCISD.as_ccsd):
+        #   T1 = C1/C0,  T2 = C2/C0 - T1 (x) T1
+        if abs(c0) < 1.0e-2:
+            print(f"[solve frag={frag_idx}] WARNING: small reference weight "
+                  f"|c0|={abs(c0):.4e} -- the CI->CCSD conversion is "
+                  f"unreliable when |c0| is small (multireference cluster).")
+        t1x = c1 / c0
+        t2x = c2 / c0 - np.einsum("ia,jb->ijab", t1x, t1x)
     else:
-        fcivec_dense = np.asarray(
-            _selected_ci.to_fci(civec, cluster.norb, nelec_t))
-
-    # FCI -> CISD (closed-shell): mirrors Vayesta's
-    # RFCI_WaveFunction.as_cisd() but using PySCF's helper directly.
-    cisdvec = _ci_cisd.from_fcivec(
-        fcivec_dense, cluster.norb, nelec_t)
-    c0, c1, c2 = _ci_cisd.cisdvec_to_amplitudes(
-        cisdvec, cluster.norb, cluster.nocc)
-    # CISD -> CCSD T-amplitudes (Vayesta's RCISD.as_ccsd):
-    #   T1 = C1/C0,  T2 = C2/C0 - T1 (x) T1
-    if abs(c0) < 1.0e-2:
-        print(f"[solve frag={frag_idx}] WARNING: small reference weight "
-              f"|c0|={abs(c0):.4e} -- the CI->CCSD conversion is "
-              f"unreliable when |c0| is small (multireference cluster).")
-    t1x = c1 / c0
-    t2x = c2 / c0 - np.einsum("ia,jb->ijab", t1x, t1x)
+        print(f"[solve frag={frag_idx}] Assembly route {assembly!r} uses the "
+              f"cluster RDMs directly -- skipping the CISD extraction.")
 
     # Save everything the driver needs to assemble global RDMs.  We keep
-    # the cluster RDMs (dm1, dm2) for the legacy "democratic" route and
-    # add the per-fragment t1/t2 (occ x vir / occ^2 x vir^2) plus the
-    # split occupied/virtual cluster MOs needed by the CI-amplitude
-    # ("global wave function") route.
+    # the cluster RDMs (dm1, dm2) plus the split occupied/virtual cluster MOs
+    # for every route.  The CI-amplitude datasets (t1/t2/c0/c1/c2) are written
+    # only when the 'ci' assembly route was requested -- they are its exclusive
+    # inputs; the RDM-derived routes never read them.
     with h5py.File(rdm_h5, "w") as h5:
         h5.attrs["frag_idx"] = frag_idx
         h5.attrs["name"] = cluster.name
@@ -1397,6 +1521,7 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.attrs["e_cluster"] = e_cls
         h5.attrs["bath_threshold"] = threshold
         h5.attrs["solver"] = solver
+        h5.attrs["assembly"] = assembly
         # SCI and SCI_SBD both use PySCF's determinant-selection cutoff.
         if solver in ("SCI", "SCI_SBD"):
             h5.attrs["sci_select_cutoff"] = sci_cutoff
@@ -1406,17 +1531,18 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.create_dataset("c_frag",        data=cluster.c_frag)
         h5.create_dataset("dm1",           data=dm1x)
         h5.create_dataset("dm2",           data=dm2x)
-        # CI-amplitude assembly inputs:
-        h5.create_dataset("t1", data=t1x)
-        h5.create_dataset("t2", data=t2x)
-        h5.attrs["c0"] = float(c0)
-        # Raw CISD coefficients (before T1⊗T1 disconnected part is removed).
-        # Required by the 'ci' assembly route, which projects and tiles the
-        # intermediate-normalised C1/C2 into a global C1/C2 and only then
-        # performs a single global CISD->CCSD conversion.  Also used by the
-        # 'rdm_t' route as a fallback check.
-        h5.create_dataset("c1", data=c1)
-        h5.create_dataset("c2", data=c2)
+        if need_ci_amplitudes:
+            # CI-amplitude assembly inputs (consumed only by the 'ci' route,
+            # via assemble_global_rdms_from_civec).
+            h5.create_dataset("t1", data=t1x)
+            h5.create_dataset("t2", data=t2x)
+            h5.attrs["c0"] = float(c0)
+            # Raw CISD coefficients (before the T1⊗T1 disconnected part is
+            # removed): the 'ci' route projects and tiles the intermediate-
+            # normalised C1/C2 into a global C1/C2 and only then performs a
+            # single global CISD->CCSD conversion.
+            h5.create_dataset("c1", data=c1)
+            h5.create_dataset("c2", data=c2)
     print(f"[solve frag={frag_idx}] Wrote RDM file {rdm_h5}")
 
 
@@ -1562,10 +1688,14 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
         with h5py.File(path, "r") as h5:
             if "c1" not in h5:
                 raise RuntimeError(
-                    f"{path} does not contain 'c1'/'c2' datasets.  "
-                    "Re-run the FCI stage with the current "
-                    "EWF-CI_Geom_Opt_HPC.py, or set "
-                    "ewf.assembly: democratic in your config.")
+                    f"{path} does not contain the 'c1'/'c2' datasets the 'ci' "
+                    "assembly route needs.  These are written by the solve "
+                    "stage only when ewf.assembly is 'ci'; this file was "
+                    f"produced under assembly "
+                    f"{str(h5.attrs.get('assembly', 'unknown'))!r}.  Re-run the "
+                    "solve stage with ewf.assembly: ci, or pick an RDM-derived "
+                    "route (rdm_t / rdm_t_lambda / projected_lambda / "
+                    "democratic) that reuses the existing files.")
             c0     = float(h5.attrs["c0"])
             c1     = np.array(h5["c1"])             # (nocc_x, nvir_x)
             c2     = np.array(h5["c2"])             # (nocc_x, nocc_x, nvir_x, nvir_x)
