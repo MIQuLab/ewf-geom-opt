@@ -993,32 +993,38 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
 # ext-SQD: dominant-config augmentation + single SBD run with --rdm 1
 # ---------------------------------------------------------------------------
 def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
-                 verbose=None, restart: bool = False) -> dict:
+                 verbose=None, restart: bool = False,
+                 with_rdm: bool = True) -> dict:
     """Reproduce ``ext-SQD-run.py``: filter the SQD best-batch wavefunction
     by ``dprime_cutoff``, augment by single excitations via PyCI, and submit
-    a SINGLE SBD job (with ``--rdm 1``) to produce the final energy + RDMs.
+    a SINGLE SBD job to produce the final energy + CI vector (and, when
+    ``with_rdm`` is set, the 1-/2-RDMs via ``--rdm 1``).  ``with_rdm=False``
+    (the 'ci' assembly route) runs ``--rdm 0`` and returns no RDMs.
 
     When ``restart`` is true and the ext-SQD SBD job from a previous run
     is complete on disk (``ext_sqd_iter/sbd_job.status == DONE`` together
-    with ``matrixformwf.txt`` and both ``1pRDM.txt`` / ``2pRDM.txt``),
-    the SBD submission is skipped and the existing outputs are re-parsed
-    into the same return dict.  This makes the very last (and often the
-    most expensive) SBD job in the SQD workflow resumable without
+    with ``matrixformwf.txt`` and, when ``with_rdm``, both ``1pRDM.txt`` /
+    ``2pRDM.txt``), the SBD submission is skipped and the existing outputs
+    are re-parsed into the same return dict.  This makes the very last (and
+    often the most expensive) SBD job in the SQD workflow resumable without
     rerunning it.
     """
     ext_dir = os.path.join(sqd_workdir, "ext_sqd_iter")
     if restart:
         status_ok = _read_status(
             os.path.join(ext_dir, "sbd_job.status")).startswith("DONE")
+        required = ["matrixformwf.txt"]
+        if with_rdm:
+            required += ["1pRDM.txt", "2pRDM.txt"]
         outputs_ok = all(os.path.isfile(os.path.join(ext_dir, fn))
-                         for fn in ("matrixformwf.txt",
-                                    "1pRDM.txt", "2pRDM.txt"))
+                         for fn in required)
         if status_ok and outputs_ok:
             if verbose:
                 verbose.info("[ext-SQD] restart: reusing completed SBD job in "
-                             "%s (status DONE + RDM outputs present)", ext_dir)
-            out = _parse_sbd_batch_outputs(ext_dir, norb, nelec, with_rdm=True)
-            if "rdm1" not in out or "rdm2" not in out:
+                             "%s (status DONE + outputs present)", ext_dir)
+            out = _parse_sbd_batch_outputs(ext_dir, norb, nelec,
+                                           with_rdm=with_rdm)
+            if with_rdm and ("rdm1" not in out or "rdm2" not in out):
                 raise RuntimeError(
                     f"ext-SQD restart: parse of {ext_dir} returned no RDMs "
                     f"despite the status/output files being present.  "
@@ -1070,15 +1076,16 @@ def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
                      addresses_alpha_aug.size, addresses_beta_aug.size,
                      addresses_alpha_aug.size * addresses_beta_aug.size)
 
-    # Single SBD job (mirrors the single-batch ext-SQD submission); RDM=1 so
-    # we can hand 1- and 2-RDMs back to the EWF assembly routes.
+    # Single SBD job (mirrors the single-batch ext-SQD submission).  RDM=1
+    # hands 1- and 2-RDMs back to the RDM-derived assembly routes; RDM=0 (the
+    # 'ci' route) still dumps the energy + CI vector but skips the RDMs.
     os.makedirs(ext_dir, exist_ok=True)
     _submit_one_sbd_job(
         sqd_cfg, ext_dir, addresses_alpha_aug, addresses_beta_aug, norb,
-        with_rdm=True, verbose=verbose, job_label="extsqd")
+        with_rdm=with_rdm, verbose=verbose, job_label="extsqd")
 
-    out = _parse_sbd_batch_outputs(ext_dir, norb, nelec, with_rdm=True)
-    if "rdm1" not in out or "rdm2" not in out:
+    out = _parse_sbd_batch_outputs(ext_dir, norb, nelec, with_rdm=with_rdm)
+    if with_rdm and ("rdm1" not in out or "rdm2" not in out):
         raise RuntimeError(
             f"ext-SQD: SBD did not produce 1pRDM.txt/2pRDM.txt in {ext_dir}.  "
             f"Check that the SBD binary supports `--rdm 1` and that the log "
@@ -1100,8 +1107,13 @@ def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
 # ---------------------------------------------------------------------------
 def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
                    cluster_h5_path: Optional[str] = None,
-                   frag_idx: int = 0, verbose=None):
+                   frag_idx: int = 0, verbose=None, need_rdm: bool = True):
     """Solve one cluster via SQD + ext-SQD.  Returns ``(E, dm1, dm2, civec)``.
+
+    When ``need_rdm`` is False (the 'ci' assembly route, which reads only the
+    CI amplitudes) the final ext-SQD SBD job runs with ``--rdm 0`` -- it still
+    dumps the energy and CI vector but skips the 1-/2-RDMs -- and this function
+    returns ``dm1 = dm2 = None``.
 
     Parameters
     ----------
@@ -1202,9 +1214,9 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
         verbose.info("[SQD] best-iteration energy: %.10f Ha (over %d iter)",
                      sqd_result["best"]["energy"], len(sqd_result["history"]))
 
-    # --- 3) ext-SQD single SBD job with RDM dumping -------------------------
+    # --- 3) ext-SQD single SBD job (RDM dumping only when a route needs it) --
     ext = _run_ext_sqd(sqd_cfg, sqd_workdir, norb, nelec, verbose=verbose,
-                       restart=restart)
+                       restart=restart, with_rdm=need_rdm)
 
     # --- 4) Pack into the FCI/SCI return contract ---------------------------
     # The SBD energy includes the nuclear repulsion (FCIDUMP `nuc=0` so this
@@ -1220,6 +1232,9 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
     civec = _selected_ci._as_SCIvector(
         sci_coeff_mat, (ext["ci_strs_a_unique"], ext["ci_strs_b_unique"]))
 
-    dm1 = np.asarray(ext["rdm1"])
-    dm2 = np.asarray(ext["rdm2"])
+    if need_rdm:
+        dm1 = np.asarray(ext["rdm1"])
+        dm2 = np.asarray(ext["rdm2"])
+    else:
+        dm1 = dm2 = None
     return e_elec, dm1, dm2, civec

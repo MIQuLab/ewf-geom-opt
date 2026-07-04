@@ -589,23 +589,29 @@ class Cluster:
                 f"norb={self.norb}, nocc={self.nocc})")
 
 
-def solve_cluster_fci(cluster, conv_tol=1e-12):
+def solve_cluster_fci(cluster, conv_tol=1e-12, need_rdm=True):
     """Solve the cluster Hamiltonian with PySCF FCI; return
     ``(E, dm1, dm2, civec)``.
 
     The civec (a dense ``(na, nb)`` array) is needed by the CI-amplitude
     assembly route in :func:`assemble_global_rdms_from_civec` -- we keep
     a single solve and let both the democratic and CI assembly paths
-    consume the same eigenvector.
+    consume the same eigenvector.  ``need_rdm=False`` skips the RDM build
+    (the 'ci' route uses only the CI amplitudes) and returns
+    ``dm1 = dm2 = None``.
     """
     nelec = (cluster.nocc, cluster.nocc)
     e, civec = direct_spin0.kernel(
         cluster.heff, cluster.eris, cluster.norb, nelec, conv_tol=conv_tol)
-    dm1, dm2 = direct_spin0.make_rdm12(civec, cluster.norb, nelec)
+    if need_rdm:
+        dm1, dm2 = direct_spin0.make_rdm12(civec, cluster.norb, nelec)
+    else:
+        dm1 = dm2 = None
     return e, dm1, dm2, np.asarray(civec)
 
 
-def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
+def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4,
+                      need_rdm=True):
     """Solve the cluster Hamiltonian with PySCF Selected-CI.
 
     Closed-shell cluster (neleca == nelecb), so we use the spin0
@@ -636,12 +642,14 @@ def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
     cisolver.ci_coeff_cutoff = select_cutoff
     e, civec = cisolver.kernel(
         cluster.heff, cluster.eris, cluster.norb, nelec)
-    dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
-    return e, np.asarray(dm1), np.asarray(dm2), civec
+    if need_rdm:
+        dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
+        return e, np.asarray(dm1), np.asarray(dm2), civec
+    return e, None, None, civec
 
 
 def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
-                          select_cutoff=1.0e-4):
+                          select_cutoff=1.0e-4, need_rdm=True):
     """Solve the cluster Hamiltonian with the ``SCI_SBD`` solver: PySCF
     Selected-CI subspace growth with the external **SBD** binary as the
     per-cycle eigensolver.
@@ -672,6 +680,15 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     select_cutoff : float
         Determinant-selection / CI-coefficient cutoff for PySCF's
         ``enlarge_space`` (the SBD-specific options live in ``cfg['sbd']``).
+    need_rdm : bool
+        When ``False`` (the 'ci' assembly route) no RDMs are built and
+        ``dm1 = dm2 = None`` is returned.  When ``True`` the RDM source is
+        chosen by ``cfg['sbd']['rdm_from_sbd']`` (default ``True``): if set,
+        one extra SBD job with ``--rdm 1`` emits the RDMs on the distributed
+        allocation (:meth:`ExternalEigSelectedCI.make_rdm12_sbd`, warm-started
+        from the converged SCI wavefunction unless ``rdm_warm_start`` is
+        false); otherwise PySCF's single-node ``selected_ci.make_rdm12``
+        builds them from ``civec``.
     """
     # The bundled SBD modules (external_sci.py, sbd_wrapper.py) sit next to
     # this driver; make sure they are importable, then import lazily so that
@@ -699,12 +716,21 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     # energy is added downstream).
     e, civec = cisolver.kernel(
         cluster.heff, cluster.eris, cluster.norb, nelec, ecore=0.0)
-    dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
+    if not need_rdm:
+        # 'ci' route: RDMs are never read -- skip both the SBD RDM job and
+        # PySCF's make_rdm12 entirely.
+        return e, None, None, civec
+    if bool(sbd_cfg.get("rdm_from_sbd", True)):
+        # Let the distributed SBD eigensolver emit the 1-/2-RDMs directly
+        # (one extra --rdm 1 job) instead of PySCF's single-node make_rdm2.
+        dm1, dm2 = cisolver.make_rdm12_sbd(civec, cluster.norb, nelec)
+    else:
+        dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
     return e, np.asarray(dm1), np.asarray(dm2), civec
 
 
 def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
-                      frag_idx=0):
+                      frag_idx=0, need_rdm=True):
     """Solve the cluster Hamiltonian with the ``SQD`` solver: quantum
     Sample-based Diagonalization driven through the SBD binary.
 
@@ -721,8 +747,10 @@ def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
        feeds them to the next iteration's configuration recovery.
     3. **ext-SQD**.  Filters the lowest-energy SQD batch by
        ``sqd.ext_sqd_dprime_cutoff`` (square-weight cutoff), augments with
-       all single excitations via PyCI, and submits ONE SBD Slurm job with
-       ``--rdm 1`` to deliver the final energy, CI vector, 1-RDM and 2-RDM.
+       all single excitations via PyCI, and submits ONE SBD Slurm job to
+       deliver the final energy and CI vector -- with ``--rdm 1`` (1-/2-RDM)
+       when ``need_rdm`` is set, or ``--rdm 0`` for the 'ci' assembly route
+       (which reads only the CI amplitudes, so ``dm1 = dm2 = None``).
 
     Each SBD invocation is a separate Slurm sub-job whose resources come
     from the ``sqd.slurm`` block (analogous to ``sbd.slurm`` for SCI_SBD),
@@ -747,6 +775,7 @@ def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
     return sqd_solver.solve_with_sqd(
         cluster, cfg, sqd_workdir,
         cluster_h5_path=cluster_h5_path, frag_idx=frag_idx,
+        need_rdm=need_rdm,
     )
 
 
@@ -788,7 +817,7 @@ def method_label_for_cfg(cfg):
 
 
 def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
-                  cluster_h5_path=None):
+                  cluster_h5_path=None, need_rdm=True):
     """Dispatch to FCI, SCI, SCI_SBD or SQD for one cluster.
 
     ``solver`` selects the cluster solver explicitly; when ``None`` it is
@@ -799,6 +828,12 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
     forwarded to the SQD path so the on-the-fly LUCJ sampler can read
     the Vayesta cluster dump.
 
+    ``need_rdm`` controls whether the cluster 1-/2-RDMs are built at all.
+    The 'ci' assembly route works purely from the CI amplitudes and never
+    reads dm1/dm2, so the driver passes ``need_rdm=False`` there to skip the
+    (norb**4) 2-RDM construction and its disk write.  When ``False`` the
+    solvers return ``dm1 = dm2 = None``.
+
     Returns ``(E, dm1, dm2, civec)`` -- see
     :func:`solve_cluster_fci`/:func:`solve_cluster_sci`/
     :func:`solve_cluster_sci_sbd`/:func:`solve_cluster_sqd` for details.
@@ -807,12 +842,14 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
         solver = choose_solver_for_cluster(cluster.norb, cfg)
     if solver == "FCI":
         return solve_cluster_fci(
-            cluster, conv_tol=float(cfg["calculation"]["fci_conv_tol"]))
+            cluster, conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
+            need_rdm=need_rdm)
     elif solver == "SCI":
         return solve_cluster_sci(
             cluster,
             conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
             select_cutoff=float(cfg["ewf"]["sci_select_cutoff"]),
+            need_rdm=need_rdm,
         )
     elif solver == "SCI_SBD":
         if workdir is None:
@@ -823,6 +860,7 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
             cluster, cfg, sbd_workdir,
             conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
             select_cutoff=float(cfg["ewf"]["sci_select_cutoff"]),
+            need_rdm=need_rdm,
         )
     elif solver == "SQD":
         if workdir is None:
@@ -833,6 +871,7 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
             cluster, cfg, sqd_workdir,
             cluster_h5_path=cluster_h5_path,
             frag_idx=(frag_idx if frag_idx is not None else 0),
+            need_rdm=need_rdm,
         )
     raise ValueError(f"Unsupported cluster solver: {solver!r}")
 
@@ -1456,9 +1495,18 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
               f"ext-SQD; iterations={sqd_cfg.get('iterations', '?')}, "
               f"n_batches={sqd_cfg.get('n_batches', '?')}; submits one Slurm "
               f"job per SBD batch and a final ext-SQD job)")
+    # The assembly route decides which per-fragment quantities are actually
+    # consumed downstream, so we resolve it up front: the 'ci' route reads only
+    # the CI amplitudes (c0/c1/c2), every other route reads only the RDMs
+    # (dm1/dm2).  We therefore build exactly one of the two and skip the other's
+    # construction *and* its disk write.
+    assembly = str(cfg["ewf"].get("assembly", "rdm_t")).lower()
+    need_ci_amplitudes = (assembly == "ci")
+    need_rdm = not need_ci_amplitudes
+
     e_cls, dm1x, dm2x, civec = solve_cluster(
         cluster, cfg, solver=solver, workdir=workdir, frag_idx=frag_idx,
-        cluster_h5_path=cluster_h5)
+        cluster_h5_path=cluster_h5, need_rdm=need_rdm)
     print(f"[solve frag={frag_idx}] E_cluster ({solver}) = {e_cls:.10f} Ha")
 
     # ------------------------------------------------------------------
@@ -1481,8 +1529,8 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     # single/double-excitation determinants are needed.  ``cisd_amplitudes_
     # from_sci`` pulls exactly those coefficients out of the sparse vector,
     # yielding the identical (c0, c1, c2) at O(nocc^2 nvir^2) memory.
-    assembly = str(cfg["ewf"].get("assembly", "rdm_t")).lower()
-    need_ci_amplitudes = (assembly == "ci")
+    # (``assembly`` / ``need_ci_amplitudes`` / ``need_rdm`` were resolved before
+    # the solve so the solver could skip the unused branch.)
     nelec_t = (cluster.nocc, cluster.nocc)
     if need_ci_amplitudes:
         if solver == "FCI":
@@ -1529,8 +1577,12 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.create_dataset("c_cluster_occ", data=cluster.c_cluster[:, :cluster.nocc])
         h5.create_dataset("c_cluster_vir", data=cluster.c_cluster[:, cluster.nocc:])
         h5.create_dataset("c_frag",        data=cluster.c_frag)
-        h5.create_dataset("dm1",           data=dm1x)
-        h5.create_dataset("dm2",           data=dm2x)
+        if need_rdm:
+            # Cluster RDMs -- consumed by every route EXCEPT 'ci'
+            # (democratic / rdm_t / rdm_t_lambda / projected_lambda).  dm2 is
+            # the (norb**4) tensor, so skipping it for 'ci' is the main saving.
+            h5.create_dataset("dm1", data=dm1x)
+            h5.create_dataset("dm2", data=dm2x)
         if need_ci_amplitudes:
             # CI-amplitude assembly inputs (consumed only by the 'ci' route,
             # via assemble_global_rdms_from_civec).
