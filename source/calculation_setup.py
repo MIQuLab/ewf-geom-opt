@@ -22,6 +22,14 @@ Questions
 5. External eigensolver none | SCI-SBD | SQD
 6. (SBD/SQD only) ...... GPU or CPU
 
+Notes
+-----
+* Workflow-level restart is NOT a prompt: the emitted template carries
+  ``calculation.restart: false`` and the CLI ``--restart`` / ``--no-restart``
+  flags of ``EWF-CI_Geom_Opt_HPC.py`` override it per invocation.  Restart
+  applies uniformly to every solver (FCI / SCI / SCI_SBD / SQD) -- the SQD
+  block therefore no longer carries its own ``sqd_restart`` knob.
+
 HPC-specific Slurm handling
 ---------------------------
 * CCF : every #SBATCH block uses ``partition`` and NO ``time``.
@@ -252,6 +260,14 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a("  symmetry: false")
     a("  workdir: jobs")
     a("  fci_conv_tol: 1.0e-12")
+    a("  # Workflow-level restart: when true (or when the driver is invoked with")
+    a("  # --restart) the driver scans the workdir and reuses every artefact that")
+    a("  # is already complete -- step_<NNN>/result.json (cached E + gradient),")
+    a("  # step_<NNN>/hf.chk (cached converged RHF), per-fragment cluster_<i>.h5")
+    a("  # / rdm_<i>.h5, and completed SCI_SBD / SQD sub-jobs (iter_*/[batch_*/]")
+    a("  # sbd_job.status == DONE, plus any existing sqd_scratch_*/count_dict.txt).")
+    a("  # Default off: wipe stale files and rerun.")
+    a("  restart: false                 # true | false  (or use --restart on CLI)")
     a("")
 
     # --- slurm block (EWF only: DUMP + per-solver solve waves) --------------
@@ -322,6 +338,18 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  sbd_init: 0")
         a("  sbd_shuffle: 0")
         a("  sbd_carryover_ratio: 0.5")
+        a("  # After the SCI loop converges, build the cluster 1-/2-RDMs with one")
+        a("  # extra SBD '--rdm 1' job on the distributed allocation (true) instead")
+        a("  # of PySCF's single-node make_rdm12 (false).  Recommended for the large")
+        a("  # clusters SCI_SBD targets, where the norb^4 2-RDM build dominates.")
+        a("  # Ignored by the 'ci' assembly route (needs no RDMs).")
+        a("  rdm_from_sbd: true")
+        a("  # Warm-start that final '--rdm 1' job from the converged SCI")
+        a("  # wavefunction (saved each cycle via --savename), so Davidson starts")
+        a("  # below tolerance and goes almost straight to RDM build.  Safe")
+        a("  # (loadname only sets the initial guess; the converged RDM is")
+        a("  # unchanged) and strictly faster.  Only used when rdm_from_sbd: true.")
+        a("  rdm_warm_start: true")
         a("  # Slurm for each per-cycle SBD sub-job.  --ntasks/--gpus-per-node/")
         a("  # --cpus-per-task are auto-derived from the knobs above; set only")
         a("  # placement / mem / time (and optional extra.exclude).")
@@ -406,7 +434,10 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  symmetrize_spin: true    # symmetrise alpha/beta when n_alpha == n_beta")
         a("  add_hf_string: true      # always include the Hartree-Fock determinant in each batch")
         a("  ext_sqd_dprime_cutoff: 1.0e-5  # |c| cutoff for the ext-SQD PyCI determinant set")
-        a("  # sqd_restart: false     # resume from existing iter_*/ scratch dirs")
+        a("  # NOTE: restart across SQD iterations is driven by the workflow-level")
+        a("  # calculation.restart flag (or --restart on the CLI); per-solver")
+        a("  # restart knobs are intentionally not exposed here.  See the header of")
+        a("  # calculation.restart in the 'calculation:' block above.")
         a("  # seed: 42                # RNG seed for sub-sampling reproducibility")
         a("  # max_dim: 200000         # cap on selected determinants per spin sector")
         a("  # --- quantum-sampling source --------------------------------------")

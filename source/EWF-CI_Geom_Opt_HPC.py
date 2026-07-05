@@ -74,6 +74,7 @@ runs is decided per fragment.)
 
 import argparse
 import copy
+import json
 import os
 import shlex
 import subprocess
@@ -297,6 +298,32 @@ def load_config(path):
         calc["workdir"] = f"{calc['workdir']}_{marker}"
     calc.setdefault("fci_conv_tol", 1.0e-12)
 
+    # Workflow-level restart flag.  When enabled, the driver scans the on-disk
+    # ``jobs_EWF``-style workdir and skips every artefact that is already
+    # complete: per-geometry ``step_<NNN>/result.json`` (cached E + gradient),
+    # ``step_<NNN>/hf.chk`` (cached converged RHF -- one SCF saved per step),
+    # per-fragment ``cluster_<i>.h5`` / ``rdm_<i>.h5`` (DUMP + solve waves),
+    # completed SCI_SBD / SQD sub-jobs (``iter_*/sbd_job.status`` or
+    # ``iter_*/batch_*/sbd_job.status`` == DONE), and -- for SQD -- an existing
+    # ``sqd_scratch_*/count_dict.txt`` (skip resampling).  The default is off,
+    # matching the historical wipe-and-rerun behaviour.  Accepts a boolean or
+    # the shorthand strings ``on``/``off``/``auto``/``true``/``false``.
+    _RESTART_TRUE = {"true", "on", "auto", "yes", "1", True}
+    _RESTART_FALSE = {"false", "off", "no", "0", "", None, False}
+    raw = calc.setdefault("restart", False)
+    if isinstance(raw, str):
+        key = raw.strip().lower()
+    else:
+        key = raw
+    if key in _RESTART_TRUE:
+        calc["restart"] = True
+    elif key in _RESTART_FALSE:
+        calc["restart"] = False
+    else:
+        raise ValueError(
+            f"Unsupported calculation.restart = {raw!r}; expected one of "
+            f"true/false, on/off, auto/no, yes/no.")
+
     # The 'sbd:' / 'sqd:' blocks (SBD executable paths, proc_type, per-cycle
     # slurm resources, etc.) are required whenever a solver that will actually
     # run resolves to SCI_SBD or SQD.  In the unfragmented modes that is simply
@@ -384,9 +411,117 @@ def write_geometry_file(elements, coords_angstrom, path):
             fh.write(f"{elem:<3s}  {x: .12f}  {y: .12f}  {z: .12f}\n")
 
 
-def build_mol_and_mf(cfg):
+def _hf_chkfile_path(cfg):
+    """Location of the RHF chkfile shared by driver + workers of one
+    optimisation step.  Sitting inside ``calculation.workdir`` (which is
+    redirected per-step by :meth:`_GeomOptEvaluator._materialize_step`)
+    means every ``step_<NNN>/`` gets its own ``hf.chk`` and workers
+    dispatched by the driver of that step see the same file.
+    """
+    return os.path.join(cfg["calculation"]["workdir"], "hf.chk")
+
+
+def _mol_matches(mol_a, mol_b, atol=1.0e-10):
+    """Return True iff two ``gto.Mole`` objects describe the same system
+    (atom count/order/symbols, coords within ``atol`` Bohr, and same
+    basis / charge / spin / symmetry).  Used to guard the HF-chkfile
+    restart against a cached result from a *different* geometry or a
+    different config that happens to share the workdir.
+    """
+    if mol_a.natm != mol_b.natm:
+        return False
+    if int(mol_a.charge) != int(mol_b.charge):
+        return False
+    if int(mol_a.spin) != int(mol_b.spin):
+        return False
+    if bool(mol_a.symmetry) != bool(mol_b.symmetry):
+        return False
+    for i in range(mol_a.natm):
+        if mol_a.atom_symbol(i) != mol_b.atom_symbol(i):
+            return False
+    if not np.allclose(mol_a.atom_coords(), mol_b.atom_coords(),
+                       atol=atol, rtol=0.0):
+        return False
+    # ``mol._basis`` is the fully-parsed per-atom basis dict; equality on
+    # it catches basis-set changes (e.g. sto-3g -> cc-pVDZ) even when the
+    # user-facing ``mol.basis`` string is identical.
+    try:
+        if mol_a._basis != mol_b._basis:
+            return False
+    except Exception:  # pragma: no cover -- defensive against exotic basis
+        return False
+    return True
+
+
+def _try_load_hf(mol, chkfile, attach_chkfile=True):
+    """If ``chkfile`` contains a converged RHF result for a mol matching
+    ``mol``, return a populated ``scf.RHF(mol)`` object with
+    ``mo_coeff / mo_energy / mo_occ / e_tot`` restored and
+    ``converged=True``.  Returns ``None`` on any of: missing file,
+    unreadable / truncated chkfile, mol mismatch, or missing SCF keys --
+    in which case the caller falls back to a fresh ``mf.kernel()``.
+
+    ``attach_chkfile`` controls whether the returned ``mf`` keeps pointing
+    at ``chkfile`` for downstream writes.  The driver wants this (it owns
+    the file); concurrent DUMP workers must NOT, or a later write would
+    race against the shared file.
+    """
+    if not os.path.isfile(chkfile):
+        return None
+    try:
+        mol_saved, scf_dict = scf.chkfile.load_scf(chkfile)
+    except Exception:
+        # Truncated file, bad HDF5, or older PySCF layout -- treat as miss.
+        return None
+    if not _mol_matches(mol, mol_saved):
+        return None
+    try:
+        mo_coeff = np.asarray(scf_dict["mo_coeff"])
+        mo_energy = np.asarray(scf_dict["mo_energy"])
+        mo_occ = np.asarray(scf_dict["mo_occ"])
+        e_tot = float(scf_dict["e_tot"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    mf = scf.RHF(mol)
+    if attach_chkfile:
+        mf.chkfile = chkfile   # keep pointing at the same file for downstream writes
+    mf.mo_coeff = mo_coeff
+    mf.mo_energy = mo_energy
+    mf.mo_occ = mo_occ
+    mf.e_tot = e_tot
+    mf.converged = True
+    return mf
+
+
+def build_mol_and_mf(cfg, write_chk=True):
     """Build the molecule and run RHF.  Same recipe in driver and worker so
-    that mo_coeff / cluster orbitals are reproducible across processes."""
+    that mo_coeff / cluster orbitals are reproducible across processes.
+
+    Concurrency: the shared chkfile has exactly one writer
+    ------------------------------------------------------
+    ``<workdir>/hf.chk`` is shared by the driver and every DUMP worker of a
+    step.  Only the driver (``write_chk=True``, the default) may attach it
+    to ``mf`` before ``kernel()``.  DUMP workers run as many concurrent
+    processes and MUST pass ``write_chk=False``: if several workers
+    attached the same chkfile and called ``mf.kernel()`` at once, their
+    overlapping HDF5 writes corrupt the file and PySCF aborts with
+    ``KeyError: "Couldn't delete link (link count would be negative)"``.
+
+    Workflow-level restart integration
+    ----------------------------------
+    When ``calculation.restart`` is on (or the driver was invoked with
+    ``--restart``) and ``<workdir>/hf.chk`` contains a converged RHF
+    result for a matching mol (same atoms, coords within 1e-10 Bohr,
+    same basis / charge / spin / symmetry), the driver reuses that
+    cached HF instead of calling ``mf.kernel()`` -- saving one full SCF
+    per step.  DUMP workers (``write_chk=False``) reuse the driver's
+    just-written ``hf.chk`` *regardless* of the restart flag -- the driver
+    always builds its ``mf`` before submitting the DUMP wave, so the file
+    is present -- which saves one full SCF per worker.  On any mismatch
+    (or when the driver runs with restart off) a fresh RHF is run; the
+    driver persists it to the chkfile for future restarts, while workers
+    run SCF locally without touching the shared file.
+    """
     calc = cfg["calculation"]
     geo = read_geometry(calc["geometry_file"])
     mol = gto.Mole()
@@ -398,7 +533,34 @@ def build_mol_and_mf(cfg):
         spin=calc["spin"],
         symmetry=calc["symmetry"],
     )
+    chkfile = _hf_chkfile_path(cfg)
+    restart = bool(calc.get("restart", False))
+    # The driver reuses the cached HF only under restart; workers always
+    # try to reuse the driver's just-written hf.chk (see docstring).  In
+    # both cases workers keep their hands off the shared file.
+    if restart or not write_chk:
+        cached = _try_load_hf(mol, chkfile, attach_chkfile=write_chk)
+        if cached is not None:
+            reason = "Restart" if restart else "worker"
+            print(f"[HF] {reason}: reused converged RHF from {chkfile} "
+                  f"(E_HF={cached.e_tot:.10f} Ha)")
+            return mol, cached
+
     mf = scf.RHF(mol)
+    # Attach chkfile so PySCF writes mol + MO coeffs + e_tot at the end
+    # of ``kernel()`` (and periodically during large SCFs).  ONLY the
+    # driver does this: concurrent DUMP workers (write_chk=False) never
+    # attach the shared chkfile, otherwise their parallel kernel() writes
+    # collide and corrupt it.  Making the workdir first so a killed driver
+    # does not leave PySCF with an unwritable path -- but any write failure
+    # is non-fatal, we just forfeit the chkfile speedup on the next restart.
+    if write_chk:
+        try:
+            os.makedirs(os.path.dirname(chkfile), exist_ok=True)
+            mf.chkfile = chkfile
+        except OSError as exc:  # pragma: no cover -- filesystem-specific
+            print(f"[HF] warning: cannot attach chkfile {chkfile}: {exc}; "
+                  f"HF result will not be cached this step.")
     mf.kernel()
     return mol, mf
 
@@ -453,23 +615,29 @@ class Cluster:
                 f"norb={self.norb}, nocc={self.nocc})")
 
 
-def solve_cluster_fci(cluster, conv_tol=1e-12):
+def solve_cluster_fci(cluster, conv_tol=1e-12, need_rdm=True):
     """Solve the cluster Hamiltonian with PySCF FCI; return
     ``(E, dm1, dm2, civec)``.
 
     The civec (a dense ``(na, nb)`` array) is needed by the CI-amplitude
     assembly route in :func:`assemble_global_rdms_from_civec` -- we keep
     a single solve and let both the democratic and CI assembly paths
-    consume the same eigenvector.
+    consume the same eigenvector.  ``need_rdm=False`` skips the RDM build
+    (the 'ci' route uses only the CI amplitudes) and returns
+    ``dm1 = dm2 = None``.
     """
     nelec = (cluster.nocc, cluster.nocc)
     e, civec = direct_spin0.kernel(
         cluster.heff, cluster.eris, cluster.norb, nelec, conv_tol=conv_tol)
-    dm1, dm2 = direct_spin0.make_rdm12(civec, cluster.norb, nelec)
+    if need_rdm:
+        dm1, dm2 = direct_spin0.make_rdm12(civec, cluster.norb, nelec)
+    else:
+        dm1 = dm2 = None
     return e, dm1, dm2, np.asarray(civec)
 
 
-def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
+def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4,
+                      need_rdm=True):
     """Solve the cluster Hamiltonian with PySCF Selected-CI.
 
     Closed-shell cluster (neleca == nelecb), so we use the spin0
@@ -477,7 +645,8 @@ def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
     ``dm2`` are spin-summed in chemist's notation (matching
     :func:`solve_cluster_fci`) and ``civec`` is the SCI sparse vector
     (an ``_SCIvector`` carrying ``._strs``); the CI-amplitude assembly
-    path densifies it on the fly via ``selected_ci.to_fci``.
+    path reads the CISD amplitudes straight off the sparse vector via
+    :func:`cisd_amplitudes_from_sci` (no dense ``selected_ci.to_fci``).
 
     Parameters
     ----------
@@ -499,12 +668,14 @@ def solve_cluster_sci(cluster, conv_tol=1e-10, select_cutoff=1.0e-4):
     cisolver.ci_coeff_cutoff = select_cutoff
     e, civec = cisolver.kernel(
         cluster.heff, cluster.eris, cluster.norb, nelec)
-    dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
-    return e, np.asarray(dm1), np.asarray(dm2), civec
+    if need_rdm:
+        dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
+        return e, np.asarray(dm1), np.asarray(dm2), civec
+    return e, None, None, civec
 
 
 def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
-                          select_cutoff=1.0e-4):
+                          select_cutoff=1.0e-4, need_rdm=True):
     """Solve the cluster Hamiltonian with the ``SCI_SBD`` solver: PySCF
     Selected-CI subspace growth with the external **SBD** binary as the
     per-cycle eigensolver.
@@ -521,8 +692,8 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     Returns ``(E, dm1, dm2, civec)`` matching
     :func:`solve_cluster_sci`: ``dm1``/``dm2`` are spin-summed in chemist's
     notation and ``civec`` is the selected-CI ``_SCIvector`` (carrying
-    ``._strs``), which the CI-amplitude assembly path densifies via
-    ``selected_ci.to_fci``.
+    ``._strs``), which the CI-amplitude assembly path reads directly via
+    :func:`cisd_amplitudes_from_sci` (no dense ``selected_ci.to_fci``).
 
     Parameters
     ----------
@@ -535,6 +706,15 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     select_cutoff : float
         Determinant-selection / CI-coefficient cutoff for PySCF's
         ``enlarge_space`` (the SBD-specific options live in ``cfg['sbd']``).
+    need_rdm : bool
+        When ``False`` (the 'ci' assembly route) no RDMs are built and
+        ``dm1 = dm2 = None`` is returned.  When ``True`` the RDM source is
+        chosen by ``cfg['sbd']['rdm_from_sbd']`` (default ``True``): if set,
+        one extra SBD job with ``--rdm 1`` emits the RDMs on the distributed
+        allocation (:meth:`ExternalEigSelectedCI.make_rdm12_sbd`, warm-started
+        from the converged SCI wavefunction unless ``rdm_warm_start`` is
+        false); otherwise PySCF's single-node ``selected_ci.make_rdm12``
+        builds them from ``civec``.
     """
     # The bundled SBD modules (external_sci.py, sbd_wrapper.py) sit next to
     # this driver; make sure they are importable, then import lazily so that
@@ -562,12 +742,21 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     # energy is added downstream).
     e, civec = cisolver.kernel(
         cluster.heff, cluster.eris, cluster.norb, nelec, ecore=0.0)
-    dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
+    if not need_rdm:
+        # 'ci' route: RDMs are never read -- skip both the SBD RDM job and
+        # PySCF's make_rdm12 entirely.
+        return e, None, None, civec
+    if bool(sbd_cfg.get("rdm_from_sbd", True)):
+        # Let the distributed SBD eigensolver emit the 1-/2-RDMs directly
+        # (one extra --rdm 1 job) instead of PySCF's single-node make_rdm2.
+        dm1, dm2 = cisolver.make_rdm12_sbd(civec, cluster.norb, nelec)
+    else:
+        dm1, dm2 = cisolver.make_rdm12(civec, cluster.norb, nelec)
     return e, np.asarray(dm1), np.asarray(dm2), civec
 
 
 def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
-                      frag_idx=0):
+                      frag_idx=0, need_rdm=True):
     """Solve the cluster Hamiltonian with the ``SQD`` solver: quantum
     Sample-based Diagonalization driven through the SBD binary.
 
@@ -584,8 +773,10 @@ def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
        feeds them to the next iteration's configuration recovery.
     3. **ext-SQD**.  Filters the lowest-energy SQD batch by
        ``sqd.ext_sqd_dprime_cutoff`` (square-weight cutoff), augments with
-       all single excitations via PyCI, and submits ONE SBD Slurm job with
-       ``--rdm 1`` to deliver the final energy, CI vector, 1-RDM and 2-RDM.
+       all single excitations via PyCI, and submits ONE SBD Slurm job to
+       deliver the final energy and CI vector -- with ``--rdm 1`` (1-/2-RDM)
+       when ``need_rdm`` is set, or ``--rdm 0`` for the 'ci' assembly route
+       (which reads only the CI amplitudes, so ``dm1 = dm2 = None``).
 
     Each SBD invocation is a separate Slurm sub-job whose resources come
     from the ``sqd.slurm`` block (analogous to ``sbd.slurm`` for SCI_SBD),
@@ -610,6 +801,7 @@ def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
     return sqd_solver.solve_with_sqd(
         cluster, cfg, sqd_workdir,
         cluster_h5_path=cluster_h5_path, frag_idx=frag_idx,
+        need_rdm=need_rdm,
     )
 
 
@@ -651,7 +843,7 @@ def method_label_for_cfg(cfg):
 
 
 def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
-                  cluster_h5_path=None):
+                  cluster_h5_path=None, need_rdm=True):
     """Dispatch to FCI, SCI, SCI_SBD or SQD for one cluster.
 
     ``solver`` selects the cluster solver explicitly; when ``None`` it is
@@ -662,6 +854,12 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
     forwarded to the SQD path so the on-the-fly LUCJ sampler can read
     the Vayesta cluster dump.
 
+    ``need_rdm`` controls whether the cluster 1-/2-RDMs are built at all.
+    The 'ci' assembly route works purely from the CI amplitudes and never
+    reads dm1/dm2, so the driver passes ``need_rdm=False`` there to skip the
+    (norb**4) 2-RDM construction and its disk write.  When ``False`` the
+    solvers return ``dm1 = dm2 = None``.
+
     Returns ``(E, dm1, dm2, civec)`` -- see
     :func:`solve_cluster_fci`/:func:`solve_cluster_sci`/
     :func:`solve_cluster_sci_sbd`/:func:`solve_cluster_sqd` for details.
@@ -670,12 +868,14 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
         solver = choose_solver_for_cluster(cluster.norb, cfg)
     if solver == "FCI":
         return solve_cluster_fci(
-            cluster, conv_tol=float(cfg["calculation"]["fci_conv_tol"]))
+            cluster, conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
+            need_rdm=need_rdm)
     elif solver == "SCI":
         return solve_cluster_sci(
             cluster,
             conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
             select_cutoff=float(cfg["ewf"]["sci_select_cutoff"]),
+            need_rdm=need_rdm,
         )
     elif solver == "SCI_SBD":
         if workdir is None:
@@ -686,6 +886,7 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
             cluster, cfg, sbd_workdir,
             conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
             select_cutoff=float(cfg["ewf"]["sci_select_cutoff"]),
+            need_rdm=need_rdm,
         )
     elif solver == "SQD":
         if workdir is None:
@@ -696,6 +897,7 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
             cluster, cfg, sqd_workdir,
             cluster_h5_path=cluster_h5_path,
             frag_idx=(frag_idx if frag_idx is not None else 0),
+            need_rdm=need_rdm,
         )
     raise ValueError(f"Unsupported cluster solver: {solver!r}")
 
@@ -1024,6 +1226,23 @@ def fragment_paths(workdir, frag_idx):
     return cluster_h5, rdm_h5
 
 
+def _is_valid_h5(path):
+    """True iff ``path`` is a readable HDF5 file with at least one group.
+
+    Cheap sanity check used by the workflow-level restart to decide whether
+    a previous run's ``cluster_<i>.h5`` / ``rdm_<i>.h5`` can be trusted; a
+    truncated write from a killed job (0-byte file or corrupt HDF5 header)
+    is treated as missing and the fragment is resubmitted.
+    """
+    if not os.path.isfile(path):
+        return False
+    try:
+        with h5py.File(path, "r") as h5:
+            return len(list(h5.keys())) > 0
+    except (OSError, RuntimeError):
+        return False
+
+
 def status_file_path(workdir, frag_idx, stage, cfg):
     """Per-fragment / per-stage status file written by the Slurm job itself.
 
@@ -1068,13 +1287,21 @@ def run_dump_worker(frag_idx, cfg):
     workdir = cfg["calculation"]["workdir"]
     os.makedirs(workdir, exist_ok=True)
     cluster_h5, _ = fragment_paths(workdir, frag_idx)
+    restart = bool(cfg["calculation"].get("restart", False))
+    if restart and _is_valid_h5(cluster_h5):
+        print(f"[dump frag={frag_idx}] Restart: {cluster_h5} already present "
+              f"-- skipping DUMP.")
+        return
     if os.path.exists(cluster_h5):
         os.remove(cluster_h5)
 
     threshold = float(cfg["ewf"]["bath_threshold"])
 
     print(f"[dump frag={frag_idx}] Building mol + RHF")
-    mol, mf = build_mol_and_mf(cfg)
+    # write_chk=False: DUMP workers run concurrently and must not touch the
+    # shared hf.chk (parallel PySCF writes would corrupt it).  They reuse the
+    # HF the driver already wrote there this step.
+    mol, mf = build_mol_and_mf(cfg, write_chk=False)
     print(f"[dump frag={frag_idx}] HF energy: {mf.e_tot:.10f}")
 
     print(f"[dump frag={frag_idx}] vayesta.ewf.EWF(solver=DUMP, "
@@ -1111,6 +1338,112 @@ def run_dump_worker(frag_idx, cfg):
     print(f"[dump frag={frag_idx}] Wrote cluster file {cluster_h5}")
 
 
+def cisd_amplitudes_from_sci(civec, norb, nelec):
+    """Extract the closed-shell CISD amplitudes ``(c0, c1, c2)`` *directly*
+    from a selected-CI vector, without densifying it to the full ``(na, nb)``
+    FCI array.
+
+    This is a drop-in, memory-frugal replacement for the
+
+        fcivec_dense = selected_ci.to_fci(civec, norb, nelec)
+        cisdvec      = ci.cisd.from_fcivec(fcivec_dense, norb, nelec)
+        c0, c1, c2   = ci.cisd.cisdvec_to_amplitudes(cisdvec, norb, nocc)
+
+    chain.  ``to_fci`` allocates a dense ``(na, nb)`` matrix (with
+    ``na = nb = C(norb, nocc)``), which for large clusters is astronomically
+    big -- e.g. a 12.9-PiB request for ``na = 40_116_600``.  Yet
+    ``ci.cisd.from_fcivec`` only ever *reads* the reference determinant and
+    the single-/double-excitation determinants relative to the HF reference:
+
+        c0 = ci0[0, 0]
+        c1 = ci0[0, t1addr] * t1sign             (and the symmetric ci0[t1addr, 0])
+        c2 = t1sign_i t1sign_j ci0[t1addr, t1addr]
+
+    where ``t1addr`` are the ``nocc * nvir`` single-excitation addresses.  So
+    the CISD amplitudes depend on at most a ``(1 + nocc*nvir)`` x
+    ``(1 + nocc*nvir)`` block of the FCI array -- tiny and independent of the
+    exponential FCI dimension.
+
+    We reconstruct exactly that block from the sparse SCI vector: every
+    determinant PySCF stores in ``civec`` carries its own alpha/beta bit
+    strings (``civec._strs``); we map those strings to FCI addresses (the same
+    ``str2addr`` mapping ``to_fci`` uses internally), look up which of the
+    needed reference/single addresses are present, and copy their coefficients
+    into the small block.  Determinants absent from the SCI expansion
+    contribute a zero coefficient -- identical to what ``to_fci`` would have
+    written into the dense array.  The result is bit-for-bit the same
+    ``(c0, c1, c2)`` the dense path produced, at ``O(nocc^2 nvir^2)`` memory.
+
+    Parameters
+    ----------
+    civec : pyscf.fci.selected_ci.SCIvector
+        The selected-CI vector returned by the SCI / SCI_SBD / SQD solvers
+        (carries ``._strs = (strs_a, strs_b)``).
+    norb, nelec : int, (int, int)
+        Cluster orbital count and ``(neleca, nelecb)`` (closed shell).
+
+    Returns
+    -------
+    (c0, c1, c2) : float, ndarray(nocc, nvir), ndarray(nocc, nocc, nvir, nvir)
+        Closed-shell CISD amplitudes in PySCF's convention -- exactly what
+        ``ci.cisd.cisdvec_to_amplitudes(ci.cisd.from_fcivec(...))`` returns.
+    """
+    from pyscf.fci import cistring as _cistring
+    from pyscf.ci.cisd import t1strs as _t1strs
+
+    ci_coeff, (neleca, nelecb), ci_strs = _selected_ci._unpack(civec, nelec)
+    if ci_strs is None:
+        raise ValueError(
+            "cisd_amplitudes_from_sci expects a selected-CI vector carrying "
+            "its determinant strings (._strs); got a plain array.  Use the "
+            "dense FCI path for a full-CI vector.")
+    if neleca != nelecb:
+        raise NotImplementedError(
+            "cisd_amplitudes_from_sci is restricted to closed-shell clusters "
+            f"(neleca == nelecb); got nelec={(neleca, nelecb)}.")
+    nocc = neleca
+    nvir = norb - nocc
+
+    strs_a, strs_b = ci_strs
+    ci_coeff = np.asarray(ci_coeff)
+
+    # Map each stored determinant string -> its FCI address (identical mapping
+    # to selected_ci.to_fci's ``str2addr``), then to its row/column index in
+    # the sparse coefficient matrix.
+    addr_a = _cistring.strs2addr(norb, nocc, np.asarray(strs_a))
+    addr_b = _cistring.strs2addr(norb, nocc, np.asarray(strs_b))
+    pos_a = {int(a): i for i, a in enumerate(addr_a)}
+    pos_b = {int(a): i for i, a in enumerate(addr_b)}
+
+    # FCI addresses (and HF-vacuum signs) of the reference + single excitations
+    # -- exactly the rows/cols ci.cisd.from_fcivec touches.
+    t1addr, t1sign = _t1strs(norb, nocc)
+    t1addr = np.asarray(t1addr, dtype=np.int64)
+    t1sign = np.asarray(t1sign)
+    need = np.concatenate([[0], t1addr]).astype(np.int64)   # [ref, singles...]
+
+    idx_a = np.fromiter((pos_a.get(int(a), -1) for a in need),
+                        dtype=np.int64, count=need.size)
+    idx_b = np.fromiter((pos_b.get(int(a), -1) for a in need),
+                        dtype=np.int64, count=need.size)
+
+    # Dense (1 + nocc*nvir) x (1 + nocc*nvir) block; absent dets stay zero.
+    small = np.zeros((need.size, need.size))
+    have_a = np.nonzero(idx_a >= 0)[0]
+    have_b = np.nonzero(idx_b >= 0)[0]
+    if have_a.size and have_b.size:
+        small[np.ix_(have_a, have_b)] = ci_coeff[
+            np.ix_(idx_a[have_a], idx_b[have_b])]
+
+    # Reproduce ci.cisd.from_fcivec on the compacted block: column/row 0 is the
+    # reference, columns/rows 1.. are the singles (in t1addr order).
+    c0 = small[0, 0]
+    c1 = (small[0, 1:] * t1sign).reshape(nocc, nvir)
+    c2 = np.einsum('i,j,ij->ij', t1sign, t1sign, small[1:, 1:])
+    c2 = c2.reshape(nocc, nvir, nocc, nvir).transpose(0, 2, 1, 3)
+    return c0, c1, c2
+
+
 def run_fci_worker(frag_idx, cfg, solver_override=None):
     """Solve stage: read ``cluster_<i>.h5`` produced by the DUMP stage,
     solve the cluster Hamiltonian with FCI or SCI, and write the cluster
@@ -1126,6 +1459,11 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     workdir = cfg["calculation"]["workdir"]
     os.makedirs(workdir, exist_ok=True)
     cluster_h5, rdm_h5 = fragment_paths(workdir, frag_idx)
+    restart = bool(cfg["calculation"].get("restart", False))
+    if restart and _is_valid_h5(rdm_h5):
+        print(f"[solve frag={frag_idx}] Restart: {rdm_h5} already present "
+              f"-- skipping solve.")
+        return
     # The DUMP stage may have written this file from a *different* node; on a
     # clustered filesystem its directory entry can lag, so settle before
     # declaring it missing (see wait_for_files_visible).
@@ -1186,45 +1524,71 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
               f"ext-SQD; iterations={sqd_cfg.get('iterations', '?')}, "
               f"n_batches={sqd_cfg.get('n_batches', '?')}; submits one Slurm "
               f"job per SBD batch and a final ext-SQD job)")
+    # The assembly route decides which per-fragment quantities are actually
+    # consumed downstream, so we resolve it up front: the 'ci' route reads only
+    # the CI amplitudes (c0/c1/c2), every other route reads only the RDMs
+    # (dm1/dm2).  We therefore build exactly one of the two and skip the other's
+    # construction *and* its disk write.
+    assembly = str(cfg["ewf"].get("assembly", "rdm_t")).lower()
+    need_ci_amplitudes = (assembly == "ci")
+    need_rdm = not need_ci_amplitudes
+
     e_cls, dm1x, dm2x, civec = solve_cluster(
         cluster, cfg, solver=solver, workdir=workdir, frag_idx=frag_idx,
-        cluster_h5_path=cluster_h5)
+        cluster_h5_path=cluster_h5, need_rdm=need_rdm)
     print(f"[solve frag={frag_idx}] E_cluster ({solver}) = {e_cls:.10f} Ha")
 
     # ------------------------------------------------------------------
     # Extract CISD (c0, c1, c2) and CCSD (t1, t2) amplitudes for the
     # *CI-coefficient* (TCCSD-style) assembly path described in the
     # README.  We reuse the civec from the single FCI/SCI solve above
-    # (no redundant re-solve).  For SCI, the sparse civec is densified
-    # with pyscf.fci.selected_ci.to_fci so the CISD extraction sees the
-    # full (na x nb) matrix it expects -- identical to the FCI path.
+    # (no redundant re-solve).
+    #
+    # This CISD->CCSD conversion feeds ONLY the 'ci' assembly route (it is the
+    # sole consumer of the c0/c1/c2 datasets written below).  Every other route
+    # -- 'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'democratic' -- derives
+    # its effective amplitudes from the full-vector RDMs (dm1/dm2) instead, so
+    # we skip the extraction entirely unless the 'ci' route was requested.
+    #
+    # FCI returns a dense (na x nb) vector, so we read the CISD amplitudes
+    # straight off it with PySCF's helper.  The SCI / SCI_SBD / SQD solvers
+    # instead return a *sparse* selected-CI vector; densifying it with
+    # ``selected_ci.to_fci`` would allocate the full (na x nb) FCI matrix
+    # (e.g. 11.4 PiB for na = 40_116_600) even though only the reference and
+    # single/double-excitation determinants are needed.  ``cisd_amplitudes_
+    # from_sci`` pulls exactly those coefficients out of the sparse vector,
+    # yielding the identical (c0, c1, c2) at O(nocc^2 nvir^2) memory.
+    # (``assembly`` / ``need_ci_amplitudes`` / ``need_rdm`` were resolved before
+    # the solve so the solver could skip the unused branch.)
     nelec_t = (cluster.nocc, cluster.nocc)
-    if solver == "FCI":
-        fcivec_dense = np.asarray(civec)
+    if need_ci_amplitudes:
+        if solver == "FCI":
+            # FCI -> CISD (closed-shell): mirrors Vayesta's
+            # RFCI_WaveFunction.as_cisd() but using PySCF's helper directly.
+            cisdvec = _ci_cisd.from_fcivec(
+                np.asarray(civec), cluster.norb, nelec_t)
+            c0, c1, c2 = _ci_cisd.cisdvec_to_amplitudes(
+                cisdvec, cluster.norb, cluster.nocc)
+        else:
+            c0, c1, c2 = cisd_amplitudes_from_sci(
+                civec, cluster.norb, nelec_t)
+        # CISD -> CCSD T-amplitudes (Vayesta's RCISD.as_ccsd):
+        #   T1 = C1/C0,  T2 = C2/C0 - T1 (x) T1
+        if abs(c0) < 1.0e-2:
+            print(f"[solve frag={frag_idx}] WARNING: small reference weight "
+                  f"|c0|={abs(c0):.4e} -- the CI->CCSD conversion is "
+                  f"unreliable when |c0| is small (multireference cluster).")
+        t1x = c1 / c0
+        t2x = c2 / c0 - np.einsum("ia,jb->ijab", t1x, t1x)
     else:
-        fcivec_dense = np.asarray(
-            _selected_ci.to_fci(civec, cluster.norb, nelec_t))
-
-    # FCI -> CISD (closed-shell): mirrors Vayesta's
-    # RFCI_WaveFunction.as_cisd() but using PySCF's helper directly.
-    cisdvec = _ci_cisd.from_fcivec(
-        fcivec_dense, cluster.norb, nelec_t)
-    c0, c1, c2 = _ci_cisd.cisdvec_to_amplitudes(
-        cisdvec, cluster.norb, cluster.nocc)
-    # CISD -> CCSD T-amplitudes (Vayesta's RCISD.as_ccsd):
-    #   T1 = C1/C0,  T2 = C2/C0 - T1 (x) T1
-    if abs(c0) < 1.0e-2:
-        print(f"[solve frag={frag_idx}] WARNING: small reference weight "
-              f"|c0|={abs(c0):.4e} -- the CI->CCSD conversion is "
-              f"unreliable when |c0| is small (multireference cluster).")
-    t1x = c1 / c0
-    t2x = c2 / c0 - np.einsum("ia,jb->ijab", t1x, t1x)
+        print(f"[solve frag={frag_idx}] Assembly route {assembly!r} uses the "
+              f"cluster RDMs directly -- skipping the CISD extraction.")
 
     # Save everything the driver needs to assemble global RDMs.  We keep
-    # the cluster RDMs (dm1, dm2) for the legacy "democratic" route and
-    # add the per-fragment t1/t2 (occ x vir / occ^2 x vir^2) plus the
-    # split occupied/virtual cluster MOs needed by the CI-amplitude
-    # ("global wave function") route.
+    # the cluster RDMs (dm1, dm2) plus the split occupied/virtual cluster MOs
+    # for every route.  The CI-amplitude datasets (t1/t2/c0/c1/c2) are written
+    # only when the 'ci' assembly route was requested -- they are its exclusive
+    # inputs; the RDM-derived routes never read them.
     with h5py.File(rdm_h5, "w") as h5:
         h5.attrs["frag_idx"] = frag_idx
         h5.attrs["name"] = cluster.name
@@ -1234,6 +1598,7 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.attrs["e_cluster"] = e_cls
         h5.attrs["bath_threshold"] = threshold
         h5.attrs["solver"] = solver
+        h5.attrs["assembly"] = assembly
         # SCI and SCI_SBD both use PySCF's determinant-selection cutoff.
         if solver in ("SCI", "SCI_SBD"):
             h5.attrs["sci_select_cutoff"] = sci_cutoff
@@ -1241,19 +1606,24 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.create_dataset("c_cluster_occ", data=cluster.c_cluster[:, :cluster.nocc])
         h5.create_dataset("c_cluster_vir", data=cluster.c_cluster[:, cluster.nocc:])
         h5.create_dataset("c_frag",        data=cluster.c_frag)
-        h5.create_dataset("dm1",           data=dm1x)
-        h5.create_dataset("dm2",           data=dm2x)
-        # CI-amplitude assembly inputs:
-        h5.create_dataset("t1", data=t1x)
-        h5.create_dataset("t2", data=t2x)
-        h5.attrs["c0"] = float(c0)
-        # Raw CISD coefficients (before T1⊗T1 disconnected part is removed).
-        # Required by the 'ci' assembly route, which projects and tiles the
-        # intermediate-normalised C1/C2 into a global C1/C2 and only then
-        # performs a single global CISD->CCSD conversion.  Also used by the
-        # 'rdm_t' route as a fallback check.
-        h5.create_dataset("c1", data=c1)
-        h5.create_dataset("c2", data=c2)
+        if need_rdm:
+            # Cluster RDMs -- consumed by every route EXCEPT 'ci'
+            # (democratic / rdm_t / rdm_t_lambda / projected_lambda).  dm2 is
+            # the (norb**4) tensor, so skipping it for 'ci' is the main saving.
+            h5.create_dataset("dm1", data=dm1x)
+            h5.create_dataset("dm2", data=dm2x)
+        if need_ci_amplitudes:
+            # CI-amplitude assembly inputs (consumed only by the 'ci' route,
+            # via assemble_global_rdms_from_civec).
+            h5.create_dataset("t1", data=t1x)
+            h5.create_dataset("t2", data=t2x)
+            h5.attrs["c0"] = float(c0)
+            # Raw CISD coefficients (before the T1⊗T1 disconnected part is
+            # removed): the 'ci' route projects and tiles the intermediate-
+            # normalised C1/C2 into a global C1/C2 and only then performs a
+            # single global CISD->CCSD conversion.
+            h5.create_dataset("c1", data=c1)
+            h5.create_dataset("c2", data=c2)
     print(f"[solve frag={frag_idx}] Wrote RDM file {rdm_h5}")
 
 
@@ -1399,10 +1769,14 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
         with h5py.File(path, "r") as h5:
             if "c1" not in h5:
                 raise RuntimeError(
-                    f"{path} does not contain 'c1'/'c2' datasets.  "
-                    "Re-run the FCI stage with the current "
-                    "EWF-CI_Geom_Opt_HPC.py, or set "
-                    "ewf.assembly: democratic in your config.")
+                    f"{path} does not contain the 'c1'/'c2' datasets the 'ci' "
+                    "assembly route needs.  These are written by the solve "
+                    "stage only when ewf.assembly is 'ci'; this file was "
+                    f"produced under assembly "
+                    f"{str(h5.attrs.get('assembly', 'unknown'))!r}.  Re-run the "
+                    "solve stage with ewf.assembly: ci, or pick an RDM-derived "
+                    "route (rdm_t / rdm_t_lambda / projected_lambda / "
+                    "democratic) that reuses the existing files.")
             c0     = float(h5.attrs["c0"])
             c1     = np.array(h5["c1"])             # (nocc_x, nvir_x)
             c2     = np.array(h5["c2"])             # (nocc_x, nocc_x, nvir_x, nvir_x)
@@ -1750,14 +2124,34 @@ def discover_n_fragments(mf, threshold):
     return len(list(emb.fragments))
 
 
-def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path):
+def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
+                  skip_indices=None):
     """sbatch one job per fragment for ``stage`` and return the list of
-    per-fragment status-file paths (in fragment-index order)."""
+    per-fragment status-file paths (in fragment-index order).
+
+    ``skip_indices`` is an optional iterable of fragment indices whose
+    output is already present on disk (workflow-level restart); those
+    fragments are NOT submitted but their existing status file (written
+    ``DONE`` by a previous run, or synthetically stamped here if the file
+    is missing but the output artefact is present) is still returned in
+    the list, so :func:`wait_for_slurm_jobs` treats them as terminal.
+    """
+    skip_set = set(skip_indices or ())
     status_files = []
     for i in range(nfrag):
+        status_path = status_file_path(workdir, i, stage, cfg)
+        if i in skip_set:
+            # Fragment already complete on disk from an earlier run.  Stamp a
+            # DONE status file so the wait loop skips it and the log stays
+            # consistent with the fresh-submission branch.
+            with open(status_path, "w") as fh:
+                fh.write("DONE\n")
+            print(f"[driver] Restart: reusing {stage} fragment {i:>3d} "
+                  f"(output already on disk)")
+            status_files.append(status_path)
+            continue
         sh = write_slurm_script(
             stage, i, cfg, workdir, config_path, script_path)
-        status_path = status_file_path(workdir, i, stage, cfg)
         # Seed the status file BEFORE sbatch so we never see a missing
         # file during the brief gap between submission and job start-up.
         with open(status_path, "w") as fh:
@@ -1811,31 +2205,68 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     cluster_files = [fragment_paths(workdir, i)[0] for i in range(nfrag)]
     rdm_files = [fragment_paths(workdir, i)[1] for i in range(nfrag)]
     poll = int(cfg["slurm"]["poll_interval"])
+    restart = bool(cfg["calculation"].get("restart", False))
 
     # Wipe stale status files (and any pre-existing per-fragment data
     # files) from a previous run inside the SAME workdir so we never
-    # mistake an old DONE for the current step's result.
-    for i in range(nfrag):
-        for stage in ("dump", "fci"):
-            sp = status_file_path(workdir, i, stage, cfg)
-            if os.path.exists(sp):
-                os.remove(sp)
-        for f in fragment_paths(workdir, i):
-            if os.path.exists(f):
-                os.remove(f)
+    # mistake an old DONE for the current step's result -- UNLESS
+    # workflow-level restart is enabled, in which case we WANT to keep
+    # (and reuse) the on-disk artefacts and only rerun the missing ones.
+    if not restart:
+        for i in range(nfrag):
+            for stage in ("dump", "fci"):
+                sp = status_file_path(workdir, i, stage, cfg)
+                if os.path.exists(sp):
+                    os.remove(sp)
+            for f in fragment_paths(workdir, i):
+                if os.path.exists(f):
+                    os.remove(f)
+    else:
+        # Under restart, valid cluster/rdm dumps let us skip the corresponding
+        # wave for that fragment.  Stale status files that survive from a
+        # crashed run are cleared so the wait loop starts from a clean state
+        # (the actual data-file check below is what determines skippability).
+        for i in range(nfrag):
+            for stage in ("dump", "fci"):
+                sp = status_file_path(workdir, i, stage, cfg)
+                if os.path.exists(sp):
+                    os.remove(sp)
+        dump_done = [i for i in range(nfrag)
+                     if _is_valid_h5(cluster_files[i])]
+        solve_done = [i for i in range(nfrag)
+                      if _is_valid_h5(rdm_files[i])]
+        if dump_done:
+            print(f"[{tag}] Restart: DUMP already complete for "
+                  f"{len(dump_done)}/{nfrag} fragment(s): {dump_done}")
+        if solve_done:
+            print(f"[{tag}] Restart: SOLVE already complete for "
+                  f"{len(solve_done)}/{nfrag} fragment(s): {solve_done}")
 
     if no_slurm:
         print(f"[{tag}] --no-slurm: running DUMP stage inline")
         for i in range(nfrag):
+            if restart and _is_valid_h5(cluster_files[i]):
+                print(f"[dump frag={i}] Restart: reusing existing "
+                      f"{cluster_files[i]}")
+                continue
             run_dump_worker(i, cfg)
         print(f"[{tag}] --no-slurm: running solve stage (FCI/SCI) inline")
         for i in range(nfrag):
+            if restart and _is_valid_h5(rdm_files[i]):
+                print(f"[solve frag={i}] Restart: reusing existing "
+                      f"{rdm_files[i]}")
+                continue
             run_fci_worker(i, cfg)
     else:
         # ---------------- WAVE 1 : DUMP --------------------------------
-        print(f"[{tag}] === Wave 1/2 : submitting {nfrag} DUMP job(s) ===")
+        skip_dump = ([i for i in range(nfrag) if _is_valid_h5(cluster_files[i])]
+                     if restart else [])
+        n_dump_new = nfrag - len(skip_dump)
+        print(f"[{tag}] === Wave 1/2 : submitting {n_dump_new} DUMP job(s)"
+              f"{f' (skipping {len(skip_dump)} already complete)' if skip_dump else ''} ===")
         dump_status_files = _submit_stage(
-            "dump", nfrag, cfg, workdir, config_path, script_path)
+            "dump", nfrag, cfg, workdir, config_path, script_path,
+            skip_indices=skip_dump)
         wait_for_slurm_jobs(dump_status_files, poll_interval=poll)
         missing = wait_for_files_visible(cluster_files, label="cluster dump")
         if missing:
@@ -1845,10 +2276,15 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
                 f"'{stage_workdir(workdir, 'dump')}'): {missing}")
 
         # ---------------- WAVE 2 : FCI ---------------------------------
-        print(f"[{tag}] === Wave 2/2 : submitting {nfrag} solve "
-              f"(FCI/SCI) job(s) ===")
+        skip_solve = ([i for i in range(nfrag) if _is_valid_h5(rdm_files[i])]
+                      if restart else [])
+        n_solve_new = nfrag - len(skip_solve)
+        print(f"[{tag}] === Wave 2/2 : submitting {n_solve_new} solve "
+              f"(FCI/SCI) job(s)"
+              f"{f' (skipping {len(skip_solve)} already complete)' if skip_solve else ''} ===")
         fci_status_files = _submit_stage(
-            "fci", nfrag, cfg, workdir, config_path, script_path)
+            "fci", nfrag, cfg, workdir, config_path, script_path,
+            skip_indices=skip_solve)
         wait_for_slurm_jobs(fci_status_files, poll_interval=poll)
 
     missing = wait_for_files_visible(rdm_files, label="RDM")
@@ -2233,6 +2669,53 @@ class _GeomOptEvaluator:
         cfg_file = os.path.join(step_dir, "config.yaml")
         return step_dir, geom_file, cfg_file
 
+    @staticmethod
+    def _result_json_path(step_dir):
+        """Location of the per-step (E, gradient, coords) cache."""
+        return os.path.join(step_dir, "result.json")
+
+    def _try_load_cached_result(self, step_dir, coords_bohr, tol=1.0e-8):
+        """Return the cached ``(energy, gradient)`` for ``step_dir`` if its
+        ``result.json`` matches ``coords_bohr`` within ``tol`` (Bohr), else
+        ``None``.  Guards against the optimizer having chosen a *different*
+        coordinate for this step index after a restart.
+        """
+        rpath = self._result_json_path(step_dir)
+        if not os.path.isfile(rpath):
+            return None
+        try:
+            with open(rpath, "r") as fh:
+                data = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            return None
+        try:
+            cached = np.asarray(data["coords_bohr"], dtype=float).reshape(-1)
+            energy = float(data["energy"])
+            gradient = np.asarray(data["gradient"], dtype=float).reshape(-1)
+        except (KeyError, TypeError, ValueError):
+            return None
+        if cached.size != coords_bohr.size:
+            return None
+        if not np.allclose(cached, coords_bohr, atol=tol, rtol=0.0):
+            return None
+        return energy, gradient
+
+    def _save_cached_result(self, step_dir, coords_bohr, energy, gradient):
+        """Persist ``(energy, gradient, coords)`` next to the step so a
+        later run with ``calculation.restart: true`` (or ``--restart``) can
+        skip this step entirely."""
+        rpath = self._result_json_path(step_dir)
+        payload = {
+            "coords_bohr": np.asarray(coords_bohr, dtype=float).reshape(-1).tolist(),
+            "energy": float(energy),
+            "gradient": np.asarray(gradient, dtype=float).reshape(-1).tolist(),
+        }
+        # Atomic write: rename over any stale content.
+        tmp = rpath + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, rpath)
+
     def _materialize_step(self, coords_bohr):
         """Write geometry.txt + config.yaml for this step and return the
         per-step config dict + path to its config file."""
@@ -2258,6 +2741,29 @@ class _GeomOptEvaluator:
         """Run one EWF-CI single point at ``coords_bohr`` (flat or (N,3),
         Bohr).  Returns ``(energy_float_Ha, gradient_flat_Ha_per_Bohr)``."""
         coords_bohr = np.asarray(coords_bohr, dtype=float).reshape(-1)
+
+        # --- Restart short-circuit --------------------------------------
+        # If the workflow-level restart flag is on and this step_idx has a
+        # cached ``result.json`` matching the current coordinates within a
+        # tight tolerance, return the cached (E, grad) without running any
+        # DUMP / solve waves.  This lets a killed geom-opt resume from the
+        # exact step it left off without re-doing completed cycles.
+        restart = bool(self.base_cfg.get("calculation", {}).get("restart", False))
+        step_idx = self.cycle
+        step_dir, _, _ = self._step_paths(step_idx)
+        if restart:
+            cached = self._try_load_cached_result(step_dir, coords_bohr)
+            if cached is not None:
+                energy, gradient = cached
+                self.last_energy = energy
+                self.last_gradient = gradient.copy()
+                gnorm = float(np.linalg.norm(gradient))
+                print(f"[geomopt step={step_idx:03d}] Restart: reusing cached "
+                      f"result from {self._result_json_path(step_dir)} "
+                      f"(E={energy:.10f} Ha, |grad|={gnorm:.4e} Eh/Bohr)")
+                self.cycle += 1
+                return energy, gradient
+
         step_idx, step_cfg, step_cfg_path, step_dir = (
             self._materialize_step(coords_bohr))
 
@@ -2282,6 +2788,13 @@ class _GeomOptEvaluator:
         gnorm = float(np.linalg.norm(gradient))
         print(f"[{tag}] E = {e_ewf:.10f} Ha   |grad| = {gnorm:.4e}")
         print("=" * 70 + "\n")
+
+        # Persist so a subsequent restart can skip this step.
+        try:
+            self._save_cached_result(step_dir, coords_bohr,
+                                     float(e_ewf), gradient)
+        except OSError as exc:
+            print(f"[{tag}] warning: failed to cache result.json: {exc}")
 
         self.cycle += 1
         return float(e_ewf), gradient
@@ -2557,6 +3070,18 @@ def parse_args(argv=None):
                         "gradient evaluation at the input geometry and "
                         "skip geometry optimisation, regardless of the "
                         "geomopt.enabled flag in the config.")
+    restart_group = p.add_mutually_exclusive_group()
+    restart_group.add_argument(
+        "--restart", dest="restart", action="store_true", default=None,
+        help="(driver mode) Enable workflow-level restart: scan the workdir "
+             "for existing artefacts (cached step results, per-fragment "
+             "cluster/RDM dumps, completed SCI_SBD / SQD sub-jobs, saved "
+             "count_dict.txt) and resume from wherever the previous run "
+             "left off.  Overrides `calculation.restart` in the config.")
+    restart_group.add_argument(
+        "--no-restart", dest="restart", action="store_false",
+        help="(driver mode) Force a from-scratch run even if the config sets "
+             "`calculation.restart: true`.")
     return p.parse_args(argv)
 
 
@@ -2564,6 +3089,18 @@ def main(argv=None):
     args = parse_args(argv)
     cfg = load_config(args.config)
     script_path = os.path.abspath(__file__)
+
+    # CLI ``--restart`` / ``--no-restart`` override ``calculation.restart`` for
+    # this invocation; propagate the resolved value back into the cfg dict so
+    # every downstream helper (driver, workers, sub-solvers) sees the same flag.
+    if args.restart is not None:
+        cfg["calculation"]["restart"] = bool(args.restart)
+    restart = bool(cfg["calculation"].get("restart", False))
+    if restart:
+        print(f"[driver] Restart mode: ON -- reusing existing artefacts in "
+              f"{cfg['calculation']['workdir']!r} where possible "
+              f"(step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, "
+              f"rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).")
 
     if args.mode in ("dump", "solve"):
         if args.frag_idx is None:

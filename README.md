@@ -12,7 +12,6 @@ The central contribution of this project is a pair of density-assembly routes �
 |---|---|
 | [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, config, test geometry, Slurm script |
 | [`Examples/`](Examples/) | Example outputs for the propylene test case |
-| [`Reference_Geom_Opt/`](Reference_Geom_Opt/) | Reference unfragmented CCSD(T) geometry optimization (Jupyter notebook) — the benchmark the EWF results are compared against |
 | [`Geom_Comparison_Tool/`](Geom_Comparison_Tool/) | RMSD / max-deviation comparison of optimized geometries (Kabsch alignment) |
 
 ### Source files
@@ -20,7 +19,7 @@ The central contribution of this project is a pair of density-assembly routes �
 | File | Role |
 |---|---|
 | `EWF-CI_Geom_Opt_HPC.py` | Main driver: run-mode dispatch, fragment construction, Slurm orchestration, RDM assembly dispatch, optimizer backends (geomeTRIC / PyBerny / Sella) |
-| `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + proper CCSD Λ (Z-vector) relaxed density |
+| `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + CCSD Λ (Z-vector) relaxed density |
 | `isolated_casci_gradient.py` | Analytic gradients: the EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) and the full-system CASCI gradient `build_grad` |
 | `external_sci.py` | `SCI_SBD` solver: PySCF Selected-CI growth with the external SBD eigensolver (CPU or GPU), driven through files and per-cycle Slurm sub-jobs |
 | `sqd_solver.py` | `SQD` solver: sample-based quantum diagonalization — quantum-sampled bitstrings drive an iterative SBD subspace-recovery loop (one Slurm job per parallel batch) followed by a final ext-SQD SBD job with PyCI single-excitation augmentation |
@@ -50,7 +49,7 @@ The chain of geometry (`x`) dependence runs from the AO integrals through the HF
 γ = (γ1, λ2) = 𝒜( {T_x}, {C_x}, {P_x}, C )
 ```
 
-Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster CI/CCSD amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
+Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
 
 ### The density-response term `(∂E/∂γ)·(dγ/dx)`
 
@@ -100,7 +99,7 @@ so the density-response term contributes a real piece of `dE/dx` (here `E_global
 
 Here `Λ_x` is the per-cluster set of Lagrange multipliers (Z-vectors) — one adjoint solve per defining equation (amplitude Λ for the amplitude equations, orbital Z for the bath/HF orbital rotations, projector multipliers for the fragment projectors) — and `H_x` is the effective cluster Hamiltonian on fragment `x` (its explicit `x`-derivative is the only *nuclear* derivative that appears on the right-hand side). The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
 
-**Scope of this project — one line of `dγ/dx` at a time.** In principle the full density-response term (b) requires closing **all four** lines of the `dγ/dx` expansion above — cluster amplitudes (i), bath/cluster orbitals (ii), fragment projectors (iii), and HF orbitals (iv). This project addresses **only line (i)** as an initial effort: `rdm_t_lambda` builds the amplitude response `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density by solving the proper CCSD Λ equations on a global effective wavefunction (`embedding_lagrangian.py` — see its Stage-1 docstring). Lines (ii)–(iv) — the geometry response of the DMET bath, of the occupied-fragment projectors, and of the HF/SCF orbitals — are **not yet closed**; they remain folded into the frozen-density (a) piece under the "frozen-bath" approximation (with the HF CPHF response of the *integrals* included there, but not the response of `γ` itself to the HF-orbital rotations). Closing lines (ii)–(iv) is the natural next stage of the methodology development: it requires adjoint solves for each of the remaining coupling equations (DMET bath overlap, fragment projector, HF stationarity) and is what would eventually let geometry optimization reach tight convergence in the fragmented EWF regime. The current gradient floor observed in propylene (~1e-3 Eh/Bohr) is a direct signature of these three missing response lines.
+**Scope of this project — one line of `dγ/dx` at a time.** In principle the full density-response term (b) requires closing **all four** lines of the `dγ/dx` expansion above — cluster amplitudes (i), bath/cluster orbitals (ii), fragment projectors (iii), and HF orbitals (iv). This project addresses **only line (i)** as an initial effort: `rdm_t_lambda` builds the amplitude response `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density by solving the CCSD Λ equations on a global effective wavefunction (`embedding_lagrangian.py` — see its Stage-1 docstring). Lines (ii)–(iv) — the geometry response of the DMET bath, of the occupied-fragment projectors, and of the HF/SCF orbitals — are **not yet closed**; they remain folded into the frozen-density (a) piece under the "frozen-bath" approximation (with the HF CPHF response of the *integrals* included there, but not the response of `γ` itself to the HF-orbital rotations). Closing lines (ii)–(iv) is the natural next stage of the methodology development: it requires adjoint solves for each of the remaining coupling equations (DMET bath overlap, fragment projector, HF stationarity) and is what would eventually let geometry optimization reach tight convergence in the fragmented EWF regime. The current gradient floor observed in propylene (~1e-3 Eh/Bohr) is a direct signature of these three missing response lines.
 
 ---
 
@@ -113,8 +112,8 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `democratic` | Cluster RDMs, democratically partitioned (4-index split) | mirrors Vayesta `make_rdm{1,2}_demo_rhf` |
 | `ci` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→CCSD conversion → global CCSD RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
 | `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default CCSD 2-RDM route |
-| **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global CCSD RDM | **this project** |
-| **`rdm_t_lambda`** | `rdm_t` amplitudes + proper CCSD **Λ solve** → relaxed global RDMs | **this project** |
+| **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global RDM | **this project** |
+| **`rdm_t_lambda`** | `rdm_t` amplitudes + CCSD **Λ solve** → relaxed global RDMs | **this project** |
 
 ### `ci`: the CI-coefficient assembly (baseline, revised ordering)
 
@@ -122,7 +121,7 @@ Vayesta's global-wavefunction route converts each fragment's FCI/SCI CI vector t
 
 The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→CCSD conversion `T2 = C2 − T1⊗T1` is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Vayesta's per-fragment conversion instead subtracts `Σ_x (P_x·T1)⊗(P_x·T1)`, which misses every cross-fragment product of the exact `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)`; converting once with the global T1 includes them.
 
-Two approximations remain baked in:
+Two approximations remain included:
 
 1. **CISD truncation of the cluster wavefunction.** `as_cisd` reads only the single- and double-excitation rows of the CI vector — triples and higher determinants of the FCI/SCI solution are discarded before the amplitudes are ever formed.
 2. **The `l = t` linearization.** Vayesta sets `l1, l2 = t1, t2` (the TCCSD shortcut) in place of solving the CCSD Λ equations, so the global RDMs carry no amplitude response.
@@ -134,11 +133,11 @@ Two approximations remain baked in:
 ```
 CI-coefficient (ci):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global CCSD RDM
 Vayesta democratic:            cluster RDMs → 4-index democratic projection → global RDM
-rdm_t (this project):          cluster RDMs → effective T1,T2 → global CCSD RDM
-                                └── novel front-end ──┘└── Vayesta back-end ──┘
+rdm_t (this project):          cluster RDMs → effective T1,T2 → global RDM
+                                └── novel front-end ──┘└── Vayesta back-end ─┘
 ```
 
-The defining step — reinterpreting the exact FCI/SCI density-matrix blocks as effective CCSD amplitudes —
+The defining step — reinterpreting the exact FCI/SCI density-matrix blocks as effective amplitudes —
 
 ```python
 T1_eff = dm1_corr[occ, vir]
@@ -149,7 +148,7 @@ is the new feature introduced in this project; it was not previously available i
 
 ### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 
-`embedding_lagrangian.py` upgrades the second baked-in approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the proper CCSD Λ equations** for it:
+`embedding_lagrangian.py` upgrades the second baked-in approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the CCSD Λ equations** for it:
 
 | Function | Role |
 |---|---|
@@ -323,17 +322,57 @@ python EWF-CI_Geom_Opt_HPC.py --config <cfg> --mode solve --frag-idx <i> [--solv
 
 `--mode solve` names the cluster-solve *stage*, not a solver — whether FCI, SCI, SCI_SBD, or SQD runs is decided per fragment. In multi-solver mode the driver resolves each fragment's solver when it writes the wave-2 batch script (the cluster file already exists at that point) and records the assignment in the script itself, both as a comment (`# multi-solver assignment for fragment 0: cluster norb=17 >= norb_threshold=13 -> SCI`) and as an explicit `--solver` argument, which the worker cross-checks against its own size-based choice.
 
+### Restarting an interrupted run
+
+Long geometry optimizations do not always finish in a single Slurm allocation: the wall-clock limit expires, a fragment hits an OOM that only needs a bigger `slurm.*.mem`, the sampling backend returns an error mid-loop, or the queue drops the job. Rather than starting over, the driver can **resume the workflow from wherever the previous run left off**, uniformly across every solver (FCI / SCI / SCI_SBD / SQD) — nothing solver-specific to configure, one flag for the whole run:
+
+```yaml
+calculation:
+  restart: true      # true | false  (default false)
+```
+
+or equivalently on the command line (overrides the config for this invocation):
+
+```bash
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --restart      # turn ON
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --no-restart   # force from-scratch
+```
+
+The driver announces the mode on startup (`[driver] Restart mode: ON -- reusing existing artefacts in 'jobs_EWF' where possible ...`) and then walks the existing workdir bottom-up. The rule is the same at every layer: **stale `.status` files are cleared, completed data files are kept and reused**. Concretely, each of the following short-circuits when its artefact is already present on disk:
+
+| Layer | Artefact | Effect on restart |
+|---|---|---|
+| **Optimizer step** | `step_<NNN>/result.json` (cached `{coords_bohr, energy, gradient}`) | Whole step skipped: cached `(E, ∇E)` returned to the optimizer, no DUMP/SOLVE waves submitted. Coords must match within `1e-8` Bohr (guards against the optimizer choosing a different geometry at the same step index). |
+| **RHF single point** | `step_<NNN>/hf.chk` (PySCF chkfile: mol + `mo_coeff`, `mo_energy`, `mo_occ`, `e_tot`) | The step's converged RHF is reused instead of a fresh `mf.kernel()` — one full SCF saved per step and per DUMP worker of that step. A geometry / basis / charge / spin / symmetry mismatch (checked against the mol stored inside the chkfile, coords to `1e-10` Bohr) forces a fresh SCF; the chkfile is then overwritten. |
+| **DUMP wave** (all solvers) | `step_<NNN>/cluster_<i>.h5` (valid HDF5, ≥ 1 group) | That fragment's DUMP job is not submitted; a `DONE` status file is stamped and the worker pool skips it. |
+| **SOLVE wave** (all solvers) | `step_<NNN>/rdm_<i>.h5` (valid HDF5, ≥ 1 group) | That fragment's SOLVE job is not submitted; the RDMs are consumed from the existing file. |
+| **SCI_SBD sub-jobs** | `step_<NNN>/rdm_<i>.h5` | Coarse-grained by design: `SCI_SBD` writes `rdm_<i>.h5` only after its full determinant-growth converges, so a completed fragment resumes at the assembly stage; a partially-grown fragment (no `rdm_<i>.h5`) is redone from scratch. Any orphaned `sci_sbd_scratch_<i>/iter_*/` from the previous attempt are reused in place: PySCF drives fresh SCI growth cycles from `iter_001` onward and the SBD binary overwrites each cycle's files (`sbd_job.status`, `matrixformwf.txt`, etc.) as it goes. |
+| **SQD count sampling** | `step_<NNN>/sqd_scratch_<i>/count_dict.txt` | Reused unconditionally — no Qiskit resampling and no re-copy from `sqd.count_dict_path` / `sqd.per_fragment_samples` / `sqd.sample_on_the_fly`. Cheap way to reuse an expensive quantum-sampling job across restarts. |
+| **SQD iteration loop** | `sqd_scratch_<i>/iter_<C>/batch_<b>/{sbd_job.status == DONE, matrixformwf.txt}` for every batch `b` | Consecutive fully-DONE iterations at the head of the sequence are re-parsed to reconstruct `current_energy`, `current_occupancies`, `best_outputs`, and the batch carry-over; the first partial iteration directory (if any) is deleted, and the loop resumes at that iteration. |
+| **SQD ext-SQD finalization** | `sqd_scratch_<i>/ext_sqd_iter/{sbd_job.status == DONE, matrixformwf.txt, 1pRDM.txt, 2pRDM.txt}` | The final SBD job is not resubmitted; the RDMs are read from the existing files. |
+
+Two behavioural details worth calling out:
+
+- **SQD RNG state is not restored across a restart.** The batch sub-sampling uses a per-cluster seed, but the RNG advances one draw per iteration inside a single run, and no attempt is made to replay those draws after a resume. Iterations that were already complete are re-parsed from disk (bit-for-bit identical), so nothing that was already accepted is disturbed; the *new* iterations following a mid-loop restart draw from a fresh RNG state and therefore produce a slightly different — but equally valid — batch sequence than a from-scratch run of the same config would produce at that iteration. The convergence criteria (`sqd.energy_tol`, `sqd.occupancies_tol`) are unchanged.
+- **A `--restart` on a clean workdir is a no-op.** Nothing is present to reuse, everything runs as usual; the flag is safe to leave on in the submission script.
+
+Typical use cases:
+
+1. **Slurm wall-clock timeout mid-optimization** — resubmit the same submission script with `--restart`; every finished `step_<NNN>` is reused via its `result.json`, and the run picks up at the first incomplete step.
+2. **OOM on one fragment** — raise the matching `slurm.<SOLVER>.mem` (or `sbd.slurm.sbatch.mem` / `sqd.slurm.sbatch.mem` for a sub-job) and resubmit with `--restart`; only the fragment(s) missing `rdm_<i>.h5` are re-solved.
+3. **Sampling-cost reuse (SQD)** — once `sqd_scratch_<i>/count_dict.txt` exists for a step, subsequent `--restart` runs neither hit the IBM backend nor re-copy from `sqd.count_dict_path`, even if the config is edited to point somewhere else.
+4. **Adding steps to a converged optimization** — raise `geomopt.<optimizer>.maxiter`/`maxsteps` and resubmit with `--restart`; the optimizer replays the cached trajectory from `step_<NNN>/result.json` and continues past the previous stopping point.
+
 ---
 
 ## Examples, reference, and geometry comparison
 
 - **[`Examples/`](Examples/)** — example outputs for the propylene test case (driver logs, per-step energies/gradients, optimized geometries).
-- **[`Reference_Geom_Opt/`](Reference_Geom_Opt/)** — reference **unfragmented CCSD(T) geometry optimization** of propylene (`geom-opt.ipynb`), run with the same basis and starting structure as the EWF calculations. Because no fragmentation or embedding is involved, the geometry optimized here serves as the benchmark for the EWF simulations: it is the `propylene_ccsd_t.txt` reference used in the comparison below.
-- **[`Geom_Comparison_Tool/`](Geom_Comparison_Tool/)** — compares optimized geometries against a reference structure: Kabsch (SVD) alignment removes rigid-body translation/rotation, then RMSD, maximum atomic deviation, and per-atom deviation tables are reported, with a ranked summary and an optional bar chart. Includes propylene geometries optimized with `rdm_t` and `rdm_t_lambda` alongside the CCSD(T) reference from `Reference_Geom_Opt/`:
+- **[`Geom_Comparison_Tool/`](Geom_Comparison_Tool/)** — compares optimized geometries against a reference structure: Kabsch (SVD) alignment removes rigid-body translation/rotation, then RMSD, maximum atomic deviation, and per-atom deviation tables are reported, with a ranked summary and an optional bar chart. Includes propylene geometry optimized with `rdm_t_lambda` alongside the SCI-SBD unfragmented reference.
 
   ```bash
   cd Geom_Comparison_Tool
-  python geom_compare.py propylene_ccsd_t.txt propylene_rdm_t.txt propylene_rdm_t_lambda.txt
+  python geom_compare.py propylene_unfragmented.txt propylene_rdm_t.txt propylene_rdm_t_lambda.txt
   ```
 
   See [`Geom_Comparison_Tool/README.md`](Geom_Comparison_Tool/README.md) for formats and the notebook workflow.

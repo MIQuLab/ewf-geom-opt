@@ -82,13 +82,21 @@ def _resolve_count_dict_for_fragment(sqd_cfg: dict, frag_idx: int) -> Optional[s
 
 def provision_quantum_sample(cluster_h5_path: str, workdir: str,
                              sqd_cfg: dict, frag_idx: int = 0,
-                             verbose=None) -> str:
+                             verbose=None, restart: bool = False) -> str:
     """Ensure ``workdir/count_dict.txt`` exists for this cluster.
 
     Either copies a pre-collected sample (when ``sqd.count_dict_path`` /
     ``sqd.per_fragment_samples`` is configured) or runs the on-the-fly
     Qiskit sampler.  Always writes ``fci_dump.txt`` from the cluster
     integrals.  Returns the absolute path to the count_dict.txt file.
+
+    When ``restart`` is true and ``workdir/count_dict.txt`` already
+    exists on disk, it is reused as-is (no config-driven copy, no fresh
+    Qiskit sampling).  This is the workflow-level restart hook: after a
+    killed run, the previous step's sampled counts are picked up
+    automatically so we do not spend another IBM Runtime job on the same
+    geometry.  A configured pre-collected path is only re-copied when
+    the file is missing; otherwise the on-disk copy wins.
     """
     os.makedirs(workdir, exist_ok=True)
     fcidump_path = os.path.abspath(os.path.join(workdir, "fci_dump.txt"))
@@ -98,6 +106,16 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
     if verbose:
         verbose.info("  SQD: wrote FCIDUMP %s (norb=%d, nocc=%d)",
                      fcidump_path, norb, nocc)
+
+    # Workflow-level restart: an on-disk count_dict.txt in the step's own
+    # scratch directory is *this geometry's* sample from a previous run.
+    # Reuse it unconditionally -- both live Qiskit and pre-collected paths
+    # would otherwise overwrite it with a fresh sample.
+    if restart and os.path.isfile(count_path):
+        if verbose:
+            verbose.info("  SQD: restart -- reusing existing %s "
+                         "(skipping resampling)", count_path)
+        return count_path
 
     src = _resolve_count_dict_for_fragment(sqd_cfg, frag_idx)
     if src:

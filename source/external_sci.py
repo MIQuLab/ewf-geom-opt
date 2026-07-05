@@ -56,6 +56,7 @@ Real SBD run on HPC::
     e, civec = myci.kernel(h1e, eri, norb, nelec, ecore=ecore)
 '''
 
+import glob
 import os
 import shlex
 import subprocess
@@ -210,8 +211,19 @@ def _mpi_env_arg(proc_type, name, value):
     return f"-x {name}={value}"   # OpenMPI (CPU)
 
 
-def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
+def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path, rdm=0,
+                       savename=None, loadname=None):
     '''Assemble the SBD ``mpirun`` command, mirroring ``solver.py``.
+
+    ``savename`` / ``loadname`` wire up SBD's binary wavefunction restart
+    (``--savename`` writes the converged vector; ``--loadname`` seeds the
+    Davidson start with a previously saved vector instead of the HF guess).
+    Used to warm-start the final ``--rdm 1`` job from the converged SCI
+    wavefunction so it skips straight to RDM construction.  ``LoadWavefunction``
+    maps the saved vector onto the current determinant space *by matching
+    bitstrings* (unmatched determinants are zero-filled and the result is
+    renormalized), so the loaded state only sets the initial guess -- the final
+    eigenvector, energy and RDMs are still whatever Davidson converges to.
 
     The ``-np`` rank count and ``OMP_NUM_THREADS`` come from
     :func:`sbd_parallel_layout` -- the SAME source the Slurm ``--ntasks`` /
@@ -223,8 +235,11 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
 
     Two differences vs. ``solver.py`` are deliberate and important for SCI:
 
-    * ``--rdm 0`` -- RDMs are not needed inside the SCI loop (PySCF builds them
-      from the returned CI vector when required).
+    * ``--rdm`` defaults to ``0`` -- RDMs are not needed *inside* the SCI growth
+      loop (the subspace is still changing).  After convergence the caller may
+      request ``rdm=1`` for a single final diagonalization so SBD emits the
+      1-/2-RDMs directly (see :meth:`ExternalEigSelectedCI.make_rdm12_sbd`),
+      instead of rebuilding the 2-RDM single-threaded with PySCF.
     * carryover is left **disabled** (``--carryover_type`` is never passed, so it
       defaults to 0).  SBD must diagonalize in *exactly* the space PySCF selected
       and must not grow it on its own -- PySCF's ``enlarge_space`` owns subspace
@@ -255,7 +270,12 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path):
         f"--init {cfg['sbd_init']} --shuffle {cfg['sbd_shuffle']} "
         f"--carryover_ratio {cfg['sbd_carryover_ratio']}"
     )
-    return base + " --rdm 0 --dump_matrix_form_wf matrixformwf.txt"
+    base += f" --rdm {int(rdm)} --dump_matrix_form_wf matrixformwf.txt"
+    if savename:
+        base += f" --savename {savename}"
+    if loadname:
+        base += f" --loadname {loadname}"
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +547,81 @@ def _matrixform_to_dense(workdir, strsa, strsb):
     return C
 
 
+# Basename (under sbd_workdir) of the binary wavefunction SBD saves each SCI
+# cycle via --savename and reloads for the final --rdm 1 job via --loadname.
+# SBD appends a 6-digit per-rank tag, so the rank-0 file is
+# ``<sbd_workdir>/<_SCI_WF_BASENAME>000000``.
+_SCI_WF_BASENAME = 'sci_converged_wf'
+
+
+def _warm_start_enabled(cfg):
+    '''True when the final SBD-direct RDM job should warm-start from the SCI
+    wavefunction.  Only meaningful with ``rdm_from_sbd`` (otherwise no SBD RDM
+    job runs); both default on because they are strictly beneficial and safe
+    (loadname only sets the Davidson initial guess).'''
+    return (bool(cfg.get('rdm_from_sbd', True))
+            and bool(cfg.get('rdm_warm_start', True)))
+
+
+def _submit_sbd_and_wait(workdir, cmd, cfg, verbose=None, label='SBD'):
+    '''Submit one SBD ``mpirun`` job (``cmd``) as a Slurm job in ``workdir`` and
+    block until it reports DONE, with the mpirun-missing bad-node auto-retry.
+
+    Factored out of :func:`sbd_eigensolver` so the per-cycle SCI diagonalizations
+    and the final ``--rdm 1`` RDM job (:meth:`ExternalEigSelectedCI.make_rdm12_sbd`)
+    share identical submission / status-file / bad-node-exclusion handling.
+    Returns the ``sbd_solver_logfile.log`` path on success; raises on failure.
+    '''
+    log_path = os.path.join(workdir, 'sbd_solver_logfile.log')
+    status_path = os.path.join(workdir, 'sbd_job.status')
+    node_marker = os.path.join(workdir, 'mpirun_missing.node')
+    sl = cfg.get('slurm', {}) or {}
+    poll = int(sl.get('poll_interval', 15))
+    max_node_retries = int(sl.get('max_node_retries', 5))
+
+    excluded = []
+    while True:
+        if os.path.exists(node_marker):     # clear stale marker from a prior try
+            os.remove(node_marker)
+        sh_path = _write_sbd_slurm_script(
+            workdir, cmd, log_path, status_path, cfg, extra_exclude=excluded)
+        with open(status_path, 'w') as fh:
+            fh.write('SUBMITTED\n')
+        jid = _submit_slurm_job(sh_path)
+        if verbose:
+            verbose.info('  %s: submitted Slurm job %s%s, waiting ...', label, jid,
+                         (' [excluding %s]' % ','.join(excluded)) if excluded else '')
+        status = _wait_for_slurm_job(status_path, poll_interval=poll,
+                                     log_path=log_path)
+        if status.startswith('DONE'):
+            return log_path
+
+        # FAILED: was it the mpirun-missing (bad node) case?  Resubmit elsewhere.
+        bad_node = ''
+        if os.path.exists(node_marker):
+            try:
+                bad_node = open(node_marker).read().strip()
+            except OSError:
+                bad_node = ''
+        if bad_node and len(excluded) < max_node_retries:
+            if bad_node not in excluded:
+                excluded.append(bad_node)
+            if verbose:
+                verbose.info('  %s: mpirun unavailable on node %s; '
+                             'resubmitting (retry %d/%d), excluding %s',
+                             label, bad_node, len(excluded),
+                             max_node_retries, ','.join(excluded))
+            continue
+
+        # Different failure, or out of bad-node retries -> give up.
+        extra = (' after %d bad-node retr%s (excluded %s)'
+                 % (len(excluded), 'y' if len(excluded) == 1 else 'ies',
+                    ','.join(excluded))) if excluded else ''
+        raise RuntimeError(
+            "SBD Slurm job failed (%s)%s; inspect %s and the slurm.out/slurm.err "
+            "next to it." % (status, extra, log_path))
+
+
 def sbd_eigensolver(op, x0, precond, nroots=1, ndim=None, myci=None,
                     verbose=None, **kwargs):
     '''Diagonalize the current selected subspace with the external SBD binary.
@@ -560,66 +655,26 @@ def sbd_eigensolver(op, x0, precond, nroots=1, ndim=None, myci=None,
     sbd_wrapper.write_into_dets(workdir, sbd_wrapper.gen_dets(strsa, norb), 'Alpha')
     sbd_wrapper.write_into_dets(workdir, sbd_wrapper.gen_dets(strsb, norb), 'Beta')
 
+    # When the final RDM will be built by SBD with a warm start, persist this
+    # cycle's converged wavefunction to a STABLE absolute path (overwritten each
+    # cycle, so after convergence it holds the last cycle's vector).  The path
+    # must be absolute because the SBD job runs with cwd = this iter dir.
+    savename = None
+    if _warm_start_enabled(cfg):
+        savename = os.path.join(myci.sbd_workdir, _SCI_WF_BASENAME)
+
     cmd = _build_sbd_command(
         cfg, myci._sbd_fcidump,
         os.path.join(workdir, 'AlphaDets.txt'),
-        os.path.join(workdir, 'BetaDets.txt'))
+        os.path.join(workdir, 'BetaDets.txt'), rdm=0, savename=savename)
 
     # Submit this SBD diagonalization as its own Slurm job (resources from the
-    # config.yaml 'slurm' block) and block until it finishes.  If the job lands
-    # on a node whose environment cannot run mpirun (the in-job guard writes
-    # 'mpirun_missing.node'), automatically resubmit on another node -- adding
-    # the bad node to --exclude -- up to slurm.max_node_retries times.
-    log_path = os.path.join(workdir, 'sbd_solver_logfile.log')
-    status_path = os.path.join(workdir, 'sbd_job.status')
-    node_marker = os.path.join(workdir, 'mpirun_missing.node')
-    sl = cfg.get('slurm', {}) or {}
-    poll = int(sl.get('poll_interval', 15))
-    max_node_retries = int(sl.get('max_node_retries', 5))
-
-    excluded = []
+    # config.yaml 'slurm' block) and block until it finishes, with the
+    # mpirun-missing bad-node auto-retry (see _submit_sbd_and_wait).
     t0 = time.time()
-    while True:
-        if os.path.exists(node_marker):     # clear stale marker from a prior try
-            os.remove(node_marker)
-        sh_path = _write_sbd_slurm_script(
-            workdir, cmd, log_path, status_path, cfg, extra_exclude=excluded)
-        with open(status_path, 'w') as fh:
-            fh.write('SUBMITTED\n')
-        jid = _submit_slurm_job(sh_path)
-        if verbose:
-            verbose.info('  SBD cycle %d: submitted Slurm job %s (dim %d x %d)%s,'
-                         ' waiting ...', myci._sbd_iter, jid, na, nb,
-                         (' [excluding %s]' % ','.join(excluded)) if excluded else '')
-        status = _wait_for_slurm_job(status_path, poll_interval=poll,
-                                     log_path=log_path)
-        if status.startswith('DONE'):
-            break
-
-        # FAILED: was it the mpirun-missing (bad node) case?  Resubmit elsewhere.
-        bad_node = ''
-        if os.path.exists(node_marker):
-            try:
-                bad_node = open(node_marker).read().strip()
-            except OSError:
-                bad_node = ''
-        if bad_node and len(excluded) < max_node_retries:
-            if bad_node not in excluded:
-                excluded.append(bad_node)
-            if verbose:
-                verbose.info('  SBD cycle %d: mpirun unavailable on node %s; '
-                             'resubmitting (retry %d/%d), excluding %s',
-                             myci._sbd_iter, bad_node, len(excluded),
-                             max_node_retries, ','.join(excluded))
-            continue
-
-        # Different failure, or out of bad-node retries -> give up.
-        extra = (' after %d bad-node retr%s (excluded %s)'
-                 % (len(excluded), 'y' if len(excluded) == 1 else 'ies',
-                    ','.join(excluded))) if excluded else ''
-        raise RuntimeError(
-            "SBD Slurm job failed (%s)%s; inspect %s and the slurm.out/slurm.err "
-            "next to it." % (status, extra, log_path))
+    log_path = _submit_sbd_and_wait(
+        workdir, cmd, cfg, verbose=verbose,
+        label='SBD cycle %d (dim %d x %d)' % (myci._sbd_iter, na, nb))
     wall = time.time() - t0
 
     e_tot = sbd_wrapper.extract_energy(log_path)
@@ -714,12 +769,93 @@ class ExternalEigSelectedCI(selected_ci.SelectedCI):
         self._sbd_ecore = ecore
         self._sbd_iter = 0
         os.makedirs(self.sbd_workdir, exist_ok=True)
+        # Drop any warm-start wavefunction left by a previous run/geometry step:
+        # its determinant space (and even norb) may differ, and make_rdm12_sbd
+        # must only ever load a save produced by THIS run's SCI loop.  The loop
+        # re-creates these files from scratch each cycle.
+        if _warm_start_enabled(self.sbd_config):
+            for f in glob.glob(
+                    os.path.join(self.sbd_workdir, _SCI_WF_BASENAME + '*')):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
         self._sbd_fcidump = os.path.join(self.sbd_workdir, 'fci_dump.txt')
         # FCIDUMP carries the core energy; SBD then reports E_elec + ecore and we
         # subtract ecore back out in sbd_eigensolver.
         tools.fcidump.from_integrals(
             self._sbd_fcidump, h1e, ao2mo.restore(8, numpy.asarray(eri), norb),
             norb, nelec_t, nuc=ecore, ms=abs(nelec_t[0] - nelec_t[1]))
+
+    # ----- SBD-direct RDMs (skip PySCF's single-node make_rdm2) -----------
+    def make_rdm12_sbd(self, civec, norb, nelec):
+        '''Build the spin-summed 1- and 2-RDM for the converged selected space
+        by running ONE additional SBD job with ``--rdm 1``, instead of PySCF's
+        single-threaded ``selected_ci.make_rdm2``.
+
+        The 2-RDM build in ``selected_ci`` runs on the driver node only and
+        materializes the ``norb**4`` tensor plus link tables there; for the
+        large clusters ``SCI_SBD`` targets that becomes a CPU/memory bottleneck.
+        SBD is the distributed MPI eigensolver already provisioned for this
+        cluster, so we let it emit the RDMs directly.
+
+        Reuses the FCIDUMP written in :meth:`_sbd_setup` and the determinant
+        space carried by the converged ``civec`` (``civec._strs``).  The SBD
+        RDM files are parsed by ``sbd_wrapper.get_rdm1_and_rdm2`` -- the *same*
+        parser (and hence the same spin-summed, chemist-notation PySCF
+        convention) the SQD solver already uses in production -- so the returned
+        ``(dm1, dm2)`` match ``selected_ci.make_rdm12`` up to the eigensolver's
+        determinant-selection noise.
+
+        Returns
+        -------
+        (dm1, dm2) : ndarray(norb, norb), ndarray(norb, norb, norb, norb)
+        '''
+        if self.sbd_config is None or not getattr(self, '_sbd_fcidump', None):
+            raise RuntimeError(
+                "make_rdm12_sbd needs a configured SBD run; call kernel() first.")
+        ci_strs = getattr(civec, '_strs', None)
+        if ci_strs is None:
+            raise ValueError(
+                "make_rdm12_sbd needs a selected-CI vector carrying ._strs "
+                "(the converged determinant space).")
+        strsa = numpy.asarray(ci_strs[0])
+        strsb = numpy.asarray(ci_strs[1])
+
+        workdir = os.path.join(self.sbd_workdir, 'rdm')
+        os.makedirs(workdir, exist_ok=True)
+        # Diagonalize in EXACTLY the converged space (carryover stays disabled
+        # in _build_sbd_command), so the RDM is for the same wavefunction PySCF
+        # would have built from civec.
+        sbd_wrapper.write_into_dets(
+            workdir, sbd_wrapper.gen_dets(strsa, norb), 'Alpha')
+        sbd_wrapper.write_into_dets(
+            workdir, sbd_wrapper.gen_dets(strsb, norb), 'Beta')
+
+        # Warm start: seed Davidson with the converged SCI wavefunction the loop
+        # saved via --savename, so the residual is already below tolerance and
+        # SBD proceeds almost immediately to RDM construction (davidson.h breaks
+        # on norm_R < eps).  LoadWavefunction matches by bitstring and only sets
+        # the initial guess, so the converged RDM is unchanged -- just reached
+        # without repeating the Davidson iterations.  Guard on the rank-0 save
+        # file actually being present (SBD appends a 6-digit per-rank tag).
+        loadname = None
+        if _warm_start_enabled(self.sbd_config):
+            prefix = os.path.join(self.sbd_workdir, _SCI_WF_BASENAME)
+            if os.path.exists(prefix + '000000'):
+                loadname = prefix
+
+        cmd = _build_sbd_command(
+            self.sbd_config, self._sbd_fcidump,
+            os.path.join(workdir, 'AlphaDets.txt'),
+            os.path.join(workdir, 'BetaDets.txt'), rdm=1, loadname=loadname)
+        _submit_sbd_and_wait(
+            workdir, cmd, self.sbd_config,
+            label='SBD RDM%s (dim %d x %d)'
+                  % (' [warm start]' if loadname else '', len(strsa), len(strsb)))
+
+        dm1, dm2 = sbd_wrapper.get_rdm1_and_rdm2(workdir)
+        return numpy.asarray(dm1), numpy.asarray(dm2)
 
     # ----- the diagonalization seam --------------------------------------
     def eig(self, op, x0=None, precond=None, **kwargs):
