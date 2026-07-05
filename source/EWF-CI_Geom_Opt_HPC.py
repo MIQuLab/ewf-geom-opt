@@ -453,13 +453,18 @@ def _mol_matches(mol_a, mol_b, atol=1.0e-10):
     return True
 
 
-def _try_load_hf(mol, chkfile):
+def _try_load_hf(mol, chkfile, attach_chkfile=True):
     """If ``chkfile`` contains a converged RHF result for a mol matching
     ``mol``, return a populated ``scf.RHF(mol)`` object with
     ``mo_coeff / mo_energy / mo_occ / e_tot`` restored and
     ``converged=True``.  Returns ``None`` on any of: missing file,
     unreadable / truncated chkfile, mol mismatch, or missing SCF keys --
     in which case the caller falls back to a fresh ``mf.kernel()``.
+
+    ``attach_chkfile`` controls whether the returned ``mf`` keeps pointing
+    at ``chkfile`` for downstream writes.  The driver wants this (it owns
+    the file); concurrent DUMP workers must NOT, or a later write would
+    race against the shared file.
     """
     if not os.path.isfile(chkfile):
         return None
@@ -478,7 +483,8 @@ def _try_load_hf(mol, chkfile):
     except (KeyError, TypeError, ValueError):
         return None
     mf = scf.RHF(mol)
-    mf.chkfile = chkfile   # keep pointing at the same file for downstream writes
+    if attach_chkfile:
+        mf.chkfile = chkfile   # keep pointing at the same file for downstream writes
     mf.mo_coeff = mo_coeff
     mf.mo_energy = mo_energy
     mf.mo_occ = mo_occ
@@ -487,21 +493,34 @@ def _try_load_hf(mol, chkfile):
     return mf
 
 
-def build_mol_and_mf(cfg):
+def build_mol_and_mf(cfg, write_chk=True):
     """Build the molecule and run RHF.  Same recipe in driver and worker so
     that mo_coeff / cluster orbitals are reproducible across processes.
+
+    Concurrency: the shared chkfile has exactly one writer
+    ------------------------------------------------------
+    ``<workdir>/hf.chk`` is shared by the driver and every DUMP worker of a
+    step.  Only the driver (``write_chk=True``, the default) may attach it
+    to ``mf`` before ``kernel()``.  DUMP workers run as many concurrent
+    processes and MUST pass ``write_chk=False``: if several workers
+    attached the same chkfile and called ``mf.kernel()`` at once, their
+    overlapping HDF5 writes corrupt the file and PySCF aborts with
+    ``KeyError: "Couldn't delete link (link count would be negative)"``.
 
     Workflow-level restart integration
     ----------------------------------
     When ``calculation.restart`` is on (or the driver was invoked with
     ``--restart``) and ``<workdir>/hf.chk`` contains a converged RHF
     result for a matching mol (same atoms, coords within 1e-10 Bohr,
-    same basis / charge / spin / symmetry), the routine reuses that
+    same basis / charge / spin / symmetry), the driver reuses that
     cached HF instead of calling ``mf.kernel()`` -- saving one full SCF
-    per step and per DUMP worker.  On any mismatch (or when restart is
-    off) a fresh RHF is run and the chkfile is written for future
-    restarts: ``mf.chkfile`` is attached before ``kernel()``, so PySCF
-    persists ``mo_coeff / mo_energy / mo_occ / e_tot`` automatically.
+    per step.  DUMP workers (``write_chk=False``) reuse the driver's
+    just-written ``hf.chk`` *regardless* of the restart flag -- the driver
+    always builds its ``mf`` before submitting the DUMP wave, so the file
+    is present -- which saves one full SCF per worker.  On any mismatch
+    (or when the driver runs with restart off) a fresh RHF is run; the
+    driver persists it to the chkfile for future restarts, while workers
+    run SCF locally without touching the shared file.
     """
     calc = cfg["calculation"]
     geo = read_geometry(calc["geometry_file"])
@@ -516,25 +535,32 @@ def build_mol_and_mf(cfg):
     )
     chkfile = _hf_chkfile_path(cfg)
     restart = bool(calc.get("restart", False))
-    if restart:
-        cached = _try_load_hf(mol, chkfile)
+    # The driver reuses the cached HF only under restart; workers always
+    # try to reuse the driver's just-written hf.chk (see docstring).  In
+    # both cases workers keep their hands off the shared file.
+    if restart or not write_chk:
+        cached = _try_load_hf(mol, chkfile, attach_chkfile=write_chk)
         if cached is not None:
-            print(f"[HF] Restart: reused converged RHF from {chkfile} "
+            reason = "Restart" if restart else "worker"
+            print(f"[HF] {reason}: reused converged RHF from {chkfile} "
                   f"(E_HF={cached.e_tot:.10f} Ha)")
             return mol, cached
 
     mf = scf.RHF(mol)
     # Attach chkfile so PySCF writes mol + MO coeffs + e_tot at the end
-    # of ``kernel()`` (and periodically during large SCFs).  Making the
-    # workdir first so a killed driver does not leave PySCF with an
-    # unwritable path -- but any write failure is non-fatal, we just
-    # forfeit the chkfile speedup on the next restart.
-    try:
-        os.makedirs(os.path.dirname(chkfile), exist_ok=True)
-        mf.chkfile = chkfile
-    except OSError as exc:  # pragma: no cover -- filesystem-specific
-        print(f"[HF] warning: cannot attach chkfile {chkfile}: {exc}; "
-              f"HF result will not be cached this step.")
+    # of ``kernel()`` (and periodically during large SCFs).  ONLY the
+    # driver does this: concurrent DUMP workers (write_chk=False) never
+    # attach the shared chkfile, otherwise their parallel kernel() writes
+    # collide and corrupt it.  Making the workdir first so a killed driver
+    # does not leave PySCF with an unwritable path -- but any write failure
+    # is non-fatal, we just forfeit the chkfile speedup on the next restart.
+    if write_chk:
+        try:
+            os.makedirs(os.path.dirname(chkfile), exist_ok=True)
+            mf.chkfile = chkfile
+        except OSError as exc:  # pragma: no cover -- filesystem-specific
+            print(f"[HF] warning: cannot attach chkfile {chkfile}: {exc}; "
+                  f"HF result will not be cached this step.")
     mf.kernel()
     return mol, mf
 
@@ -1272,7 +1298,10 @@ def run_dump_worker(frag_idx, cfg):
     threshold = float(cfg["ewf"]["bath_threshold"])
 
     print(f"[dump frag={frag_idx}] Building mol + RHF")
-    mol, mf = build_mol_and_mf(cfg)
+    # write_chk=False: DUMP workers run concurrently and must not touch the
+    # shared hf.chk (parallel PySCF writes would corrupt it).  They reuse the
+    # HF the driver already wrote there this step.
+    mol, mf = build_mol_and_mf(cfg, write_chk=False)
     print(f"[dump frag={frag_idx}] HF energy: {mf.e_tot:.10f}")
 
     print(f"[dump frag={frag_idx}] vayesta.ewf.EWF(solver=DUMP, "
