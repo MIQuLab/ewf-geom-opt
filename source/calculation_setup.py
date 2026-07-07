@@ -295,7 +295,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         solvers_needed = ({high_solver, approx_solver} if multi else {single_solver})
         for s in ("FCI", "SCI", "SCI_SBD", "SQD"):
             if s in solvers_needed:
-                mem = "100G" if s in ("SCI_SBD", "SQD") else "10G"
+                mem = "170G" if s in ("SCI_SBD", "SQD") else "10G"
                 a(f"  {s}:")
                 L.extend(_sbatch_lines(4, hpc, CCF_CPU_PARTITION, ntasks=2, mem=mem))
         a("")
@@ -328,13 +328,51 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         else:
             a("  cpus_per_batch: 96      # MPI ranks (-np / --ntasks) for the CPU run")
         a("  sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)")
-        a("  sbd_block: 20")
-        a("  sbd_dav_iteration: 100")
+        a("  sbd_block: 10           # Davidson subspace size (~2*block state-vectors per GPU); lowered 20->10 to cut GPU RAM")
+        a("  sbd_dav_iteration: 100  # ample restarts; keeps converging to sbd_tolerance at the smaller sbd_block")
         a("  sbd_tolerance: 1.e-8    # keep this exact '1.e-8' notation")
+        if gpu:
+            a("  # GPU determinant-cache RAM control (SBD_THRUST only; ignored by the")
+            a("  # CPU build). use_precalculated_dets 0 recomputes each Slater determinant")
+            a("  # on the fly instead of caching the whole bra-block table (the single")
+            a("  # largest GPU allocation); max_memory_gb_dets caps the scratch that")
+            a("  # replaces it. Accuracy-neutral (memory vs. recompute trade-off).")
+            a("  sbd_use_precalculated_dets: 0   # 0 = recompute dets on the fly (low GPU RAM); 1 = cache table (faster, high RAM)")
+            a("  # PER-RANK cap on GPU *VRAM* (GiB) for the det scratch -- NOT host RAM,")
+            a("  # NOT the whole run. Each GPU is shared by cpus_per_gpu ranks, so det")
+            a("  # memory on one card is ~cpus_per_gpu * this value and must coexist with")
+            a("  # the Davidson vectors, integrals, RDM buffers, and CUDA contexts in the")
+            a("  # same VRAM. Rule of thumb ~(usable_VRAM_per_GPU / cpus_per_gpu) / 2 (e.g.")
+            a("  # A100-40GB, cpus_per_gpu=16 -> ~1). Never set this to the host mem. <=0 = off.")
+            a("  sbd_max_memory_gb_dets: 1       # per-rank GPU VRAM (GiB); used only when sbd_use_precalculated_dets = 0")
         if not gpu:
-            a("  sbd_adet_comm_size: 2   # 'comm_size' options apply to CPU runs only")
-            a("  sbd_bdet_comm_size: 2")
-            a("  sbd_task_comm_size: 2")
+            a("  sbd_adet_comm_size: 2   # split alpha-dets across ranks")
+            a("  sbd_bdet_comm_size: 2   # split beta-dets across ranks")
+            a("  sbd_task_comm_size: 2   # split H columns across ranks")
+        else:
+            cpg = 8 if is_v100 else 16
+            a("  # Wavefunction partition across ranks -- VERIFIED to work on GPU: each")
+            a("  # rank stores W ~ (n_alpha/adet)*(n_beta/bdet), so raising these splits")
+            a("  # the Davidson vectors (the dominant GPU allocation for large subspaces)")
+            a("  # across GPUs -- the main guardrail against SBD OOM. Constraints:")
+            a("  # adet*bdet*task must divide nranks (= gpus_per_batch*cpus_per_gpu) and")
+            a("  # each factor <= its determinant count.")
+            a("  # sbd_auto_comm_size picks the split from the alpha-string count (lines")
+            a("  # in the AlphaDets file) via sbd_comm_size_tiers: the highest tier whose")
+            a("  # min_alpha_strings <= n_alpha wins; small clusters run un-split, large")
+            a("  # ones distribute across GPUs. An invalid tier for a cluster (factor >")
+            a("  # its det count, or product does not divide nranks) falls back to no split.")
+            a("  # No split replicates W on all cpus_per_gpu ranks/GPU, so it OOMs above")
+            a("  # ~2500-3000 alpha strings on 40 GB cards; full distribution holds ~W/")
+            a("  # gpus_per_batch per GPU. Add GPUs for even larger subspaces.")
+            a("  sbd_auto_comm_size: true")
+            a("  sbd_comm_size_tiers:      # [min_alpha_strings, adet, bdet, task]")
+            a("    - [0,    1, 1,  1]      # small subspace: no split (fits replicated)")
+            a(f"    - [2500, 4, {cpg}, 1]      # large subspace: full distribution across GPUs")
+            a("  # Static fallback (used only when sbd_auto_comm_size is false):")
+            a("  sbd_adet_comm_size: 1")
+            a("  sbd_bdet_comm_size: 1")
+            a("  sbd_task_comm_size: 1")
         a("  sbd_init: 0")
         a("  sbd_shuffle: 0")
         a("  sbd_carryover_ratio: 0.5")
@@ -376,8 +414,12 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         else:  # CPU
             sbd_mem = "760G" if hpc == "MSU" else "1T"
         L.extend(_sbatch_lines(6, hpc, sbd_partition, ntasks=None, mem=sbd_mem))
-        a("      # extra:")
-        a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
+        if gpu:
+            a("      extra:")
+            a("        exclude: m002   # skip nodes that fail mpirun")
+        else:
+            a("      # extra:")
+            a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
         a("")
 
     # --- sqd block (only when SQD external eigensolver is selected) --------
@@ -412,22 +454,59 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         else:
             a("  cpus_per_batch: 96      # MPI ranks (-np / --ntasks) for the CPU run")
         a("  sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)")
-        a("  sbd_block: 20")
-        a("  sbd_dav_iteration: 10   # SQD: relaxed vs SCI_SBD's 100 (per-batch SBD"
-          " is much more expensive)")
+        a("  sbd_block: 8            # Davidson subspace size (~2*block state-vectors per GPU); 8 for SQD (RAM-critical); raise sbd_dav_iteration if convergence slows")
+        a("  sbd_dav_iteration: 20   # more restarts to offset the small sbd_block (same accuracy at sbd_tolerance)")
         a("  sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this"
           " exact '1.e-5' notation")
+        if gpu:
+            a("  # GPU determinant-cache RAM control (SBD_THRUST only; ignored by the")
+            a("  # CPU build). use_precalculated_dets 0 recomputes each Slater determinant")
+            a("  # on the fly instead of caching the whole bra-block table (the single")
+            a("  # largest GPU allocation); max_memory_gb_dets caps the scratch that")
+            a("  # replaces it. Accuracy-neutral (memory vs. recompute trade-off).")
+            a("  sbd_use_precalculated_dets: 0   # 0 = recompute dets on the fly (low GPU RAM); 1 = cache table (faster, high RAM)")
+            a("  # PER-RANK cap on GPU *VRAM* (GiB) for the det scratch -- NOT host RAM,")
+            a("  # NOT the whole run. Each GPU is shared by cpus_per_gpu ranks, so det")
+            a("  # memory on one card is ~cpus_per_gpu * this value and must coexist with")
+            a("  # the Davidson vectors, integrals, RDM buffers, and CUDA contexts in the")
+            a("  # same VRAM. Rule of thumb ~(usable_VRAM_per_GPU / cpus_per_gpu) / 2 (e.g.")
+            a("  # A100-40GB, cpus_per_gpu=16 -> ~1). Never set this to the host mem. <=0 = off.")
+            a("  sbd_max_memory_gb_dets: 1       # per-rank GPU VRAM (GiB); used only when sbd_use_precalculated_dets = 0")
         if not gpu:
-            a("  sbd_adet_comm_size: 2   # 'comm_size' options apply to CPU runs only")
-            a("  sbd_bdet_comm_size: 2")
-            a("  sbd_task_comm_size: 2")
+            a("  sbd_adet_comm_size: 2   # split alpha-dets across ranks")
+            a("  sbd_bdet_comm_size: 2   # split beta-dets across ranks")
+            a("  sbd_task_comm_size: 2   # split H columns across ranks")
+        else:
+            cpg = 8 if is_v100 else 16
+            a("  # Wavefunction partition across ranks -- VERIFIED to work on GPU: each")
+            a("  # rank stores W ~ (n_alpha/adet)*(n_beta/bdet), so raising these splits")
+            a("  # the Davidson vectors (the dominant GPU allocation for large subspaces)")
+            a("  # across GPUs -- the main guardrail against SBD OOM. Constraints:")
+            a("  # adet*bdet*task must divide nranks (= gpus_per_batch*cpus_per_gpu) and")
+            a("  # each factor <= its determinant count.")
+            a("  # sbd_auto_comm_size picks the split from the alpha-string count (lines")
+            a("  # in the AlphaDets file) via sbd_comm_size_tiers: the highest tier whose")
+            a("  # min_alpha_strings <= n_alpha wins; small clusters run un-split, large")
+            a("  # ones distribute across GPUs. An invalid tier for a cluster (factor >")
+            a("  # its det count, or product does not divide nranks) falls back to no split.")
+            a("  # No split replicates W on all cpus_per_gpu ranks/GPU, so it OOMs above")
+            a("  # ~2500-3000 alpha strings on 40 GB cards; full distribution holds ~W/")
+            a("  # gpus_per_batch per GPU. Add GPUs for even larger subspaces.")
+            a("  sbd_auto_comm_size: true")
+            a("  sbd_comm_size_tiers:      # [min_alpha_strings, adet, bdet, task]")
+            a("    - [0,    1, 1,  1]      # small subspace: no split (fits replicated)")
+            a(f"    - [2500, 4, {cpg}, 1]      # large subspace: full distribution across GPUs")
+            a("  # Static fallback (used only when sbd_auto_comm_size is false):")
+            a("  sbd_adet_comm_size: 1")
+            a("  sbd_bdet_comm_size: 1")
+            a("  sbd_task_comm_size: 1")
         a("  sbd_init: 0")
         a("  sbd_shuffle: 0")
         a("  sbd_carryover_ratio: 0.5")
         a("  # --- SQD recovery loop --------------------------------------------")
         a("  iterations: 5            # number of SQD configuration-recovery cycles")
-        a("  n_batches: 2             # parallel SBD batches submitted per iteration")
-        a("  samples_per_batch: 200   # bitstrings sampled per batch")
+        a("  n_batches: 4             # parallel SBD batches submitted per iteration")
+        a("  samples_per_batch: 2000   # bitstrings sampled per batch")
         a("  energy_tol: 1.0e-8       # energy convergence between SQD iterations")
         a("  occupancies_tol: 1.0e-5  # orbital-occupancy convergence between iterations")
         a("  carryover_threshold: 1.0e-4  # |c| above which a determinant survives to the next iteration")
@@ -451,7 +530,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  # per_fragment_samples:")
         a("  #   0: /path/to/cluster_0_count_dict.txt")
         a("  #   1: /path/to/cluster_1_count_dict.txt")
-        a("  qiskit_backend: ibm_cleveland   # IBM backend name for SamplerV2")
+        a("  qiskit_backend: ibm_marrakesh   # IBM backend name for SamplerV2")
         a("  default_shots: 100000           # shots per Qiskit SamplerV2 job")
         a("  n_reps: 1                       # LUCJ ansatz repetitions")
         a("  thresh_two_q: 1.0               # ffsim two-qubit-gate threshold")
@@ -479,8 +558,12 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         else:  # CPU
             sqd_mem = "760G" if hpc == "MSU" else "1T"
         L.extend(_sbatch_lines(6, hpc, sqd_partition, ntasks=None, mem=sqd_mem))
-        a("      # extra:")
-        a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
+        if gpu:
+            a("      extra:")
+            a("        exclude: m002   # skip nodes that fail mpirun")
+        else:
+            a("      # extra:")
+            a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
         a("")
 
     # --- geomopt block ------------------------------------------------------
@@ -512,10 +595,10 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         # fmax (eV/Angstrom) and steps drive Sella.run(); other keys are
         # forwarded to sella.Sella(...).
         a("  sella:")
-        a("    fmax:  0.01           # eV / Angstrom (max-force convergence)")
-        a("    steps: 100            # max optimizer steps")
-        a("    # order: 0            # 0 = minimisation (default), 1 = saddle")
-        a("    # internal: true      # use internal coordinates")
+        a("    fmax:  0.1           # eV / Angstrom (max-force convergence)")
+        a("    steps: 25            # max optimizer steps")
+        a("    order: 0            # 0 = minimisation (default), 1 = saddle")
+        a("    internal: true      # use internal coordinates")
     a("")
     return "\n".join(L)
 

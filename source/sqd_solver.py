@@ -114,6 +114,34 @@ def _mpi_env_arg(proc_type, name, value):
     return f"-x {name}={value}"   # OpenMPI (CPU)
 
 
+def _count_det_strings(path):
+    """Number of determinant bitstrings (non-empty lines) in a det file, or
+    ``-1`` if unreadable -- mirror of :func:`external_sci._count_det_strings`."""
+    try:
+        with open(path) as fh:
+            return sum(1 for ln in fh if ln.strip())
+    except OSError:
+        return -1
+
+
+def _auto_comm_sizes(cfg, nranks, n_alpha, n_beta):
+    """Pick ``(adet, bdet, task)`` from the alpha-string count via the ladder
+    ``cfg['sbd_comm_size_tiers']`` -- mirror of
+    :func:`external_sci._auto_comm_sizes`.  The highest tier whose
+    ``min_alpha_strings <= n_alpha`` wins; the split is used only if valid
+    (each factor fits its det count and the product divides ``nranks``),
+    otherwise it falls back to ``(1, 1, 1)`` (safe: un-splittable => small)."""
+    tiers = cfg.get("sbd_comm_size_tiers") or [[0, 1, 1, 1]]
+    adet = bdet = task = 1
+    for entry in sorted(tiers, key=lambda e: int(e[0])):
+        if n_alpha >= int(entry[0]):
+            adet, bdet, task = int(entry[1]), int(entry[2]), int(entry[3])
+    if (adet < 1 or bdet < 1 or task < 1 or adet > n_alpha or bdet > n_beta
+            or nranks % (adet * bdet * task) != 0):
+        return 1, 1, 1
+    return adet, bdet, task
+
+
 def _build_sbd_command(cfg: dict, fcidump_path: str, adet_path: str,
                        bdet_path: str, with_rdm: bool):
     """Assemble the SBD ``mpirun`` command for one SQD diagonalisation.
@@ -140,12 +168,51 @@ def _build_sbd_command(cfg: dict, fcidump_path: str, adet_path: str,
         f"--block {cfg['sbd_block']} --iteration {cfg['sbd_dav_iteration']} "
         f"--tolerance {cfg['sbd_tolerance']} "
     )
-    if proc_type == 0:
-        base += (
-            f"--adet_comm_size {cfg['sbd_adet_comm_size']} "
-            f"--bdet_comm_size {cfg['sbd_bdet_comm_size']} "
-            f"--task_comm_size {cfg['sbd_task_comm_size']} "
-        )
+    # Wavefunction partition across ranks -- passed for BOTH CPU and GPU (see
+    # external_sci._build_sbd_command).  VERIFIED that the SBD_THRUST (GPU)
+    # build honours these: each rank stores W ~ (n_alpha/adet)*(n_beta/bdet), so
+    # raising them shrinks the Davidson vectors (the dominant GPU allocation for
+    # large SQD subspaces) linearly across GPUs.  When sbd_auto_comm_size is on
+    # (GPU), the split is chosen from the number of strings in the det files so
+    # small SQD batches run un-split and large ones distribute automatically;
+    # otherwise the static sbd_*_comm_size are used.  Default 1 = no split.
+    if proc_type == 1 and cfg.get("sbd_auto_comm_size", False):
+        n_a = _count_det_strings(adet_path)
+        n_b = _count_det_strings(bdet_path) if bdet_path else n_a
+        if n_a > 0 and n_b > 0:
+            adet_cs, bdet_cs, task_cs = _auto_comm_sizes(
+                cfg, layout["nranks"], n_a, n_b)
+        else:   # unreadable det file -> fall back to the static knobs
+            adet_cs = int(cfg.get("sbd_adet_comm_size", 1))
+            bdet_cs = int(cfg.get("sbd_bdet_comm_size", 1))
+            task_cs = int(cfg.get("sbd_task_comm_size", 1))
+    else:
+        adet_cs = int(cfg.get("sbd_adet_comm_size", 1))
+        bdet_cs = int(cfg.get("sbd_bdet_comm_size", 1))
+        task_cs = int(cfg.get("sbd_task_comm_size", 1))
+    comm_prod = adet_cs * bdet_cs * task_cs
+    if comm_prod < 1 or layout["nranks"] % comm_prod != 0:
+        raise ValueError(
+            f"SQD SBD comm-size product adet*bdet*task = {comm_prod} must be a "
+            f"positive divisor of nranks = {layout['nranks']} (SBD sets "
+            f"h_comm_size = nranks / product, which must be a positive integer). "
+            f"Adjust sqd.sbd_adet_comm_size / sbd_bdet_comm_size / "
+            f"sbd_task_comm_size, gpus_per_batch, or cpus_per_gpu.")
+    base += (
+        f"--adet_comm_size {adet_cs} "
+        f"--bdet_comm_size {bdet_cs} "
+        f"--task_comm_size {task_cs} "
+    )
+    if proc_type == 1:  # GPU (SBD_THRUST): determinant-cache RAM controls
+        # --use_precalculated_dets 0 recomputes each Slater determinant on the
+        # fly instead of caching the whole bra-block table (the largest single
+        # allocation); --max_memory_gb_for_determinants caps the per-GPU scratch
+        # that replaces it.  Accuracy-neutral; ignored by the CPU build.
+        use_pre = int(cfg.get("sbd_use_precalculated_dets", 0))
+        base += f"--use_precalculated_dets {use_pre} "
+        max_gb = int(cfg.get("sbd_max_memory_gb_dets", 0))
+        if use_pre == 0 and max_gb > 0:
+            base += f"--max_memory_gb_for_determinants {max_gb} "
     base += (
         f"--init {cfg['sbd_init']} --shuffle {cfg['sbd_shuffle']} "
         f"--carryover_ratio {cfg['sbd_carryover_ratio']}"

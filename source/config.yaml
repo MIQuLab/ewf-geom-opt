@@ -71,9 +71,53 @@ sqd:
   gpus_per_batch: 4       # GPUs per SBD batch -> --gpus-per-node
   cpus_per_gpu: 16      # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
   sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)
-  sbd_block: 20
-  sbd_dav_iteration: 10   # SQD: relaxed vs SCI_SBD's 100 (per-batch SBD is much more expensive)
+  sbd_block: 8            # Davidson subspace size: ~2*block full state-vectors live on each GPU. 8 for SQD (RAM-critical); raise sbd_dav_iteration if convergence slows
+  sbd_dav_iteration: 20   # more restarts to offset the small sbd_block (same accuracy at sbd_tolerance)
   sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this exact '1.e-5' notation
+  # GPU determinant-cache RAM control (proc_type: 1 / SBD_THRUST only; ignored
+  # by the CPU build). use_precalculated_dets 0 recomputes each Slater
+  # determinant on the fly instead of caching the whole bra-block table -- the
+  # single largest GPU allocation -- and max_memory_gb_dets caps the per-GPU
+  # scratch that replaces it. Both are accuracy-neutral (identical results;
+  # a memory vs. recompute trade-off).
+  sbd_use_precalculated_dets: 0   # 0 = recompute dets on the fly (low GPU RAM); 1 = cache table (faster, high RAM)
+  # sbd_max_memory_gb_dets is a PER-RANK cap on GPU *VRAM* (GiB) for the det
+  # scratch -- NOT host RAM and NOT the whole SBD run. Each GPU is shared by
+  # cpus_per_gpu ranks, so det memory on one card is ~cpus_per_gpu * this value,
+  # and it must leave room for the Davidson vectors, integrals, RDM buffers, and
+  # per-process CUDA contexts in the same VRAM. Rule of thumb:
+  # ~(usable_VRAM_per_GPU / cpus_per_gpu) / 2. Example: A100-40GB with
+  # cpus_per_gpu=16 -> ~26 GiB usable / 16 / 2 ~= 1. Do NOT set this to the host
+  # mem (e.g. 500) -- that OOMs the GPU. <=0 disables the cap.
+  sbd_max_memory_gb_dets: 1       # per-rank GPU VRAM (GiB); used only when sbd_use_precalculated_dets = 0
+  # Wavefunction partition across ranks -- VERIFIED to work on GPU: each rank
+  # stores W ~ (n_alpha/adet)*(n_beta/bdet), so raising these splits the Davidson
+  # vectors (the dominant GPU allocation for large subspaces) across GPUs. This
+  # is the main guardrail against SBD OOM on large subspaces. Constraints:
+  # adet*bdet*task must divide nranks (= gpus_per_batch*cpus_per_gpu) and each
+  # factor <= its determinant count.
+  #
+  # sbd_auto_comm_size picks the split automatically from the number of alpha
+  # strings (lines in the AlphaDets file) using sbd_comm_size_tiers below: the
+  # highest tier whose min_alpha_strings <= n_alpha wins. Small clusters run
+  # un-split; large ones distribute across GPUs. If a tier is invalid for a
+  # given cluster (factor > its det count, or product does not divide nranks)
+  # it safely falls back to no split. When sbd_auto_comm_size is false the
+  # static sbd_*_comm_size values are used instead.
+  #
+  # Memory guide for this 4xA100-40GB layout (64 ranks, block 8): no split
+  # replicates W on all 16 ranks/GPU, so it OOMs above ~2500-3000 alpha strings
+  # (4000 -> ~41 GB/GPU). Full 4x16 distribution holds ~W/4 per GPU: 10000
+  # strings -> ~4 GB/GPU, 20000 -> ~16 GB/GPU. Add GPUs (gpus_per_batch) for
+  # even larger subspaces.
+  sbd_auto_comm_size: true
+  sbd_comm_size_tiers:      # [min_alpha_strings, adet, bdet, task]
+    - [0,    1, 1,  1]      # < 2500 strings: no split (fits replicated)
+    - [2500, 4, 16, 1]      # >= 2500 strings: full distribution across all GPUs
+  # Static fallback (used when sbd_auto_comm_size is false):
+  sbd_adet_comm_size: 1     # split alpha-dets across ranks
+  sbd_bdet_comm_size: 1     # split beta-dets across ranks
+  sbd_task_comm_size: 1     # split H columns across ranks
   sbd_init: 0
   sbd_shuffle: 0
   sbd_carryover_ratio: 0.5
