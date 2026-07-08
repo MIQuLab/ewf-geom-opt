@@ -297,53 +297,65 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path, rdm=0,
         f"--block {cfg['sbd_block']} --iteration {cfg['sbd_dav_iteration']} "
         f"--tolerance {cfg['sbd_tolerance']} "
     )
-    # Wavefunction partition across ranks -- passed for BOTH CPU and GPU.
-    # VERIFIED that the SBD_THRUST (GPU) build honours these: MakeHelpers +
-    # BasisInitVector size each rank's W as (n_alpha/adet)*(n_beta/bdet), so
-    # raising them shrinks the Davidson vectors -- the dominant GPU allocation
-    # for large subspaces -- linearly across GPUs.  (The old "ignored in GPU
-    # runs" note was wrong; nothing in the SBD source bypasses these on GPU.)
-    # When sbd_auto_comm_size is on (GPU), the split is chosen from the number
-    # of strings in the det files so small clusters run un-split and large ones
-    # distribute automatically; otherwise the static sbd_*_comm_size are used.
-    # Default 1 = no split.  cfg.get keeps older configs working.
-    if proc_type == 1 and cfg.get('sbd_auto_comm_size', False):
-        n_a = _count_det_strings(adet_path)
-        n_b = _count_det_strings(bdet_path) if bdet_path else n_a
-        if n_a > 0 and n_b > 0:
-            adet_cs, bdet_cs, task_cs = _auto_comm_sizes(
-                cfg, layout['nranks'], n_a, n_b)
-        else:   # unreadable det file -> fall back to the static knobs
+    # SBD memory management is gated by ``sbd_advanced_memory`` (set from the
+    # interactive "advanced SBD memory management" question).  When it is off
+    # (the stable default; absent == off for older configs) we reproduce the
+    # pre-guardrail behaviour of commit 0000c598: comm sizes are passed on CPU
+    # only, and no GPU determinant-cache / auto-split flags are emitted.
+    if not bool(cfg.get('sbd_advanced_memory', False)):
+        if proc_type == 0:  # the comm_size options are ignored in GPU runs
+            base += (
+                f"--adet_comm_size {cfg['sbd_adet_comm_size']} "
+                f"--bdet_comm_size {cfg['sbd_bdet_comm_size']} "
+                f"--task_comm_size {cfg['sbd_task_comm_size']} "
+            )
+    else:
+        # --- advanced (experimental) GPU RAM/VRAM guardrails ---
+        # Wavefunction partition across ranks -- passed for BOTH CPU and GPU.
+        # VERIFIED that the SBD_THRUST (GPU) build honours these: MakeHelpers +
+        # BasisInitVector size each rank's W as (n_alpha/adet)*(n_beta/bdet), so
+        # raising them shrinks the Davidson vectors -- the dominant GPU
+        # allocation for large subspaces -- linearly across GPUs.  When
+        # sbd_auto_comm_size is on (GPU), the split is chosen from the number of
+        # strings in the det files so small clusters run un-split and large ones
+        # distribute automatically; otherwise the static sbd_*_comm_size are used.
+        if proc_type == 1 and cfg.get('sbd_auto_comm_size', False):
+            n_a = _count_det_strings(adet_path)
+            n_b = _count_det_strings(bdet_path) if bdet_path else n_a
+            if n_a > 0 and n_b > 0:
+                adet_cs, bdet_cs, task_cs = _auto_comm_sizes(
+                    cfg, layout['nranks'], n_a, n_b)
+            else:   # unreadable det file -> fall back to the static knobs
+                adet_cs = int(cfg.get('sbd_adet_comm_size', 1))
+                bdet_cs = int(cfg.get('sbd_bdet_comm_size', 1))
+                task_cs = int(cfg.get('sbd_task_comm_size', 1))
+        else:
             adet_cs = int(cfg.get('sbd_adet_comm_size', 1))
             bdet_cs = int(cfg.get('sbd_bdet_comm_size', 1))
             task_cs = int(cfg.get('sbd_task_comm_size', 1))
-    else:
-        adet_cs = int(cfg.get('sbd_adet_comm_size', 1))
-        bdet_cs = int(cfg.get('sbd_bdet_comm_size', 1))
-        task_cs = int(cfg.get('sbd_task_comm_size', 1))
-    comm_prod = adet_cs * bdet_cs * task_cs
-    if comm_prod < 1 or layout['nranks'] % comm_prod != 0:
-        raise ValueError(
-            f"SBD comm-size product adet*bdet*task = {comm_prod} must be a "
-            f"positive divisor of nranks = {layout['nranks']} (SBD sets "
-            f"h_comm_size = nranks / product, which must be a positive integer). "
-            f"Adjust sbd_adet_comm_size / sbd_bdet_comm_size / sbd_task_comm_size, "
-            f"gpus_per_batch, or cpus_per_gpu.")
-    base += (
-        f"--adet_comm_size {adet_cs} "
-        f"--bdet_comm_size {bdet_cs} "
-        f"--task_comm_size {task_cs} "
-    )
-    if proc_type == 1:  # GPU (SBD_THRUST): determinant-cache RAM controls
-        # --use_precalculated_dets 0 recomputes each Slater determinant on the
-        # fly instead of caching the whole bra-block table (the largest single
-        # allocation), and --max_memory_gb_for_determinants caps the per-GPU
-        # scratch that replaces it.  Accuracy-neutral; ignored by the CPU build.
-        use_pre = int(cfg.get('sbd_use_precalculated_dets', 0))
-        base += f"--use_precalculated_dets {use_pre} "
-        max_gb = int(cfg.get('sbd_max_memory_gb_dets', 0))
-        if use_pre == 0 and max_gb > 0:
-            base += f"--max_memory_gb_for_determinants {max_gb} "
+        comm_prod = adet_cs * bdet_cs * task_cs
+        if comm_prod < 1 or layout['nranks'] % comm_prod != 0:
+            raise ValueError(
+                f"SBD comm-size product adet*bdet*task = {comm_prod} must be a "
+                f"positive divisor of nranks = {layout['nranks']} (SBD sets "
+                f"h_comm_size = nranks / product, which must be a positive "
+                f"integer). Adjust sbd_adet_comm_size / sbd_bdet_comm_size / "
+                f"sbd_task_comm_size, gpus_per_batch, or cpus_per_gpu.")
+        base += (
+            f"--adet_comm_size {adet_cs} "
+            f"--bdet_comm_size {bdet_cs} "
+            f"--task_comm_size {task_cs} "
+        )
+        if proc_type == 1:  # GPU (SBD_THRUST): determinant-cache RAM controls
+            # --use_precalculated_dets 0 recomputes each Slater determinant on
+            # the fly instead of caching the whole bra-block table (the largest
+            # single allocation); --max_memory_gb_for_determinants caps the
+            # per-GPU scratch.  Accuracy-neutral; ignored by the CPU build.
+            use_pre = int(cfg.get('sbd_use_precalculated_dets', 0))
+            base += f"--use_precalculated_dets {use_pre} "
+            max_gb = int(cfg.get('sbd_max_memory_gb_dets', 0))
+            if use_pre == 0 and max_gb > 0:
+                base += f"--max_memory_gb_for_determinants {max_gb} "
     base += (
         f"--init {cfg['sbd_init']} --shuffle {cfg['sbd_shuffle']} "
         f"--carryover_ratio {cfg['sbd_carryover_ratio']}"
