@@ -274,8 +274,8 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
             "  \\centering\n"
             f"  \\includegraphics[width=\\textwidth]{{{figure_relpath}}}\n"
             "  \\caption{Overlay of the optimized geometries for each molecule. The "
-            "unfragmented SCI reference is shown in CPK element colours and the EWF "
-            "SCI--SBD structure in a single highlight colour (magenta).}\n"
+            "unfragmented SCI reference is shown in CPK element colors and the EWF "
+            "SCI--SBD structure in a single highlight color (magenta).}\n"
             "  \\label{fig:overlay}\n"
             "\\end{figure*}\n"
         )
@@ -510,9 +510,9 @@ def _tilt_for_depth(coord_sets, radii, deg=(24.0, -18.0)):
     return list(coord_sets)
 
 
-# The unfragmented reference is drawn in standard CPK element colours; the EWF
-# structure is drawn in ONE consistent highlight colour on EVERY atom, chosen to
-# stay visible against all CPK colours in the set (C grey, H white, N blue,
+# The unfragmented reference is drawn in standard CPK element colors; the EWF
+# structure is drawn in ONE consistent highlight color on EVERY atom, chosen to
+# stay visible against all CPK colors in the set (C grey, H white, N blue,
 # O red, S yellow, Si beige) -- a vivid magenta-purple sits in the palette's gap.
 _EWF_HILITE_RGB = (0.69, 0.15, 0.79)
 _EWF_HEX = "#B026C9"
@@ -547,8 +547,8 @@ def _write_xyz(atoms, coords, path):
 
 def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
     """
-    Ray-trace one molecule tile with PyMOL: the reference in CPK colours (grey
-    carbons) overlaid with the EWF structure in a single accent colour, both as
+    Ray-trace one molecule tile with PyMOL: the reference in CPK colors (grey
+    carbons) overlaid with the EWF structure in a single accent color, both as
     ball-and-stick with double/triple bonds shown as valence lines. The best
     viewing angle is chosen automatically via PyMOL 'orient'.
     """
@@ -598,8 +598,8 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
         except Exception:
             pass
 
-    # Overlay colouring: the reference keeps standard CPK element colours; every
-    # atom of the EWF structure gets the same highlight colour, so the overlap is
+    # Overlay coloring: the reference keeps standard CPK element colors; every
+    # atom of the EWF structure gets the same highlight color, so the overlap is
     # visible on ALL atoms wherever the geometries diverge. Both structures are
     # drawn at equal size and opaque.
     for el in {_elem(a) for a in atoms}:
@@ -637,8 +637,8 @@ def build_overlay_figure(results, out_path,
     """
     Publication-quality tiled figure: one tile per molecule, overlaying the
     aligned reference and EWF structures as ray-traced 3D ball-and-stick models
-    rendered with PyMOL. The reference uses CPK element colours (grey carbons);
-    the EWF structure is drawn in a single accent colour so any geometric
+    rendered with PyMOL. The reference uses CPK element colors (grey carbons);
+    the EWF structure is drawn in a single accent color so any geometric
     deviation is clearly visible. Double/triple bonds are shown as valence
     lines, and each molecule is auto-oriented to its best viewing angle.
 
@@ -701,7 +701,7 @@ def build_overlay_figure(results, out_path,
     fig.subplots_adjust(left=0.005, right=0.995, top=1 - yf(0.05),
                         bottom=yf(legend_in), wspace=0.0, hspace=0.28)
 
-    # Legend 1: the EWF structure (its single highlight colour).
+    # Legend 1: the EWF structure (its single highlight color).
     ewf_handle = [Line2D([0], [0], marker="o", linestyle="none", markersize=15,
                          markerfacecolor=_EWF_HEX, markeredgecolor="black",
                          markeredgewidth=0.6)]
