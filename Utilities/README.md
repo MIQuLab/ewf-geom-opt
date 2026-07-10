@@ -125,8 +125,7 @@ Sample stdout:
 ```
 Molecule               N   RMSD (Å)  Max deviation (Å)   Max EWF MOs  Full MOs  EWF steps  Reference steps
 --------------------------------------------------------------------------------------------------------
-acetone               10      0.006              0.018            16        26          4                4
-acetylene             10      0.006              0.018            16        26          4                4
+acetone               10      0.012              0.018            16        26          4                4
 ```
 
 | Column | Meaning | Source |
