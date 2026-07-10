@@ -119,6 +119,8 @@ _STEP_RE = re.compile(r"geomopt step=(\d+)")
 _CYCLES_RE = re.compile(r"Cycles evaluated\s*:\s*(\d+)")
 _CLUSTER_NORB_RE = re.compile(r"E_cluster\s*=.*norb=(\d+)")
 _FULL_NORB_RE = re.compile(r"Full active space:\s*norb=(\d+)")
+_PERCLUSTER_RE = re.compile(r"Per-cluster energies")
+_SCI_CLUSTER_RE = re.compile(r"E_cluster\s*=.*\[SCI")
 
 
 def find_log(molecule_dir):
@@ -155,6 +157,22 @@ def parse_full_norb(logpath):
     """Full active-space orbital count from the unfragmented log."""
     m = _FULL_NORB_RE.search(_read(logpath))
     return int(m.group(1)) if m else None
+
+
+def parse_n_sci_solver(logpath):
+    """
+    Number of fragments (clusters) solved with the SCI solver, counted from the
+    last per-cluster energy block of the EWF log (clusters tagged '[SCI...]',
+    e.g. '[SCI_SBD, norb=16]', as opposed to '[FCI, ...]').
+    """
+    blocks = _PERCLUSTER_RE.split(_read(logpath))
+    if len(blocks) < 2:
+        return None
+    last = blocks[-1]
+    cut = re.search(r"Global 1-RDM|Global 2-RDM|Tr\(dm1\)|energy:", last)
+    if cut:
+        last = last[:cut.start()]
+    return len(_SCI_CLUSTER_RE.findall(last))
 
 
 def _read(path):
@@ -207,14 +225,16 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
         "Comparison of the optimized geometries obtained from EWF SCI "
         "calculations against the unfragmented SCI reference calculations, for "
         "each molecule. "
-        "Here \\textbf{$N$} is number of atoms, "
+        "Here \\textbf{N atoms} is number of atoms, "
         "\\textbf{RMSD} is root-mean-square deviation between the EWF SCI and "
         "unfragmented SCI calculations, "
-        "\\textbf{Max deviation} is largest single-atom displacement, "
+        "\\textbf{Max $\\Delta$} is largest single-atom displacement, "
         "\\textbf{Max EWF MOs} is number of molecular orbitals in the largest "
         "EWF cluster, "
+        "\\textbf{N SCI solver} is the number of fragments treated with the SCI "
+        "solver, "
         "\\textbf{Full MOs} is the total number of MOs in the unfragmented molecule, "
-        "and \\textbf{EWF steps} and \\textbf{Reference steps} are number of "
+        "and \\textbf{EWF steps} and \\textbf{Ref. Steps} are number of "
         "geometry-optimization cycles in the EWF SCI and unfragmented SCI runs, "
         "respectively."
     )
@@ -222,12 +242,13 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
     rows = []
     for r in results:
         rows.append(
-            "{molecule} & {n} & {rmsd} & {maxdev} & {frag} & {full} & {ewf} & {ref} \\\\".format(
+            "{molecule} & {n} & {rmsd} & {maxdev} & {frag} & {nsci} & {full} & {ewf} & {ref} \\\\".format(
                 molecule=escape_latex(r["molecule"]),
                 n=_num_cell(r["natoms"]),
                 rmsd=_num_cell(r["rmsd"], DIST_FMT),
                 maxdev=_num_cell(r["max_dev"], DIST_FMT),
                 frag=_num_cell(r["frag_norb"]),
+                nsci=_num_cell(r["n_sci"]),
                 full=_num_cell(r["full_norb"]),
                 ewf=_num_cell(r["ewf_steps"]),
                 ref=_num_cell(r["ref_steps"]),
@@ -237,19 +258,20 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
 
     # Column specification: text name + siunitx numeric columns for aligned figures.
     colspec = ("l "
-               "S[table-format=2.0] "        # N
+               "S[table-format=2.0] "        # N atoms
                "S[table-format=2.3] "        # RMSD
                "S[table-format=2.3] "        # Max dev
-               "S[table-format=3.0] "        # Max MOs in Frag.
+               "S[table-format=3.0] "        # Max EWF MOs
+               "S[table-format=3.0] "        # N SCI solver
                "S[table-format=3.0] "        # Full MOs
                "S[table-format=3.0] "        # EWF steps
                "S[table-format=3.0]")        # Ref steps
 
     header = (
-        "{Molecule} & {$N$} & {RMSD} & {Max} & "
-        "{Max EWF} & {Full} & {EWF} & {Reference} \\\\\n"
-        " & & {(\\si{\\angstrom})} & {deviation (\\si{\\angstrom})} & "
-        "{MOs} & {MOs} & {steps} & {steps} \\\\"
+        "{Molecule} & {N atoms} & {RMSD} & {Max $\\Delta$} & "
+        "{Max EWF} & {N SCI} & {Full} & {EWF} & {Ref.} \\\\\n"
+        " & & {(\\si{\\angstrom})} & {(\\si{\\angstrom})} & "
+        "{MOs} & {solver} & {MOs} & {steps} & {Steps} \\\\"
     )
 
     # Highlight the molecule with the highest discrepancy (largest RMSD).
@@ -840,6 +862,7 @@ def main():
         full_norb = parse_full_norb(ref_log) if ref_log else None
         ewf_steps = parse_num_steps(cmp_log) if cmp_log else None
         ref_steps = parse_num_steps(ref_log) if ref_log else None
+        n_sci = parse_n_sci_solver(cmp_log) if cmp_log else None
 
         if cmp_log is None:
             errors.append(f"  {molecule}: EWF log not found in {os.path.join(cmp_root, molecule)}")
@@ -852,6 +875,7 @@ def main():
             "rmsd": rmsd,
             "max_dev": max_dev,
             "frag_norb": frag_norb,
+            "n_sci": n_sci,
             "full_norb": full_norb,
             "ewf_steps": ewf_steps,
             "ref_steps": ref_steps,
@@ -861,14 +885,15 @@ def main():
         })
 
     # --- per-molecule table -------------------------------------------------
-    header = (f"\n{'Molecule':<20} {'N':>3} {'RMSD (Å)':>10} {'Max deviation (Å)':>18} "
-              f"{'Max EWF MOs':>13} {'Full MOs':>9} {'EWF steps':>11} {'Reference steps':>16}")
+    header = (f"\n{'Molecule':<20} {'N atoms':>7} {'RMSD (Å)':>10} {'Max Δ (Å)':>18} "
+              f"{'Max EWF MOs':>13} {'N SCI solver':>13} {'Full MOs':>9} "
+              f"{'EWF steps':>11} {'Ref. Steps':>16}")
     print(header)
-    print("-" * 102)
+    print("-" * 122)
     for r in results:
-        print(f"{r['molecule']:<20} {r['natoms']:>3} "
+        print(f"{r['molecule']:<20} {r['natoms']:>7} "
               f"{DIST_FMT.format(r['rmsd']):>10} {DIST_FMT.format(r['max_dev']):>18} "
-              f"{_fmt(r['frag_norb']):>13} {_fmt(r['full_norb']):>9} "
+              f"{_fmt(r['frag_norb']):>13} {_fmt(r['n_sci']):>13} {_fmt(r['full_norb']):>9} "
               f"{_fmt(r['ewf_steps']):>11} {_fmt(r['ref_steps']):>16}")
 
     # --- summary ------------------------------------------------------------

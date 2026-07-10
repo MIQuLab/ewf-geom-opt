@@ -123,21 +123,22 @@ The script produces four things:
 Sample stdout:
 
 ```
-Molecule               N   RMSD (Å)  Max deviation (Å)   Max EWF MOs  Full MOs  EWF steps  Reference steps
---------------------------------------------------------------------------------------------------------
-acetone               10      0.012              0.018            16        26          4                4
+Molecule             N atoms   RMSD (Å)          Max Δ (Å)   Max EWF MOs  N SCI solver  Full MOs   EWF steps  Ref. Steps
+--------------------------------------------------------------------------------------------------------------------------
+acetone                   10      0.012              0.018            16             4        26           4                4
 ```
 
 | Column | Meaning | Source |
 |---|---|---|
 | `Molecule` | Molecule name (the subfolder name) | directory tree |
-| `N` | Number of atoms | last `.xyz` frame |
+| `N atoms` | Number of atoms | last `.xyz` frame |
 | `RMSD (Å)` | Root-mean-square deviation after Kabsch alignment (3 decimals, e.g. `0.011`) | geometry comparison |
-| `Max deviation (Å)` | Largest single-atom displacement after alignment (3 decimals) | geometry comparison |
+| `Max Δ (Å)` | Largest single-atom displacement after alignment (3 decimals) | geometry comparison |
 | `Max EWF MOs` | MOs in the largest EWF cluster (max `norb` across the EWF per-cluster energies) | EWF log |
+| `N SCI solver` | Number of fragments treated with the SCI solver (clusters tagged `[SCI…]`, e.g. `[SCI_SBD, …]`) | EWF log |
 | `Full MOs` | Full active-space MOs (`Full active space: norb=…`) | unfragmented log |
 | `EWF steps` | Geometry-optimization cycles in the fragmented run | EWF log |
-| `Reference steps` | Geometry-optimization cycles in the unfragmented run | unfragmented log |
+| `Ref. Steps` | Geometry-optimization cycles in the unfragmented run | unfragmented log |
 
 A value of `n/a` (or `--` in the LaTeX/PDF) means the quantity could not be found in
 the corresponding log.
