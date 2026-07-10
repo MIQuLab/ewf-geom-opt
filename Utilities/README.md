@@ -1,44 +1,50 @@
-# EWF SCI-SBD vs. Unfragmented Geometry Comparison
+# EWF Geometry-Optimization Utilities
+
+Standalone analysis tools that accompany the EWF geometry-optimization driver. This is
+the detailed reference for all of them; the top-level [`README.md`](../README.md) only
+lists them and points here.
+
+| Tool | Role |
+|---|---|
+| [`slurm_jobs_check.py`](slurm_jobs_check.py) | Post-mortem diagnostic for the workflow's multi-layer Slurm jobs — resolves every job, runs `seff`, and explains failures (especially out-of-memory), pointing at the exact config knob to raise. |
+| [`geom_compare.py`](geom_compare.py) | Low-level, single-reference geometry comparison (Kabsch alignment → RMSD / max deviation). |
+| [`fragmentation_effect_analysis.py`](fragmentation_effect_analysis.py) | Batch driver: walks two directory trees, compares each molecule, reports RMSD, max deviation, MO counts, and step counts, and emits an ACS-style LaTeX table + PDF and a structure-overlay figure. |
+
+Contents:
+
+- [Geometry comparison](#geometry-comparison) — `geom_compare.py` + `fragmentation_effect_analysis.py`
+- [Slurm job diagnostics](#slurm-job-diagnostics) — `slurm_jobs_check.py`
+
+---
+
+# Geometry comparison
 
 Tools for comparing the optimized geometries produced by **fragmented (EWF) SCI-SBD**
 calculations against their **unfragmented (reference)** counterparts, across a set of
 molecules — and for pulling the associated orbital-space and optimization-step
 metadata out of the run logs.
 
-There are two scripts:
-
-| Script | Role |
-|---|---|
-| [`geom_compare.py`](geom_compare.py) | Low-level, single-reference geometry comparison (Kabsch alignment → RMSD / max deviation). |
-| [`fragmentation_effect_analysis.py`](fragmentation_effect_analysis.py) | Batch driver: walks two directory trees, compares each molecule, reports RMSD, max deviation, MO counts, and step counts, and emits an ACS-style LaTeX table + PDF. |
-
 `fragmentation_effect_analysis.py` reuses the vetted alignment routine from
 `geom_compare.py`, so both files must sit in the same directory.
 
 ---
 
-## Requirements
+## Requirements (geometry comparison tools)
 
 - Python 3
 - [NumPy](https://numpy.org/)
 - [**Matplotlib**](https://matplotlib.org/) — for assembling the tiled figure.
 - [**PyMOL**](https://pymol.org/) (open-source) — ray-traces the ball-and-stick
-  structures. Install with `conda install -n classical -c conda-forge pymol-open-source`.
+  structures. Install with `conda install -n <your enviroment> -c conda-forge pymol-open-source`.
   If PyMOL is missing the table/PDF are still produced and only the figure is skipped.
 - [**tectonic**](https://tectonic-typesetting.github.io/) — for compiling the LaTeX
   table to PDF (auto-fetches the ACS `achemso`, `booktabs`, and `siunitx` packages
   on first use). Only needed if you want the PDF; the `.tex` file is written either way.
 
-The reference environment is the conda env named **`classical`**:
-
-```bash
-conda activate classical
-```
-
 Install tectonic into that env if you have not already:
 
 ```bash
-conda install -n classical -c conda-forge tectonic
+conda install -n <your enviroment> -c conda-forge tectonic
 ```
 
 ---
@@ -75,7 +81,7 @@ one tree are listed separately in the summary.
 ## Usage
 
 ```bash
-conda activate classical
+conda activate <your enviroment>
 python fragmentation_effect_analysis.py <reference_path> <compared_path>
 ```
 
@@ -222,3 +228,26 @@ multi-frame `.xyz` files it reads only the **first** frame — use
 ```bash
 python geom_compare.py reference.xyz candidate1.xyz candidate2.xyz
 ```
+
+---
+
+# Slurm job diagnostics
+
+[`slurm_jobs_check.py`](slurm_jobs_check.py) is a post-mortem diagnostic for the workflow's **multi-layer** Slurm jobs, written for the memory-orchestration problem that comes with nesting them. A single optimization spawns jobs on several layers:
+
+- **DUMP wave** — one job per fragment (`jobs_fragments_production/frag_dump_*`);
+- **SOLVE wave** — one job per fragment (`jobs_ci_calculations/frag_*`), whose resolved solver (FCI / SCI / SCI_SBD / SQD) decides which `slurm.<SOLVER>` block it used;
+- **SBD sub-jobs (SCI_SBD)** — one job per SCI growth cycle (`sci_sbd_scratch_<frag>/iter_<cycle>/sbd_job*`);
+- **SBD sub-jobs (SQD)** — one job per SQD batch (`sqd_scratch_<frag>/iter_<cycle>/batch_<b>/sbd_job*`) plus one final ext-SQD job (`sqd_scratch_<frag>/ext_sqd_iter/sbd_job*`);
+
+all of them grouped per `step_<NNN>/` under geometry optimization. With memory sized independently at each layer (`slurm.dump.mem`, the per-solver `slurm.FCI/SCI/SCI_SBD/SQD.mem`, and `sbd.slurm.sbatch.mem` / `sqd.slurm.sbatch.mem`), an out-of-memory kill on one layer is easy to misattribute.
+
+The tool walks the working directory, discovers every job from its on-disk artifacts, resolves each Slurm JobID (from the `.status` file while a job is queued/running, otherwise via `sacct` matched by job name and submit time), runs **`seff`** on each, and reports failures with an *explained* reason. Out-of-memory is detected from `State: OUT_OF_MEMORY`, exit code 137, or near-100% memory efficiency, and each OOM points at the exact config knob to raise (including a note that an SBD sub-job is sized by `sbd.slurm.sbatch.mem` not `slurm.SCI_SBD.mem`, and that an SQD sub-job is sized by `sqd.slurm.sbatch.mem` not `slurm.SQD.mem`). It also prints a per-layer **memory-orchestration table** (peak used vs. requested, with `TIGHT` / `over-provisioned` / `OOM` verdicts) to help right-size each block.
+
+```bash
+python slurm_jobs_check.py --workdir jobs_EWF        # or --config config.yaml
+python slurm_jobs_check.py --workdir jobs_EWF --all  # also list successful jobs
+python slurm_jobs_check.py --workdir jobs_EWF --json report.json
+```
+
+Requires only the Python standard library (plus `seff` / `sacct` on `PATH`); read-only (never calls `squeue` / `scancel` or touches the run), so it is safe to run at any time, including while jobs are still in flight. It exits non-zero if any job failed, and degrades gracefully to the on-disk `.status` records when `seff` / `sacct` are unavailable.
