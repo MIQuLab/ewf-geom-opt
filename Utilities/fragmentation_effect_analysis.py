@@ -577,17 +577,20 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
     cmd.show("sticks")
     cmd.show("spheres")
 
-    # Assign double/triple bond orders so PyMOL draws valence lines.
+    # Assign double/triple bond orders so PyMOL draws valence lines. The multiple
+    # bond is drawn ONLY on the reference; the corresponding EWF bond is removed so
+    # its highlight stick does not overlap and obscure the reference's valence
+    # lines (the EWF atoms adjacent to the bond are still shown as spheres).
     any_multiple = False
     for i, j in _covalent_bonds(atoms, ref_xyz):
         order = _bond_order(atoms[i], atoms[j],
                             float(np.linalg.norm(ref_xyz[i] - ref_xyz[j])))
         if order >= 2:
             any_multiple = True
-            for obj in ("ref", "ewf"):
-                a1, a2 = f"{obj} and index {i + 1}", f"{obj} and index {j + 1}"
-                cmd.unbond(a1, a2)
-                cmd.bond(a1, a2, order)
+            r1, r2 = f"ref and index {i + 1}", f"ref and index {j + 1}"
+            cmd.unbond(r1, r2)
+            cmd.bond(r1, r2, order)
+            cmd.unbond(f"ewf and index {i + 1}", f"ewf and index {j + 1}")
     if any_multiple:
         cmd.set("valence", 1)
         try:
@@ -630,8 +633,7 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
 
 
 def build_overlay_figure(results, out_path,
-                         ref_label="Unfragmented reference (CPK)",
-                         cmp_label="EWF SCI-SBD (highlight)", dpi=300):
+                         cmp_label="EWF SCI-SBD", dpi=300):
     """
     Publication-quality tiled figure: one tile per molecule, overlaying the
     aligned reference and EWF structures as ray-traced 3D ball-and-stick models
@@ -682,7 +684,7 @@ def build_overlay_figure(results, out_path,
     ncols = min(4, n)
     nrows = math.ceil(n / ncols)
     fontsize = 16
-    legend_in = 1.05
+    legend_in = 1.75
     tile_w, tile_h = 2.5, 2.4
     fig_h = tile_h * nrows + legend_in
     fig = plt.figure(figsize=(tile_w * ncols, fig_h))
@@ -691,18 +693,20 @@ def build_overlay_figure(results, out_path,
         ax = fig.add_subplot(nrows, ncols, idx + 1)
         ax.imshow(mpimg.imread(png))
         ax.set_axis_off()
-        ax.set_title(r["molecule"], fontsize=fontsize)   # RMSD is given in the table
+        # Label below the molecule (RMSD is given in the table) for readability.
+        ax.text(0.5, -0.03, r["molecule"], transform=ax.transAxes,
+                ha="center", va="top", fontsize=fontsize)
 
     yf = lambda inch: inch / fig_h
-    fig.subplots_adjust(left=0.005, right=0.995, top=1 - yf(0.1),
-                        bottom=yf(legend_in), wspace=0.0, hspace=0.16)
+    fig.subplots_adjust(left=0.005, right=0.995, top=1 - yf(0.05),
+                        bottom=yf(legend_in), wspace=0.0, hspace=0.28)
 
     # Legend 1: the EWF structure (its single highlight colour).
     ewf_handle = [Line2D([0], [0], marker="o", linestyle="none", markersize=15,
                          markerfacecolor=_EWF_HEX, markeredgecolor="black",
                          markeredgewidth=0.6)]
     leg1 = fig.legend(ewf_handle, [cmp_label], loc="center", frameon=False,
-                      fontsize=fontsize, bbox_to_anchor=(0.5, yf(0.72)))
+                      fontsize=fontsize, bbox_to_anchor=(0.5, yf(1.05)))
     fig.add_artist(leg1)
 
     # Legend 2: CPK element key for the reference structure (same font size).
@@ -717,7 +721,7 @@ def build_overlay_figure(results, out_path,
             for e in elems
         ]
         fig.legend(elem_handles, elems, loc="center", ncol=min(len(elems), 11),
-                   frameon=False, fontsize=fontsize, bbox_to_anchor=(0.5, yf(0.28)),
+                   frameon=False, fontsize=fontsize, bbox_to_anchor=(0.5, yf(0.38)),
                    handletextpad=0.2, columnspacing=1.1)
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
