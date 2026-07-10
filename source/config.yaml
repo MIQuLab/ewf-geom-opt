@@ -106,7 +106,7 @@ sqd:
   # per_fragment_samples:
   #   0: /path/to/cluster_0_count_dict.txt
   #   1: /path/to/cluster_1_count_dict.txt
-  qiskit_backend: ibm_marrakesh   # IBM backend name for SamplerV2
+  qiskit_backend: ibm_cleveland   # IBM backend name for SamplerV2
   default_shots: 100000           # shots per Qiskit SamplerV2 job
   n_reps: 1                       # LUCJ ansatz repetitions
   thresh_two_q: 1.0               # ffsim two-qubit-gate threshold

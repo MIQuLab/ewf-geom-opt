@@ -178,7 +178,7 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
 def run_qiskit_sampling(fcidump_path: str, backend_name: str,
                         default_shots: int, n_reps: int,
                         thresh_two_q: float = 1.0, thresh_meas: float = 0.10,
-                        verbose=None):
+                        verbose=None, submit: bool = True):
     """Construct the LUCJ ansatz from the FCIDUMP and sample on an IBM backend.
 
     Lifted from the original ``produce_quantum_sample.py``.  ffsim,
@@ -187,10 +187,17 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
 
     Returns ``(counts, circuit_metadata)`` where ``counts`` is the measurement
     dictionary and ``circuit_metadata`` is a JSON-serialisable dict describing
-    the submitted job -- ``job_id``, ``backend``, qubit counts, the ISA
-    ``gate_counts`` (``count_ops``), and the total / two-qubit circuit depth.
-    The metadata is captured here (the transpiled ISA circuit is only live at
-    this point) so the caller can persist it next to ``count_dict.txt``.
+    the circuit -- ``job_id`` (when submitted), ``backend``, qubit counts, the
+    ISA ``gate_counts`` (``count_ops``), and the total / two-qubit circuit
+    depth.  The metadata is captured here (the transpiled ISA circuit is only
+    live at this point) so the caller can persist it.
+
+    ``submit=False`` builds and transpiles the circuit and captures the metadata
+    but does NOT run the sampler -- used by the ``run_task: circuits`` analysis,
+    which only needs the circuit size (depth / qubits / gate counts) and must
+    not consume IBM Runtime time.  In that case ``counts`` is ``None``.  Note
+    that transpiling still needs a real backend target, so IBM connectivity is
+    required even without submission.
     """
     # Local imports keep optional dependencies optional.
     import numpy as np
@@ -326,6 +333,21 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
         circuit_metadata = {"backend": backend_name,
                             "metrics_error": repr(exc)}
 
+    if not submit:
+        # Circuit-size analysis only: no job submitted, no counts.
+        circuit_metadata["submitted"] = False
+        _msg = (f"  SQD circuits: transpiled LUCJ ansatz on {backend_name} "
+                f"(qubits={circuit_metadata.get('num_active_qubits', '?')}, "
+                f"depth={circuit_metadata.get('depth', '?')}, "
+                f"2q depth={circuit_metadata.get('two_qubit_depth', '?')}); "
+                f"job NOT submitted")
+        if verbose:
+            verbose.info(_msg)
+        else:
+            print(_msg, flush=True)
+        return None, circuit_metadata
+
+    circuit_metadata["submitted"] = True
     sampler = SamplerV2(mode=backend)
     sampler.options.dynamical_decoupling.enable = True
     sampler.options.dynamical_decoupling.sequence_type = "XY4"
@@ -347,6 +369,43 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     pub_result = result[0]
     counts = pub_result.data.meas.get_counts()
     return dict(counts), circuit_metadata
+
+
+def analyze_quantum_circuit(cluster_h5_path: str, workdir: str,
+                            sqd_cfg: dict, frag_idx: int = 0,
+                            verbose=None) -> Optional[str]:
+    """Build + transpile the LUCJ ansatz for one fragment and write its
+    circuit-size metadata to ``workdir/circuit_metadata.json`` WITHOUT
+    submitting an IBM Runtime job.  Backs the ``run_task: circuits`` analysis:
+    it records the same fields as a real sample's sidecar (qubit counts, ISA
+    gate histogram, circuit / two-qubit depth) so a later script can collect
+    circuit depth, qubit count, and CNOT/CZ counts per fragment.
+
+    Returns the metadata JSON path.
+    """
+    os.makedirs(workdir, exist_ok=True)
+    fcidump_path = os.path.abspath(os.path.join(workdir, "fci_dump.txt"))
+    norb, nocc = write_fcidump_from_cluster_h5(cluster_h5_path, fcidump_path)
+    if verbose:
+        verbose.info("  SQD circuits: wrote FCIDUMP %s (norb=%d, nocc=%d)",
+                     fcidump_path, norb, nocc)
+    _counts, circuit_meta = run_qiskit_sampling(
+        fcidump_path=fcidump_path,
+        backend_name=str(sqd_cfg.get("qiskit_backend", "ibm_cleveland")),
+        default_shots=int(sqd_cfg.get("default_shots", 100_000)),
+        n_reps=int(sqd_cfg.get("n_reps", 1)),
+        thresh_two_q=float(sqd_cfg.get("thresh_two_q", 1.0)),
+        thresh_meas=float(sqd_cfg.get("thresh_meas", 0.10)),
+        verbose=verbose, submit=False,
+    )
+    meta_path = os.path.join(workdir, "circuit_metadata.json")
+    circuit_meta = dict(circuit_meta or {})
+    circuit_meta.setdefault("frag_idx", int(frag_idx))
+    with open(meta_path, "w") as fh:
+        json.dump(circuit_meta, fh, indent=2, sort_keys=True)
+    if verbose:
+        verbose.info("  SQD circuits: wrote circuit metadata -> %s", meta_path)
+    return meta_path
 
 
 # Tiny helper kept for tests / scripts that want to read back a saved sample.

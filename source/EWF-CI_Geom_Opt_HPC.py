@@ -285,6 +285,22 @@ def load_config(path):
             f"Unsupported calculation.run_mode={run_mode!r}; expected one of "
             f"{', '.join(_RUN_MODES)}.")
     calc["run_mode"] = run_mode
+    # Run task: what the driver produces at the input geometry.
+    #   geomopt   -- geometry optimisation (the classic behaviour)
+    #   gradient  -- one single-point energy + nuclear gradient
+    #   energy    -- one single-point energy only (gradient skipped)
+    #   circuits  -- quantum-circuit size analysis for the SQD fragments
+    #                (build/transpile the LUCJ ansatz per fragment, no solve)
+    # Absent -> resolved in main() from geomopt.enabled for back-compat.
+    _RUN_TASKS = ("geomopt", "gradient", "energy", "circuits")
+    run_task = calc.get("run_task")
+    if run_task is not None:
+        run_task = str(run_task)
+        if run_task not in _RUN_TASKS:
+            raise ValueError(
+                f"Unsupported calculation.run_task={run_task!r}; expected one "
+                f"of {', '.join(_RUN_TASKS)}.")
+        calc["run_task"] = run_task
     calc.setdefault("geometry_file", "ch4_dimer.txt")
     calc.setdefault("basis", "sto-3g")
     calc.setdefault("charge", 0)
@@ -2169,7 +2185,7 @@ def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
 
 
 def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
-                   tag="driver", return_rdms=False):
+                   tag="driver", return_rdms=False, compute_gradient=True):
     """Run one full DUMP + FCI/SCI cycle on the current geometry and
     return ``(mol, mf, e_ewf, grad_natomx3)``.
 
@@ -2382,14 +2398,19 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     e_ewf = ewf_energy_from_rdms(mol, mf, dm1, dm2_cumulant)
     print(f"[{tag}] {method_label} energy: {e_ewf:.10f} Ha")
 
-    ewf_gradient = build_ewf_grad(
-        mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ, mf.get_hcore(),
-        hcore_generator=hcore_gen, grad_nuc_fn=grad_nuc_gen)
-    de_ewf = ewf_gradient(dm1, dm2_cumulant)
+    if compute_gradient:
+        ewf_gradient = build_ewf_grad(
+            mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ, mf.get_hcore(),
+            hcore_generator=hcore_gen, grad_nuc_fn=grad_nuc_gen)
+        de_ewf = ewf_gradient(dm1, dm2_cumulant)
+        de_out = np.asarray(de_ewf)
+    else:
+        print(f"[{tag}] energy-only task: skipping nuclear-gradient assembly")
+        de_out = None
     if return_rdms:
-        return (mol, mf, float(e_ewf), np.asarray(de_ewf),
+        return (mol, mf, float(e_ewf), de_out,
                 np.asarray(dm1), np.asarray(dm2_cumulant))
-    return mol, mf, float(e_ewf), np.asarray(de_ewf)
+    return mol, mf, float(e_ewf), de_out
 
 
 # ---------------------------------------------------------------------------
@@ -2477,7 +2498,7 @@ def _solve_full_system(cfg, tag):
     return mol, mf, e_cls, dm1, dm2, hcore_gen, grad_nuc_gen, solver
 
 
-def _run_unfragmented_ewf_limit_cycle(cfg, tag="driver"):
+def _run_unfragmented_ewf_limit_cycle(cfg, tag="driver", compute_gradient=True):
     """run_mode ``unfragmented_EWF_limit``: solve the whole molecule and evaluate
     the EWF energy *functional* + :func:`build_ewf_grad` gradient -- the
     no-fragmentation limit of the EWF method (a debug / reference tool).
@@ -2503,6 +2524,9 @@ def _run_unfragmented_ewf_limit_cycle(cfg, tag="driver"):
     e = ewf_energy_from_rdms(mol, mf, dm1, dm2_cum)
     print(f"[{tag}] UnfragEWFlim-{solver} energy (EWF functional): {e:.10f} Ha")
 
+    if not compute_gradient:
+        print(f"[{tag}] energy-only task: skipping nuclear-gradient assembly")
+        return mol, mf, float(e), None
     grad_fn = build_ewf_grad(
         mol, mf.mo_coeff, mf.mo_energy, mf.mo_occ, mf.get_hcore(),
         hcore_generator=hcore_gen, grad_nuc_fn=grad_nuc_gen)
@@ -2510,7 +2534,7 @@ def _run_unfragmented_ewf_limit_cycle(cfg, tag="driver"):
     return mol, mf, float(e), np.asarray(de)
 
 
-def _run_true_unfragmented_cycle(cfg, tag="driver"):
+def _run_true_unfragmented_cycle(cfg, tag="driver", compute_gradient=True):
     """run_mode ``true_unfragmented``: a genuine full-system FCI/SCI/SCI_SBD
     geometry optimisation -- the EXACT total energy (eigenvalue + E_nuc) paired
     with the ANALYTIC CASCI nuclear gradient (:func:`build_grad`), with the FULL
@@ -2529,6 +2553,9 @@ def _run_true_unfragmented_cycle(cfg, tag="driver"):
     e_total = e_cls + mol.energy_nuc()
     print(f"[{tag}] TrueUnfrag-{solver} energy (exact total): {e_total:.10f} Ha")
 
+    if not compute_gradient:
+        print(f"[{tag}] energy-only task: skipping nuclear-gradient assembly")
+        return mol, mf, float(e_total), None
     # Analytic CASCI gradient with the full MO space as the active space; dm1,
     # dm2 are the full-system RDMs (= casdm1, casdm2 since ncore=0, ncas=nmo).
     grad_fn = build_grad(
@@ -2538,27 +2565,38 @@ def _run_true_unfragmented_cycle(cfg, tag="driver"):
     return mol, mf, float(e_total), np.asarray(de)
 
 
-def _run_cycle(cfg, config_path, script_path, no_slurm=False, tag="driver"):
-    """Per-geometry energy + gradient, dispatched on ``calculation.run_mode``:
+def _run_cycle(cfg, config_path, script_path, no_slurm=False, tag="driver",
+               compute_gradient=True):
+    """Per-geometry energy (+ gradient), dispatched on ``calculation.run_mode``:
     ``'ewf'`` (default; fragmented Slurm workflow), ``'unfragmented_EWF_limit'``
     (full-system EWF functional), or ``'true_unfragmented'`` (full-system exact
-    energy + analytic CASCI gradient).  Returns ``(mol, mf, E, grad)``."""
+    energy + analytic CASCI gradient).  Returns ``(mol, mf, E, grad)`` -- with
+    ``grad is None`` when ``compute_gradient`` is False (the energy-only task)."""
     mode = cfg["calculation"].get("run_mode", "ewf")
     if mode == "unfragmented_EWF_limit":
-        return _run_unfragmented_ewf_limit_cycle(cfg, tag=tag)
+        return _run_unfragmented_ewf_limit_cycle(
+            cfg, tag=tag, compute_gradient=compute_gradient)
     if mode == "true_unfragmented":
-        return _run_true_unfragmented_cycle(cfg, tag=tag)
+        return _run_true_unfragmented_cycle(
+            cfg, tag=tag, compute_gradient=compute_gradient)
     return _run_ewf_cycle(cfg, config_path, script_path,
-                          no_slurm=no_slurm, tag=tag)
+                          no_slurm=no_slurm, tag=tag,
+                          compute_gradient=compute_gradient)
 
 
-def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False):
-    """Single-point driver: compute one energy + gradient at the input geometry
-    from ``config.yaml`` and exit.  Honours ``calculation.run_mode`` (fragmented
-    EWF or unfragmented full-system)."""
+def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False,
+                           compute_gradient=True):
+    """Single-point driver: compute one energy (and, unless ``compute_gradient``
+    is False, the nuclear gradient) at the input geometry from ``config.yaml``
+    and exit.  Honours ``calculation.run_mode`` (fragmented EWF or unfragmented
+    full-system).  ``compute_gradient=False`` is the ``run_task: energy`` path."""
     mol, mf, e_ewf, de_ewf = _run_cycle(
-        cfg, config_path, script_path, no_slurm=no_slurm, tag="driver")
+        cfg, config_path, script_path, no_slurm=no_slurm, tag="driver",
+        compute_gradient=compute_gradient)
     method_label = method_label_for_cfg(cfg)
+    if not compute_gradient:
+        print(f"\n{method_label} energy (energy-only task): {e_ewf:.10f} Ha")
+        return
     print(f"\n{method_label} Nuclear Gradient (Hartree/Bohr):")
     print(de_ewf)
     print(f"\n  Max |grad| : {np.max(np.abs(de_ewf)):.4e} Eh/Bohr")
@@ -2568,6 +2606,95 @@ def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False):
               "calculation.run_mode to 'true_unfragmented' (exact energy + "
               "analytic CASCI gradient) or 'unfragmented_EWF_limit' (EWF "
               "functional, debug) in the config.")
+
+
+def run_circuit_analysis(cfg, config_path, script_path, no_slurm=False):
+    """run_task ``circuits``: build + transpile the LUCJ quantum ansatz for the
+    fragments that would be solved with SQD and write a per-fragment
+    ``circuit_metadata.json`` (qubit count, ISA gate histogram, and circuit /
+    two-qubit depth).  No cluster solve, no SBD, no energy/gradient -- this task
+    exists purely to collect circuit sizes for the SQD fragments.
+
+    Fragment selection mirrors the multi-solver split:
+
+      * ``multi_solver`` disabled -> circuits for ALL fragments;
+      * ``multi_solver`` enabled  -> circuits only for fragments with
+        ``norb >= ewf.multi_solver.norb_threshold`` (the SQD-eligible clusters).
+
+    Each fragment's DUMP wave still runs (inline) because the LUCJ circuit is
+    built from the cluster FCIDUMP; only the solve/energy/gradient stages are
+    skipped.  Transpilation targets the real ``sqd.qiskit_backend``, so IBM
+    connectivity is required, but no Runtime job is submitted.
+    """
+    _here = os.path.dirname(os.path.abspath(__file__))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    import sqd_quantum_sampling
+
+    workdir = cfg["calculation"]["workdir"]
+    os.makedirs(workdir, exist_ok=True)
+    threshold = float(cfg["ewf"]["bath_threshold"])
+    sqd_cfg = cfg.get("sqd", {}) or {}
+    restart = bool(cfg["calculation"].get("restart", False))
+
+    print("[circuits] Building mol + RHF")
+    mol, mf = build_mol_and_mf(cfg)
+    print(f"[circuits] HF energy: {mf.e_tot:.10f}")
+
+    nfrag = discover_n_fragments(mf, threshold)
+    print(f"[circuits] Discovered {nfrag} fragment(s) at threshold={threshold}")
+
+    # DUMP every fragment (inline) so we know each cluster's norb and have the
+    # FCIDUMP the LUCJ circuit is built from.
+    for i in range(nfrag):
+        cluster_h5, _ = fragment_paths(workdir, i)
+        if restart and _is_valid_h5(cluster_h5):
+            print(f"[circuits] Restart: reusing existing {cluster_h5}")
+            continue
+        run_dump_worker(i, cfg)
+
+    ms = cfg["ewf"].get("multi_solver", {}) or {}
+    multi = bool(ms.get("enabled", False))
+    norb_threshold = int(ms.get("norb_threshold", 0))
+
+    targets = []
+    for i in range(nfrag):
+        cluster_h5, _ = fragment_paths(workdir, i)
+        with h5py.File(cluster_h5, "r") as h5:
+            norb = int(h5[list(h5.keys())[0]].attrs["norb"])
+        if (not multi) or (norb >= norb_threshold):
+            targets.append((i, norb))
+
+    if multi:
+        print(f"[circuits] Multi-solver: {len(targets)}/{nfrag} fragment(s) "
+              f"with norb >= {norb_threshold} get a quantum circuit "
+              f"(the SQD-eligible clusters)")
+    else:
+        print(f"[circuits] All {nfrag} fragment(s) get a quantum circuit")
+
+    results, failures = [], []
+    for i, norb in targets:
+        cluster_h5, _ = fragment_paths(workdir, i)
+        frag_dir = os.path.join(workdir, f"circuit_frag_{i:03d}")
+        print(f"[circuits] Fragment {i} (norb={norb}): building LUCJ ansatz")
+        try:
+            meta_path = sqd_quantum_sampling.analyze_quantum_circuit(
+                cluster_h5, frag_dir, sqd_cfg, frag_idx=i)
+            results.append((i, norb, meta_path))
+        except Exception as exc:  # keep going: one bad fragment must not abort
+            print(f"[circuits] Fragment {i}: circuit analysis FAILED: {exc}")
+            failures.append((i, norb, repr(exc)))
+
+    print(f"\n[circuits] Wrote circuit metadata for {len(results)}/"
+          f"{len(targets)} targeted fragment(s):")
+    for i, norb, meta_path in results:
+        print(f"   frag {i:>3d}  norb={norb:<4d} -> {meta_path}")
+    if failures:
+        print(f"[circuits] {len(failures)} fragment(s) failed: "
+              f"{[i for i, _, _ in failures]}")
+    print("[circuits] Each circuit_metadata.json holds job-free ISA circuit "
+          "metrics (num_qubits, gate_counts, depth, two_qubit_depth) for "
+          "collecting depth / qubit / CNOT-CZ statistics per fragment.")
 
 
 # ---------------------------------------------------------------------------
@@ -3070,6 +3197,15 @@ def parse_args(argv=None):
                         "gradient evaluation at the input geometry and "
                         "skip geometry optimisation, regardless of the "
                         "geomopt.enabled flag in the config.")
+    p.add_argument("--task",
+                   choices=["geomopt", "gradient", "energy", "circuits"],
+                   default=None,
+                   help="(driver mode) What to compute at the input geometry, "
+                        "overriding calculation.run_task: 'geomopt' "
+                        "(optimise), 'gradient' (single-point E + gradient), "
+                        "'energy' (single-point E only), or 'circuits' "
+                        "(LUCJ quantum-circuit size analysis for the SQD "
+                        "fragments -- no solve).")
     restart_group = p.add_mutually_exclusive_group()
     restart_group.add_argument(
         "--restart", dest="restart", action="store_true", default=None,
@@ -3114,16 +3250,29 @@ def main(argv=None):
         return
 
     # ---- driver mode -------------------------------------------------
-    do_geomopt = bool(cfg["geomopt"].get("enabled", True))
-    if args.single_point:
-        do_geomopt = False
-    if do_geomopt:
-        run_geomopt(cfg, os.path.abspath(args.config), script_path,
-                    no_slurm=args.no_slurm)
-    else:
-        run_driver_singlepoint(
-            cfg, os.path.abspath(args.config), script_path,
-            no_slurm=args.no_slurm)
+    # Resolve the run task.  Explicit calculation.run_task wins; absent, fall
+    # back to the legacy geomopt.enabled flag.  CLI --task / --single-point
+    # override the config for this invocation.
+    run_task = cfg["calculation"].get("run_task")
+    if run_task is None:
+        run_task = ("geomopt" if bool(cfg["geomopt"].get("enabled", True))
+                    else "gradient")
+    if args.single_point and run_task == "geomopt":
+        run_task = "gradient"
+    if args.task:
+        run_task = args.task
+
+    cfgp = os.path.abspath(args.config)
+    if run_task == "geomopt":
+        run_geomopt(cfg, cfgp, script_path, no_slurm=args.no_slurm)
+    elif run_task == "circuits":
+        run_circuit_analysis(cfg, cfgp, script_path, no_slurm=args.no_slurm)
+    elif run_task == "energy":
+        run_driver_singlepoint(cfg, cfgp, script_path,
+                               no_slurm=args.no_slurm, compute_gradient=False)
+    else:  # gradient
+        run_driver_singlepoint(cfg, cfgp, script_path,
+                               no_slurm=args.no_slurm, compute_gradient=True)
 
 
 if __name__ == "__main__":
