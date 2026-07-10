@@ -153,12 +153,13 @@ optimized geometries superimposed:
 
 - **Ball-and-stick, ray-traced** — smooth spheres and cylinders with shadows and
   anti-aliasing, in the style of PyMOL / Avogadro / Chimera.
-- **Two-model overlay (Chimera style)** — both structures are drawn opaque and at
-  **equal size**, with their **carbons in distinct solid colours** (baby blue for the
-  unfragmented reference, tan for EWF SCI-SBD); heteroatoms and hydrogens keep their
-  element colours (red O, blue N, white H, …). Wherever the two geometries diverge the
-  overlap reads clearly as interleaved blue/tan. A legend keys the two structures by
-  carbon colour, and an element key for heteroatoms / H is shown below.
+- **Two-model overlay** — both structures are drawn opaque and at **equal size**. The
+  unfragmented reference uses standard **CPK element colours** (grey C, white H, blue N,
+  red O, yellow S, beige Si, …); the EWF structure is drawn in **one consistent
+  highlight colour on every atom** — a vivid magenta-purple (`#B026C9`) chosen to stay
+  visible against every CPK colour in the set. Wherever the two geometries diverge, the
+  magenta EWF atoms/bonds stand out on all atoms. A legend keys the two structures, and
+  a CPK element key for the reference is shown below.
 - **Double / triple bonds** — bond order is inferred from the interatomic distance and
   element pair and shown as PyMOL valence lines (e.g. the C=O in acetone, the C≡C in
   acetylene).

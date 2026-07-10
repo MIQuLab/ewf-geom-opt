@@ -389,12 +389,13 @@ def _bond_order(a, b, dist):
     return min(table, key=lambda o: abs(dist - table[o]))
 
 
-# Distinct solid carbon colours identifying the two overlaid structures, in the
-# style of a Chimera two-model overlay (heteroatoms / H stay element-coloured).
-_REF_CARBON_RGB = (0.62, 0.82, 0.93)   # baby blue -> unfragmented reference
-_EWF_CARBON_RGB = (0.85, 0.75, 0.56)   # tan       -> EWF SCI-SBD
-_REF_HEX = "#9ED1ED"
-_EWF_HEX = "#D9BF8F"
+# The unfragmented reference is drawn in standard CPK element colours; the EWF
+# structure is drawn in ONE consistent highlight colour on EVERY atom, chosen to
+# stay visible against all CPK colours in the set (C grey, H white, N blue,
+# O red, S yellow, Si beige) -- a vivid magenta-purple sits in the palette's gap.
+_EWF_HILITE_RGB = (0.69, 0.15, 0.79)
+_EWF_HEX = "#B026C9"
+_REF_SWATCH_HEX = "#909090"   # grey carbon, representing the reference's CPK scheme
 
 
 def _hex_to_rgb(h):
@@ -463,19 +464,16 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
         except Exception:
             pass
 
-    # Chimera-style two-model colouring: each structure's carbons get a distinct
-    # solid colour (baby blue vs tan); heteroatoms and hydrogens keep element
-    # colours. Both structures are drawn at equal size and opaque so the overlap
-    # reads as interleaved blue/tan wherever the geometries diverge.
-    cmd.set_color("ref_carbon", list(_REF_CARBON_RGB))
-    cmd.set_color("ewf_carbon", list(_EWF_CARBON_RGB))
-    hetero = {_elem(a) for a in atoms} - {"C"}
-    for obj, carbon_color in (("ref", "ref_carbon"), ("ewf", "ewf_carbon")):
-        cmd.color(carbon_color, obj)                      # colour everything...
-        for el in hetero:                                 # ...then heteroatoms/H by element
-            cname = f"cpk_{el}"
-            cmd.set_color(cname, _hex_to_rgb(_CPK_COLORS.get(el, _DEFAULT_CPK)))
-            cmd.color(cname, f"{obj} and elem {el}")
+    # Overlay colouring: the reference keeps standard CPK element colours; every
+    # atom of the EWF structure gets the same highlight colour, so the overlap is
+    # visible on ALL atoms wherever the geometries diverge. Both structures are
+    # drawn at equal size and opaque.
+    for el in {_elem(a) for a in atoms}:
+        cname = f"cpk_{el}"
+        cmd.set_color(cname, _hex_to_rgb(_CPK_COLORS.get(el, _DEFAULT_CPK)))
+        cmd.color(cname, f"ref and elem {el}")
+    cmd.set_color("ewf_hilite", list(_EWF_HILITE_RGB))
+    cmd.color("ewf_hilite", "ewf")
 
     # Equal ball-and-stick sizing for both structures.
     for obj in ("ref", "ewf"):
@@ -503,8 +501,8 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
 
 
 def build_overlay_figure(results, out_path,
-                         ref_label="Unfragmented reference (blue C)",
-                         cmp_label="EWF SCI-SBD (tan C)", dpi=300):
+                         ref_label="Unfragmented reference (CPK)",
+                         cmp_label="EWF SCI-SBD (highlight)", dpi=300):
     """
     Publication-quality tiled figure: one tile per molecule, overlaying the
     aligned reference and EWF structures as ray-traced 3D ball-and-stick models
@@ -560,10 +558,10 @@ def build_overlay_figure(results, out_path,
     fig.subplots_adjust(left=0.01, right=0.99, top=0.93, bottom=yf(1.3),
                         wspace=0.02, hspace=0.16)
 
-    # Legend 1: the two structures, keyed by their carbon colour (blue vs tan).
+    # Legend 1: the two structures (reference CPK vs EWF single highlight colour).
     struct_handles = [
         Line2D([0], [0], marker="o", linestyle="none", markersize=12,
-               markerfacecolor=_REF_HEX, markeredgecolor="black", markeredgewidth=0.6),
+               markerfacecolor=_REF_SWATCH_HEX, markeredgecolor="black", markeredgewidth=0.6),
         Line2D([0], [0], marker="o", linestyle="none", markersize=12,
                markerfacecolor=_EWF_HEX, markeredgecolor="black", markeredgewidth=0.6),
     ]
@@ -572,10 +570,10 @@ def build_overlay_figure(results, out_path,
                       bbox_to_anchor=(0.5, yf(0.98)))
     fig.add_artist(leg1)
 
-    # Legend 2: element key for heteroatoms and hydrogen (carbon is structure-coloured).
-    order = ["H", "N", "O", "F", "P", "S", "Cl", "Br", "I"]
+    # Legend 2: CPK element key for the reference structure.
+    order = ["H", "C", "N", "O", "F", "P", "S", "Si", "Cl", "Br", "I"]
     elems = [e for e in order if e in present_elems] + \
-            sorted(present_elems - set(order) - {"C"})
+            sorted(present_elems - set(order))
     if elems:
         elem_handles = [
             Line2D([0], [0], marker="o", linestyle="none", markersize=11,
@@ -583,10 +581,10 @@ def build_overlay_figure(results, out_path,
                    markeredgecolor="black", markeredgewidth=0.5)
             for e in elems
         ]
-        fig.legend(elem_handles, elems, loc="center", ncol=min(len(elems), 10),
+        fig.legend(elem_handles, elems, loc="center", ncol=min(len(elems), 11),
                    frameon=False, fontsize=9.5, bbox_to_anchor=(0.5, yf(0.30)),
                    handletextpad=0.2, columnspacing=1.1,
-                   title="Heteroatom / H colours (element)", title_fontsize=9.5)
+                   title="Reference CPK element colours", title_fontsize=9.5)
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     png_path = os.path.splitext(out_path)[0] + ".png"
