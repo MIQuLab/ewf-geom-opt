@@ -1,0 +1,800 @@
+#!/usr/bin/env python3
+"""
+Batch geometry-deviation analysis across molecules.
+
+Compares the optimized geometry of each molecule between a reference tree and
+a comparison tree, reporting the RMSD and maximum atomic deviation per molecule,
+plus orbital-space and optimization-step metadata pulled from the run logs.
+
+Directory layout expected under EACH of the two top-level paths:
+
+    <top_level>/
+        <molecule>/                       e.g. acetone, acetylene, ...
+            EWF-CI_Geom_Opt_HPC.log       run log (same name in both trees)
+            jobs_TRUEUNFRAG/
+                true_unfragmented_geomopt_optim.xyz
+            jobs_EWF/
+                ewf_geomopt_optim.xyz
+
+  * Path 1 (reference) = ".../SCI-SBD_unfragmented"  -> unfragmented job
+    (jobs_TRUEUNFRAG / true_unfragmented_geomopt_optim.xyz). Its log reports the
+    full active space as "[geomopt step=000] Full active space: norb=26".
+  * Path 2 (compared)  = ".../SCI-SBD"               -> fragmented EWF job
+    (jobs_EWF / ewf_geomopt_optim.xyz). Its log reports per-cluster orbital
+    counts as "O  E_cluster = ... Ha  [SCI_SBD, norb=16]".
+
+The .xyz files are optimization trajectories (many stacked geometries); only the
+LAST frame (the converged / optimized geometry) is compared.
+
+Metadata extracted per molecule:
+  * Largest-fragment MOs  : max norb across the EWF per-cluster energy lines.
+  * Full active-space MOs : norb from the unfragmented log's "Full active space".
+  * Opt steps (EWF / ref) : number of geometry-optimisation cycles in each run.
+
+Alignment (Kabsch) and the RMSD / max-deviation computation are reused from
+geom_compare.py, which must sit next to this script.
+"""
+
+import os
+import re
+import sys
+import glob
+import math
+import shutil
+import tempfile
+import argparse
+import subprocess
+import numpy as np
+
+# Reuse the vetted alignment / comparison routine from the existing tool.
+from geom_compare import align_and_compare, _is_float
+
+
+# ---------------------------------------------------------------------------
+# Defaults describing where each file lives inside a molecule folder
+# ---------------------------------------------------------------------------
+
+REFERENCE_SUBPATH = os.path.join("jobs_TRUEUNFRAG", "true_unfragmented_geomopt_optim.xyz")
+COMPARED_SUBPATH = os.path.join("jobs_EWF", "ewf_geomopt_optim.xyz")
+LOG_NAME = "EWF-CI_Geom_Opt_HPC.log"
+
+# Distances (RMSD / max deviation) are reported with three decimals, e.g. 0.011.
+DIST_FMT = "{:.3f}"
+
+
+# ---------------------------------------------------------------------------
+# Parsing: extract the LAST geometry frame from a multi-frame xyz trajectory
+# ---------------------------------------------------------------------------
+
+def parse_last_frame(filepath):
+    """
+    Read a (possibly multi-frame) xyz file and return the LAST geometry.
+
+    Returns
+    -------
+    atoms  : list[str]        atomic symbols
+    coords : np.ndarray (N,3) coordinates of the final frame
+    """
+    with open(filepath) as fh:
+        lines = [l.rstrip("\n") for l in fh]
+
+    # Walk block-by-block: <count> / <comment> / <count> data lines, repeated.
+    last_atoms, last_coords = None, None
+    i = 0
+    n_lines = len(lines)
+    while i < n_lines:
+        # Skip blank lines between frames.
+        if not lines[i].strip():
+            i += 1
+            continue
+
+        header = lines[i].split()
+        if len(header) == 1 and header[0].isdigit():
+            n_atoms = int(header[0])
+            data_start = i + 2  # skip count line and comment line
+            atoms, coords = [], []
+            for line in lines[data_start:data_start + n_atoms]:
+                parts = line.split()
+                if len(parts) >= 4 and all(_is_float(p) for p in parts[1:4]):
+                    atoms.append(parts[0])
+                    coords.append([float(parts[1]), float(parts[2]), float(parts[3])])
+            if len(atoms) == n_atoms and n_atoms > 0:
+                last_atoms, last_coords = atoms, coords
+            i = data_start + n_atoms
+        else:
+            # Not a valid xyz header where expected; advance to avoid infinite loop.
+            i += 1
+
+    if last_atoms is None:
+        raise ValueError(f"No valid xyz frame found in: {filepath}")
+
+    return last_atoms, np.array(last_coords, dtype=float)
+
+
+# ---------------------------------------------------------------------------
+# Parsing: metadata from the optimisation log
+# ---------------------------------------------------------------------------
+
+_STEP_RE = re.compile(r"geomopt step=(\d+)")
+_CYCLES_RE = re.compile(r"Cycles evaluated\s*:\s*(\d+)")
+_CLUSTER_NORB_RE = re.compile(r"E_cluster\s*=.*norb=(\d+)")
+_FULL_NORB_RE = re.compile(r"Full active space:\s*norb=(\d+)")
+
+
+def find_log(molecule_dir):
+    """Locate the run log inside a molecule folder (default name, else any *.log)."""
+    primary = os.path.join(molecule_dir, LOG_NAME)
+    if os.path.isfile(primary):
+        return primary
+    candidates = sorted(glob.glob(os.path.join(molecule_dir, "*.log")))
+    return candidates[0] if candidates else None
+
+
+def parse_num_steps(logpath):
+    """
+    Number of geometry-optimisation steps performed.
+
+    Prefers the authoritative "Cycles evaluated : N" line from the summary;
+    falls back to (highest 'geomopt step=' index + 1).
+    """
+    text = _read(logpath)
+    m = _CYCLES_RE.search(text)
+    if m:
+        return int(m.group(1))
+    steps = [int(s) for s in _STEP_RE.findall(text)]
+    return max(steps) + 1 if steps else None
+
+
+def parse_largest_fragment_norb(logpath):
+    """Largest per-cluster orbital count (max norb over EWF E_cluster lines)."""
+    norbs = [int(n) for n in _CLUSTER_NORB_RE.findall(_read(logpath))]
+    return max(norbs) if norbs else None
+
+
+def parse_full_norb(logpath):
+    """Full active-space orbital count from the unfragmented log."""
+    m = _FULL_NORB_RE.search(_read(logpath))
+    return int(m.group(1)) if m else None
+
+
+def _read(path):
+    with open(path, errors="replace") as fh:
+        return fh.read()
+
+
+# ---------------------------------------------------------------------------
+# Molecule discovery
+# ---------------------------------------------------------------------------
+
+def list_molecules(top_level):
+    """Return the sorted names of immediate subdirectories (molecule folders)."""
+    return sorted(
+        name for name in os.listdir(top_level)
+        if os.path.isdir(os.path.join(top_level, name))
+    )
+
+
+def _fmt(value):
+    """Render an int metric or 'n/a' when it could not be parsed."""
+    return str(value) if value is not None else "n/a"
+
+
+# ---------------------------------------------------------------------------
+# LaTeX output (ACS / achemso style) + PDF compilation
+# ---------------------------------------------------------------------------
+
+_LATEX_SPECIALS = {
+    "\\": r"\textbackslash{}", "&": r"\&", "%": r"\%", "$": r"\$",
+    "#": r"\#", "_": r"\_", "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
+def escape_latex(text):
+    """Escape LaTeX special characters in a plain string (e.g. molecule names)."""
+    return "".join(_LATEX_SPECIALS.get(ch, ch) for ch in str(text))
+
+
+def _num_cell(value, fmt="{}"):
+    """A siunitx S-column cell: formatted number, or a braced dash for missing data."""
+    return "{--}" if value is None else fmt.format(value)
+
+
+def build_latex_table(results, ref_root, cmp_root):
+    """Return a standalone ACS-style (achemso) LaTeX document containing the table."""
+    caption = (
+        "Comparison of the optimized geometries obtained from EWF SCI "
+        "calculations against the unfragmented SCI reference calculations, for "
+        "each molecule. "
+        "Here \\textbf{$N$} is number of atoms, "
+        "\\textbf{RMSD} is root-mean-square deviation between the EWF SCI and "
+        "unfragmented SCI calculations, "
+        "\\textbf{Max deviation} is largest single-atom displacement, "
+        "\\textbf{Max EWF MOs} is number of molecular orbitals in the largest "
+        "EWF cluster, "
+        "\\textbf{Full MOs} is the total number of MOs in the unfragmented molecule, "
+        "and \\textbf{EWF steps} and \\textbf{Reference steps} are number of "
+        "geometry-optimization cycles in the EWF SCI and unfragmented SCI runs, "
+        "respectively."
+    )
+
+    rows = []
+    for r in results:
+        rows.append(
+            "{molecule} & {n} & {rmsd} & {maxdev} & {frag} & {full} & {ewf} & {ref} \\\\".format(
+                molecule=escape_latex(r["molecule"]),
+                n=_num_cell(r["natoms"]),
+                rmsd=_num_cell(r["rmsd"], DIST_FMT),
+                maxdev=_num_cell(r["max_dev"], DIST_FMT),
+                frag=_num_cell(r["frag_norb"]),
+                full=_num_cell(r["full_norb"]),
+                ewf=_num_cell(r["ewf_steps"]),
+                ref=_num_cell(r["ref_steps"]),
+            )
+        )
+    body = "\n".join(rows)
+
+    # Column specification: text name + siunitx numeric columns for aligned figures.
+    colspec = ("l "
+               "S[table-format=2.0] "        # N
+               "S[table-format=2.3] "        # RMSD
+               "S[table-format=2.3] "        # Max dev
+               "S[table-format=3.0] "        # Max MOs in Frag.
+               "S[table-format=3.0] "        # Full MOs
+               "S[table-format=3.0] "        # EWF steps
+               "S[table-format=3.0]")        # Ref steps
+
+    header = (
+        "{Molecule} & {$N$} & {RMSD} & {Max} & "
+        "{Max EWF} & {Full} & {EWF} & {Reference} \\\\\n"
+        " & & {(\\si{\\angstrom})} & {deviation (\\si{\\angstrom})} & "
+        "{MOs} & {MOs} & {steps} & {steps} \\\\"
+    )
+
+    # Highlight the molecule with the highest discrepancy (largest RMSD).
+    worst = max(results, key=lambda r: r["rmsd"])
+    discussion = (
+        "As can be seen from the Table, the highest discrepancy between EWF SCI "
+        "and unfragmented SCI calculations is observed in "
+        f"{escape_latex(worst['molecule'])}, where RMSD and maximum deviation are "
+        f"{DIST_FMT.format(worst['rmsd'])} and {DIST_FMT.format(worst['max_dev'])} "
+        "\\si{\\angstrom}, respectively."
+    )
+
+    return f"""\\documentclass[journal=jacsat,manuscript=article,layout=twocolumn]{{achemso}}
+\\usepackage{{booktabs}}
+\\usepackage{{siunitx}}
+\\sisetup{{detect-weight=true, detect-family=true}}
+
+% Suppress the achemso corresponding-author "E-mail:" line in the title block.
+\\makeatletter
+\\AtBeginDocument{{\\let\\ifacs@email\\iffalse}}
+\\makeatother
+
+\\author{{Automated Report}}
+\\affiliation{{EWF SCI--SBD vs.\\ unfragmented geometry comparison}}
+\\title{{Optimized-geometry comparison: fragmented (EWF) SCI--SBD vs.\\ unfragmented reference}}
+
+% Reference tree (unfragmented): {escape_latex(ref_root)}
+% Compared  tree (EWF):          {escape_latex(cmp_root)}
+
+\\begin{{document}}
+
+\\begin{{table*}}
+  \\centering
+  \\small
+  \\caption{{{caption}}}
+  \\label{{tab:geom-comparison}}
+  \\begin{{tabular}}{{{colspec}}}
+    \\toprule
+    {header}
+    \\midrule
+{_indent(body, 4)}
+    \\bottomrule
+  \\end{{tabular}}
+\\end{{table*}}
+
+{discussion}
+
+\\end{{document}}
+"""
+
+
+def _indent(text, spaces):
+    pad = " " * spaces
+    return "\n".join(pad + line for line in text.splitlines())
+
+
+def compile_pdf(tex_path):
+    """
+    Compile the LaTeX file to PDF with tectonic.
+
+    Returns (pdf_path, error_message). On success error_message is None.
+    """
+    tectonic = shutil.which("tectonic")
+    if tectonic is None:
+        return None, ("tectonic not found on PATH — install it with "
+                      "'conda install -n classical -c conda-forge tectonic' "
+                      "(or activate the env), then re-run to get the PDF.")
+
+    outdir = os.path.dirname(os.path.abspath(tex_path)) or "."
+    proc = subprocess.run(
+        [tectonic, tex_path, "--outdir", outdir, "--chatter", "minimal"],
+        capture_output=True, text=True,
+    )
+    pdf_path = os.path.splitext(tex_path)[0] + ".pdf"
+    if proc.returncode == 0 and os.path.isfile(pdf_path):
+        return pdf_path, None
+    return None, (proc.stderr.strip() or proc.stdout.strip() or
+                  "tectonic exited non-zero with no output")
+
+
+# ---------------------------------------------------------------------------
+# Structure-overlay figure (3D CPK ball-and-stick, tiled per molecule)
+# ---------------------------------------------------------------------------
+
+# Covalent radii (Cordero 2008), in Angstrom, for distance-based bond detection.
+_COVALENT_RADII = {
+    "H": 0.31, "He": 0.28, "Li": 1.28, "Be": 0.96, "B": 0.84, "C": 0.76,
+    "N": 0.71, "O": 0.66, "F": 0.57, "Ne": 0.58, "Na": 1.66, "Mg": 1.41,
+    "Al": 1.21, "Si": 1.11, "P": 1.07, "S": 1.05, "Cl": 1.02, "Ar": 1.06,
+    "K": 2.03, "Ca": 1.76, "Br": 1.20, "I": 1.39,
+}
+_DEFAULT_RADIUS = 0.75
+
+# CPK / Jmol element colors for the balls.
+_CPK_COLORS = {
+    "H": "#FFFFFF", "C": "#909090", "N": "#3050F8", "O": "#FF0D0D",
+    "F": "#90E050", "Ne": "#B3E3F5", "Na": "#AB5CF2", "Mg": "#8AFF00",
+    "Al": "#BFA6A6", "Si": "#F0C8A0", "P": "#FF8000", "S": "#FFFF30",
+    "Cl": "#1FF01F", "Ar": "#80D1E3", "K": "#8F40D4", "Ca": "#3DFF00",
+    "B": "#FFB5B5", "Br": "#A62929", "I": "#940094", "Fe": "#E06633",
+    "Zn": "#7D80B0",
+}
+_DEFAULT_CPK = "#FF1493"
+
+# Typical bond lengths (Angstrom) per bond order, for guessing double/triple bonds.
+_BOND_ORDER_LENGTHS = {
+    ("C", "C"): {1: 1.54, 2: 1.34, 3: 1.20},
+    ("C", "N"): {1: 1.47, 2: 1.29, 3: 1.16},
+    ("C", "O"): {1: 1.43, 2: 1.23, 3: 1.13},
+    ("N", "N"): {1: 1.45, 2: 1.25, 3: 1.10},
+    ("N", "O"): {1: 1.40, 2: 1.21},
+    ("O", "O"): {1: 1.48, 2: 1.21},
+    ("C", "S"): {1: 1.82, 2: 1.60},
+}
+
+
+def _elem(sym):
+    return sym.capitalize()
+
+
+def _covalent_bonds(atoms, coords, tol=1.15):
+    """List of (i, j) atom-index pairs bonded by the covalent-radii criterion."""
+    radii = np.array([_COVALENT_RADII.get(_elem(a), _DEFAULT_RADIUS) for a in atoms])
+    bonds = []
+    n = len(atoms)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if np.linalg.norm(coords[i] - coords[j]) <= tol * (radii[i] + radii[j]):
+                bonds.append((i, j))
+    return bonds
+
+
+def _bond_order(a, b, dist):
+    """Guess bond order (1/2/3) from the interatomic distance and element pair."""
+    table = _BOND_ORDER_LENGTHS.get(tuple(sorted((_elem(a), _elem(b)))))
+    if not table:
+        return 1
+    return min(table, key=lambda o: abs(dist - table[o]))
+
+
+# Distinct solid carbon colours identifying the two overlaid structures, in the
+# style of a Chimera two-model overlay (heteroatoms / H stay element-coloured).
+_REF_CARBON_RGB = (0.62, 0.82, 0.93)   # baby blue -> unfragmented reference
+_EWF_CARBON_RGB = (0.85, 0.75, 0.56)   # tan       -> EWF SCI-SBD
+_REF_HEX = "#9ED1ED"
+_EWF_HEX = "#D9BF8F"
+
+
+def _hex_to_rgb(h):
+    h = h.lstrip("#")
+    return [int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
+
+
+_PYMOL_CMD = None
+
+
+def _get_pymol():
+    """Launch a headless PyMOL once and return its cmd module (raises if absent)."""
+    global _PYMOL_CMD
+    if _PYMOL_CMD is None:
+        import pymol
+        pymol.finish_launching(["pymol", "-qc"])   # quiet, no GUI
+        from pymol import cmd
+        _PYMOL_CMD = cmd
+    return _PYMOL_CMD
+
+
+def _write_xyz(atoms, coords, path):
+    with open(path, "w") as fh:
+        fh.write(f"{len(atoms)}\n\n")
+        for a, c in zip(atoms, coords):
+            fh.write(f"{a} {c[0]:.6f} {c[1]:.6f} {c[2]:.6f}\n")
+
+
+def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
+    """
+    Ray-trace one molecule tile with PyMOL: the reference in CPK colours (grey
+    carbons) overlaid with the EWF structure in a single accent colour, both as
+    ball-and-stick with double/triple bonds shown as valence lines. The best
+    viewing angle is chosen automatically via PyMOL 'orient'.
+    """
+    cmd.reinitialize()
+    cmd.bg_color("white")
+    cmd.set("ray_opaque_background", 0)
+
+    tmp = tempfile.mkdtemp()
+    rf, ef = os.path.join(tmp, "ref.xyz"), os.path.join(tmp, "ewf.xyz")
+    _write_xyz(atoms, ref_xyz, rf)
+    _write_xyz(atoms, cmp_xyz, ef)
+    cmd.load(rf, "ref")
+    cmd.load(ef, "ewf")
+
+    cmd.hide("everything")
+    cmd.show("sticks")
+    cmd.show("spheres")
+
+    # Assign double/triple bond orders so PyMOL draws valence lines.
+    any_multiple = False
+    for i, j in _covalent_bonds(atoms, ref_xyz):
+        order = _bond_order(atoms[i], atoms[j],
+                            float(np.linalg.norm(ref_xyz[i] - ref_xyz[j])))
+        if order >= 2:
+            any_multiple = True
+            for obj in ("ref", "ewf"):
+                a1, a2 = f"{obj} and index {i + 1}", f"{obj} and index {j + 1}"
+                cmd.unbond(a1, a2)
+                cmd.bond(a1, a2, order)
+    if any_multiple:
+        cmd.set("valence", 1)
+        try:
+            cmd.set("valence_size", 0.11)
+        except Exception:
+            pass
+
+    # Chimera-style two-model colouring: each structure's carbons get a distinct
+    # solid colour (baby blue vs tan); heteroatoms and hydrogens keep element
+    # colours. Both structures are drawn at equal size and opaque so the overlap
+    # reads as interleaved blue/tan wherever the geometries diverge.
+    cmd.set_color("ref_carbon", list(_REF_CARBON_RGB))
+    cmd.set_color("ewf_carbon", list(_EWF_CARBON_RGB))
+    hetero = {_elem(a) for a in atoms} - {"C"}
+    for obj, carbon_color in (("ref", "ref_carbon"), ("ewf", "ewf_carbon")):
+        cmd.color(carbon_color, obj)                      # colour everything...
+        for el in hetero:                                 # ...then heteroatoms/H by element
+            cname = f"cpk_{el}"
+            cmd.set_color(cname, _hex_to_rgb(_CPK_COLORS.get(el, _DEFAULT_CPK)))
+            cmd.color(cname, f"{obj} and elem {el}")
+
+    # Equal ball-and-stick sizing for both structures.
+    for obj in ("ref", "ewf"):
+        cmd.set("sphere_scale", 0.20, obj)
+        cmd.set("stick_radius", 0.15, obj)
+
+    # Quality / lighting.
+    cmd.set("ray_shadows", 1)
+    cmd.set("antialias", 2)
+    cmd.set("ambient", 0.30)
+    cmd.set("specular", 0.25)
+    cmd.set("sphere_quality", 3)
+    cmd.set("stick_quality", 20)
+
+    # Best angle + slight tilt for depth; small buffer keeps atoms off the edges
+    # while letting the molecule fill the tile.
+    cmd.orient()
+    cmd.turn("y", 20)
+    cmd.turn("x", -12)
+    cmd.zoom("all", 0.4, complete=1)
+
+    cmd.ray(size, size)
+    cmd.png(out_png, dpi=300)
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def build_overlay_figure(results, out_path,
+                         ref_label="Unfragmented reference (blue C)",
+                         cmp_label="EWF SCI-SBD (tan C)", dpi=300):
+    """
+    Publication-quality tiled figure: one tile per molecule, overlaying the
+    aligned reference and EWF structures as ray-traced 3D ball-and-stick models
+    rendered with PyMOL. The reference uses CPK element colours (grey carbons);
+    the EWF structure is drawn in a single accent colour so any geometric
+    deviation is clearly visible. Double/triple bonds are shown as valence
+    lines, and each molecule is auto-oriented to its best viewing angle.
+
+    Saves both the requested vector file (e.g. PDF) and a PNG next to it.
+    Returns (figure_path, error_message); error_message is None on success.
+    """
+    try:
+        cmd = _get_pymol()
+    except Exception as exc:
+        return None, (f"PyMOL unavailable ({exc}); install it with "
+                      "'conda install -n classical -c conda-forge pymol-open-source'.")
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.image as mpimg
+        from matplotlib.lines import Line2D
+    except Exception as exc:  # pragma: no cover - only when matplotlib absent
+        return None, (f"matplotlib unavailable ({exc}); install it with "
+                      "'conda install -n classical -c conda-forge matplotlib'.")
+
+    # Ray-trace each molecule tile with PyMOL.
+    tmp = tempfile.mkdtemp()
+    present_elems = set()
+    tiles = []
+    for idx, r in enumerate(results):
+        present_elems.update(_elem(a) for a in r["atoms"])
+        png = os.path.join(tmp, f"tile_{idx:03d}.png")
+        _render_pair_png(cmd, r["atoms"], r["ref_xyz"], r["cmp_xyz"], png)
+        tiles.append((r, png))
+
+    # Assemble the tiles into a labelled grid.
+    n = len(tiles)
+    ncols = min(4, n)
+    nrows = math.ceil(n / ncols)
+    fig = plt.figure(figsize=(3.0 * ncols, 3.2 * nrows))
+
+    for idx, (r, png) in enumerate(tiles):
+        ax = fig.add_subplot(nrows, ncols, idx + 1)
+        ax.imshow(mpimg.imread(png))
+        ax.set_axis_off()
+        ax.set_title(f"{r['molecule']}\nRMSD = {DIST_FMT.format(r['rmsd'])} " r"$\AA$",
+                     fontsize=10)
+
+    # Reserve a fixed ~1.3 inch band at the bottom for the two stacked legends.
+    fig_h = 3.2 * nrows
+    yf = lambda inch: inch / fig_h
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.93, bottom=yf(1.3),
+                        wspace=0.02, hspace=0.16)
+
+    # Legend 1: the two structures, keyed by their carbon colour (blue vs tan).
+    struct_handles = [
+        Line2D([0], [0], marker="o", linestyle="none", markersize=12,
+               markerfacecolor=_REF_HEX, markeredgecolor="black", markeredgewidth=0.6),
+        Line2D([0], [0], marker="o", linestyle="none", markersize=12,
+               markerfacecolor=_EWF_HEX, markeredgecolor="black", markeredgewidth=0.6),
+    ]
+    leg1 = fig.legend(struct_handles, [ref_label, cmp_label], loc="center",
+                      ncol=2, frameon=False, fontsize=11,
+                      bbox_to_anchor=(0.5, yf(0.98)))
+    fig.add_artist(leg1)
+
+    # Legend 2: element key for heteroatoms and hydrogen (carbon is structure-coloured).
+    order = ["H", "N", "O", "F", "P", "S", "Cl", "Br", "I"]
+    elems = [e for e in order if e in present_elems] + \
+            sorted(present_elems - set(order) - {"C"})
+    if elems:
+        elem_handles = [
+            Line2D([0], [0], marker="o", linestyle="none", markersize=11,
+                   markerfacecolor=_CPK_COLORS.get(e, _DEFAULT_CPK),
+                   markeredgecolor="black", markeredgewidth=0.5)
+            for e in elems
+        ]
+        fig.legend(elem_handles, elems, loc="center", ncol=min(len(elems), 10),
+                   frameon=False, fontsize=9.5, bbox_to_anchor=(0.5, yf(0.30)),
+                   handletextpad=0.2, columnspacing=1.1,
+                   title="Heteroatom / H colours (element)", title_fontsize=9.5)
+
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    png_path = os.path.splitext(out_path)[0] + ".png"
+    if png_path != out_path:
+        fig.savefig(png_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    shutil.rmtree(tmp, ignore_errors=True)
+    return out_path, None
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Compare optimized geometries per molecule between a reference "
+                    "tree (SCI-SBD_unfragmented) and a comparison tree (SCI-SBD).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "reference_path",
+        help="Absolute path to the reference folder (SCI-SBD_unfragmented).",
+    )
+    parser.add_argument(
+        "compared_path",
+        help="Absolute path to the folder compared against the reference (SCI-SBD).",
+    )
+    parser.add_argument(
+        "--reference-subpath", default=REFERENCE_SUBPATH,
+        help=f"Relative path to the reference xyz inside each molecule folder "
+             f"(default: {REFERENCE_SUBPATH}).",
+    )
+    parser.add_argument(
+        "--compared-subpath", default=COMPARED_SUBPATH,
+        help=f"Relative path to the compared xyz inside each molecule folder "
+             f"(default: {COMPARED_SUBPATH}).",
+    )
+    parser.add_argument(
+        "--tex", default="geometry_comparison.tex",
+        help="Path for the generated ACS-style LaTeX table "
+             "(PDF written alongside; default: geometry_comparison.tex).",
+    )
+    parser.add_argument(
+        "--no-pdf", action="store_true",
+        help="Write the .tex file but skip compiling it to PDF.",
+    )
+    parser.add_argument(
+        "--figure", default="geometry_overlay.pdf",
+        help="Path for the tiled structure-overlay figure (a PNG is written "
+             "alongside; default: geometry_overlay.pdf).",
+    )
+    parser.add_argument(
+        "--no-figure", action="store_true",
+        help="Skip generating the structure-overlay figure.",
+    )
+    args = parser.parse_args()
+
+    ref_root = args.reference_path
+    cmp_root = args.compared_path
+
+    for label, path in (("reference", ref_root), ("compared", cmp_root)):
+        if not os.path.isdir(path):
+            sys.exit(f"ERROR: {label} path is not a directory: {path}")
+
+    # Molecules present in both trees are the ones we can compare.
+    ref_molecules = set(list_molecules(ref_root))
+    cmp_molecules = set(list_molecules(cmp_root))
+    common = sorted(ref_molecules & cmp_molecules)
+    only_ref = sorted(ref_molecules - cmp_molecules)
+    only_cmp = sorted(cmp_molecules - ref_molecules)
+
+    print("=" * 96)
+    print(f"Reference (unfragmented) : {ref_root}")
+    print(f"Compared  (EWF)          : {cmp_root}")
+    print(f"  reference file/molecule: {args.reference_subpath}")
+    print(f"  compared  file/molecule: {args.compared_subpath}")
+    print("=" * 96)
+
+    results = []
+    errors = []
+
+    for molecule in common:
+        ref_file = os.path.join(ref_root, molecule, args.reference_subpath)
+        cmp_file = os.path.join(cmp_root, molecule, args.compared_subpath)
+
+        if not os.path.isfile(ref_file):
+            errors.append(f"  {molecule}: reference file missing -> {ref_file}")
+            continue
+        if not os.path.isfile(cmp_file):
+            errors.append(f"  {molecule}: compared file missing  -> {cmp_file}")
+            continue
+
+        try:
+            ref_atoms, ref_coords = parse_last_frame(ref_file)
+            cmp_atoms, cmp_coords = parse_last_frame(cmp_file)
+        except ValueError as exc:
+            errors.append(f"  {molecule}: parse error — {exc}")
+            continue
+
+        if len(ref_atoms) != len(cmp_atoms):
+            errors.append(
+                f"  {molecule}: atom count mismatch "
+                f"[{len(cmp_atoms)} EWF vs {len(ref_atoms)} reference]"
+            )
+            continue
+
+        rmsd, max_dev, atom_devs, cmp_aligned = align_and_compare(ref_coords, cmp_coords)
+
+        # --- metadata from the two run logs --------------------------------
+        ref_log = find_log(os.path.join(ref_root, molecule))
+        cmp_log = find_log(os.path.join(cmp_root, molecule))
+
+        frag_norb = parse_largest_fragment_norb(cmp_log) if cmp_log else None
+        full_norb = parse_full_norb(ref_log) if ref_log else None
+        ewf_steps = parse_num_steps(cmp_log) if cmp_log else None
+        ref_steps = parse_num_steps(ref_log) if ref_log else None
+
+        if cmp_log is None:
+            errors.append(f"  {molecule}: EWF log not found in {os.path.join(cmp_root, molecule)}")
+        if ref_log is None:
+            errors.append(f"  {molecule}: reference log not found in {os.path.join(ref_root, molecule)}")
+
+        results.append({
+            "molecule": molecule,
+            "natoms": len(ref_atoms),
+            "rmsd": rmsd,
+            "max_dev": max_dev,
+            "frag_norb": frag_norb,
+            "full_norb": full_norb,
+            "ewf_steps": ewf_steps,
+            "ref_steps": ref_steps,
+            "atoms": ref_atoms,
+            "ref_xyz": ref_coords,
+            "cmp_xyz": cmp_aligned,
+        })
+
+    # --- per-molecule table -------------------------------------------------
+    header = (f"\n{'Molecule':<20} {'N':>3} {'RMSD (Å)':>10} {'Max deviation (Å)':>18} "
+              f"{'Max EWF MOs':>13} {'Full MOs':>9} {'EWF steps':>11} {'Reference steps':>16}")
+    print(header)
+    print("-" * 102)
+    for r in results:
+        print(f"{r['molecule']:<20} {r['natoms']:>3} "
+              f"{DIST_FMT.format(r['rmsd']):>10} {DIST_FMT.format(r['max_dev']):>18} "
+              f"{_fmt(r['frag_norb']):>13} {_fmt(r['full_norb']):>9} "
+              f"{_fmt(r['ewf_steps']):>11} {_fmt(r['ref_steps']):>16}")
+
+    # --- summary ------------------------------------------------------------
+    print("\n" + "=" * 96)
+    print("SUMMARY")
+    print("=" * 96)
+
+    if results:
+        rmsds = [r["rmsd"] for r in results]
+        worst_rmsd = max(results, key=lambda r: r["rmsd"])
+        worst_maxdev = max(results, key=lambda r: r["max_dev"])
+        print(f"Molecules compared           : {len(results)}")
+        print(f"Mean RMSD                    : {DIST_FMT.format(np.mean(rmsds))} Å")
+        print(f"Max RMSD                     : {DIST_FMT.format(worst_rmsd['rmsd'])} Å  ({worst_rmsd['molecule']})")
+        print(f"Largest max-deviation        : {DIST_FMT.format(worst_maxdev['max_dev'])} Å  ({worst_maxdev['molecule']})")
+        print("\nNotes:")
+        print("  * Max EWF MOs = max norb across EWF per-cluster energies.")
+        print("  * Full MOs    = unfragmented full active-space norb.")
+        print("  * *steps           = number of geometry-optimisation cycles "
+              "('Cycles evaluated', else max step index + 1).")
+    else:
+        print("No molecules were successfully compared.")
+
+    if only_ref:
+        print(f"\nMolecules only in reference tree : {', '.join(only_ref)}")
+    if only_cmp:
+        print(f"Molecules only in compared tree  : {', '.join(only_cmp)}")
+    if errors:
+        print("\nSkipped / errors:")
+        for msg in errors:
+            print(msg)
+    print("=" * 96)
+
+    if not results:
+        return
+
+    # --- structure-overlay figure ------------------------------------------
+    if not args.no_figure:
+        fig_path, fig_err = build_overlay_figure(results, os.path.abspath(args.figure))
+        if fig_path:
+            png_path = os.path.splitext(fig_path)[0] + ".png"
+            print(f"\nOverlay figure written : {fig_path}")
+            print(f"Overlay figure (PNG)   : {png_path}")
+        else:
+            print(f"\nOverlay figure NOT produced : {fig_err}")
+
+    # --- LaTeX table + PDF --------------------------------------------------
+    tex_path = os.path.abspath(args.tex)
+    with open(tex_path, "w") as fh:
+        fh.write(build_latex_table(results, ref_root, cmp_root))
+    print(f"\nLaTeX table written : {tex_path}")
+
+    if args.no_pdf:
+        print("PDF compilation skipped (--no-pdf).")
+        return
+
+    pdf_path, err = compile_pdf(tex_path)
+    if pdf_path:
+        print(f"PDF written         : {pdf_path}")
+    else:
+        print(f"PDF NOT produced    : {err}")
+
+
+if __name__ == "__main__":
+    main()
