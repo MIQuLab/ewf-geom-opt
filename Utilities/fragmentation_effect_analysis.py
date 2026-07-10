@@ -200,8 +200,9 @@ def _num_cell(value, fmt="{}"):
     return "{--}" if value is None else fmt.format(value)
 
 
-def build_latex_table(results, ref_root, cmp_root):
-    """Return a standalone ACS-style (achemso) LaTeX document containing the table."""
+def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
+    """Return a standalone ACS-style (achemso) LaTeX document containing the table
+    (and, if ``figure_relpath`` is given, the structure-overlay figure)."""
     caption = (
         "Comparison of the optimized geometries obtained from EWF SCI "
         "calculations against the unfragmented SCI reference calculations, for "
@@ -261,9 +262,28 @@ def build_latex_table(results, ref_root, cmp_root):
         "\\si{\\angstrom}, respectively."
     )
 
+    # Optional structure-overlay figure float, referenced from the discussion.
+    figure_block = ""
+    if figure_relpath:
+        discussion += (
+            " The overlaid optimized geometries for all molecules are shown in "
+            "Figure~\\ref{fig:overlay}."
+        )
+        figure_block = (
+            "\n\\begin{figure*}\n"
+            "  \\centering\n"
+            f"  \\includegraphics[width=\\textwidth]{{{figure_relpath}}}\n"
+            "  \\caption{Overlay of the optimized geometries for each molecule. The "
+            "unfragmented SCI reference is shown in CPK element colours and the EWF "
+            "SCI--SBD structure in a single highlight colour (magenta).}\n"
+            "  \\label{fig:overlay}\n"
+            "\\end{figure*}\n"
+        )
+
     return f"""\\documentclass[journal=jacsat,manuscript=article,layout=twocolumn]{{achemso}}
 \\usepackage{{booktabs}}
 \\usepackage{{siunitx}}
+\\usepackage{{graphicx}}
 \\sisetup{{detect-weight=true, detect-family=true}}
 
 % Suppress the achemso corresponding-author "E-mail:" line in the title block.
@@ -295,7 +315,7 @@ def build_latex_table(results, ref_root, cmp_root):
 \\end{{table*}}
 
 {discussion}
-
+{figure_block}
 \\end{{document}}
 """
 
@@ -389,6 +409,107 @@ def _bond_order(a, b, dist):
     return min(table, key=lambda o: abs(dist - table[o]))
 
 
+# Approximate van der Waals radii (Angstrom) for occlusion-aware view selection.
+_VDW_RADII = {"H": 1.10, "C": 1.70, "N": 1.55, "O": 1.52, "F": 1.47,
+              "P": 1.80, "S": 1.80, "Si": 2.10, "Cl": 1.75, "Br": 1.85, "I": 1.98}
+_VDW_DEFAULT = 1.70
+
+
+def _fibonacci_sphere(n):
+    """n roughly-uniform unit vectors on the sphere."""
+    ga = math.pi * (3.0 - math.sqrt(5.0))
+    out = np.empty((n, 3))
+    for i in range(n):
+        z = 1.0 - 2.0 * (i + 0.5) / n
+        r = math.sqrt(max(0.0, 1.0 - z * z))
+        th = ga * i
+        out[i] = (r * math.cos(th), r * math.sin(th), z)
+    return out
+
+
+def _best_view_basis(coords, radii, n_dirs=1200):
+    """
+    Search camera orientations and pick the best by (in priority order):
+      1. fewest atoms whose centre is hidden behind a nearer atom's disc,
+      2. fewest pairs of atoms whose projected discs overlap (least crowding),
+      3. largest projected spread (variance) so the molecule is well spread out.
+
+    This favours clean, well-separated views (like a principal-axis view) while
+    still guaranteeing every atom is visible. Returns a 3x3 matrix whose columns
+    are the view (x, y, z) axes; +z points toward the camera. Coords are centred.
+    """
+    n = len(coords)
+    if n < 3:
+        return np.eye(3)
+    rr = radii[:, None] + radii[None, :]
+    rmin = np.minimum(radii[:, None], radii[None, :])
+    best_key, best = None, np.eye(3)
+    for d in _fibonacci_sphere(n_dirs):
+        z = d / (np.linalg.norm(d) + 1e-12)
+        up = np.array([0.0, 0.0, 1.0]) if abs(z[2]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        x = np.cross(up, z)
+        x /= (np.linalg.norm(x) + 1e-12)
+        y = np.cross(z, x)
+        proj = coords @ np.column_stack([x, y])
+        depth = coords @ z
+        dxy = np.linalg.norm(proj[:, None, :] - proj[None, :, :], axis=-1)
+        ddepth = np.abs(depth[:, None] - depth[None, :])
+        front = (depth[:, None] - depth[None, :]) > 0.0      # atom i nearer than j
+        # (1) atom j's centre hidden behind a nearer atom i's disc
+        covers = front & (dxy < radii[:, None])
+        np.fill_diagonal(covers, False)
+        n_hidden = int(covers.any(axis=0).sum())
+        # (2) genuine obstruction: discs overlap AND clearly separated in depth,
+        #     so one atom sits behind the other (crowded / partly hidden)
+        obstruct = (dxy < rr) & (ddepth > rmin)
+        np.fill_diagonal(obstruct, False)
+        n_obstruct = int(np.triu(obstruct).sum())
+        # (3) spread the atoms out in the image
+        variance = float(proj.var(axis=0).sum())
+        key = (-n_hidden, -n_obstruct, variance)
+        if best_key is None or key > best_key:
+            best_key, best = key, np.column_stack([x, y, z])
+    return best
+
+
+def _rot_x(deg):
+    a = math.radians(deg)
+    c, s = math.cos(a), math.sin(a)
+    return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+
+
+def _rot_y(deg):
+    a = math.radians(deg)
+    c, s = math.cos(a), math.sin(a)
+    return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+
+
+def _n_hidden(coords, radii):
+    """Number of atom centres hidden behind a nearer atom (camera looks down -z)."""
+    proj, depth = coords[:, :2], coords[:, 2]
+    dxy = np.linalg.norm(proj[:, None, :] - proj[None, :, :], axis=-1)
+    front = (depth[:, None] - depth[None, :]) > 0.0
+    covers = front & (dxy < radii[:, None])
+    np.fill_diagonal(covers, False)
+    return int(covers.any(axis=0).sum())
+
+
+def _tilt_for_depth(coord_sets, radii, deg=(24.0, -18.0)):
+    """
+    Tilt the already-oriented structures slightly out of plane. This gives a 3D
+    perspective and, crucially, stops multiple bonds along a linear axis (e.g.
+    the C#C of acetylene) from collapsing into a single line. The tilt is applied
+    only if it does not hide any atom that was visible before.
+    """
+    combined = np.vstack(coord_sets)
+    base_hidden = _n_hidden(combined, radii)
+    tilt = _rot_x(deg[0]) @ _rot_y(deg[1])
+    tilted = [c @ tilt.T for c in coord_sets]
+    if _n_hidden(np.vstack(tilted), radii) <= base_hidden:
+        return tilted
+    return list(coord_sets)
+
+
 # The unfragmented reference is drawn in standard CPK element colours; the EWF
 # structure is drawn in ONE consistent highlight colour on EVERY atom, chosen to
 # stay visible against all CPK colours in the set (C grey, H white, N blue,
@@ -435,10 +556,20 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
     cmd.bg_color("white")
     cmd.set("ray_opaque_background", 0)
 
+    # Occlusion-aware orientation: rotate so that (as far as possible) no atom is
+    # hidden behind another from the camera, then bake it into the coordinates.
+    combined = np.vstack([ref_xyz, cmp_xyz])
+    centroid = combined.mean(axis=0)
+    disp_r = np.array([_VDW_RADII.get(_elem(a), _VDW_DEFAULT) * 0.32 for a in atoms])
+    basis = _best_view_basis(combined - centroid, np.concatenate([disp_r, disp_r]))
+    ref_v = (ref_xyz - centroid) @ basis
+    cmp_v = (cmp_xyz - centroid) @ basis
+    ref_v, cmp_v = _tilt_for_depth([ref_v, cmp_v], np.concatenate([disp_r, disp_r]))
+
     tmp = tempfile.mkdtemp()
     rf, ef = os.path.join(tmp, "ref.xyz"), os.path.join(tmp, "ewf.xyz")
-    _write_xyz(atoms, ref_xyz, rf)
-    _write_xyz(atoms, cmp_xyz, ef)
+    _write_xyz(atoms, ref_v, rf)
+    _write_xyz(atoms, cmp_v, ef)
     cmd.load(rf, "ref")
     cmd.load(ef, "ewf")
 
@@ -460,7 +591,7 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
     if any_multiple:
         cmd.set("valence", 1)
         try:
-            cmd.set("valence_size", 0.11)
+            cmd.set("valence_size", 0.24)   # wide spacing so multiple bonds read clearly
         except Exception:
             pass
 
@@ -475,10 +606,11 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
     cmd.set_color("ewf_hilite", list(_EWF_HILITE_RGB))
     cmd.color("ewf_hilite", "ewf")
 
-    # Equal ball-and-stick sizing for both structures.
+    # Equal ball-and-stick sizing for both structures; smaller spheres and
+    # slimmer sticks leave the (multiple) bonds clearly exposed.
     for obj in ("ref", "ewf"):
-        cmd.set("sphere_scale", 0.20, obj)
-        cmd.set("stick_radius", 0.15, obj)
+        cmd.set("sphere_scale", 0.17, obj)
+        cmd.set("stick_radius", 0.12, obj)
 
     # Quality / lighting.
     cmd.set("ray_shadows", 1)
@@ -488,12 +620,9 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
     cmd.set("sphere_quality", 3)
     cmd.set("stick_quality", 20)
 
-    # Best angle + slight tilt for depth; small buffer keeps atoms off the edges
-    # while letting the molecule fill the tile.
-    cmd.orient()
-    cmd.turn("y", 20)
-    cmd.turn("x", -12)
-    cmd.zoom("all", 0.4, complete=1)
+    # The viewing angle is already baked into the coordinates; just fit the tile
+    # (small buffer keeps atoms off the edges while filling the tile).
+    cmd.zoom("all", 0.25, complete=1)
 
     cmd.ray(size, size)
     cmd.png(out_png, dpi=300)
@@ -529,6 +658,13 @@ def build_overlay_figure(results, out_path,
         return None, (f"matplotlib unavailable ({exc}); install it with "
                       "'conda install -n classical -c conda-forge matplotlib'.")
 
+    # Match the serif (Times-like) font of the achemso LaTeX table/PDF.
+    matplotlib.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "Times New Roman", "Times", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
+
     # Ray-trace each molecule tile with PyMOL.
     tmp = tempfile.mkdtemp()
     present_elems = set()
@@ -539,52 +675,50 @@ def build_overlay_figure(results, out_path,
         _render_pair_png(cmd, r["atoms"], r["ref_xyz"], r["cmp_xyz"], png)
         tiles.append((r, png))
 
-    # Assemble the tiles into a labelled grid.
+    # Assemble the tiles into a compact grid, with a fixed band at the bottom
+    # (added on top of the tile rows) reserved for the two legends. One uniform
+    # font size is used for every text element in the figure.
     n = len(tiles)
     ncols = min(4, n)
     nrows = math.ceil(n / ncols)
-    fig = plt.figure(figsize=(3.0 * ncols, 3.2 * nrows))
+    fontsize = 16
+    legend_in = 1.05
+    tile_w, tile_h = 2.5, 2.4
+    fig_h = tile_h * nrows + legend_in
+    fig = plt.figure(figsize=(tile_w * ncols, fig_h))
 
     for idx, (r, png) in enumerate(tiles):
         ax = fig.add_subplot(nrows, ncols, idx + 1)
         ax.imshow(mpimg.imread(png))
         ax.set_axis_off()
-        ax.set_title(f"{r['molecule']}\nRMSD = {DIST_FMT.format(r['rmsd'])} " r"$\AA$",
-                     fontsize=10)
+        ax.set_title(r["molecule"], fontsize=fontsize)   # RMSD is given in the table
 
-    # Reserve a fixed ~1.3 inch band at the bottom for the two stacked legends.
-    fig_h = 3.2 * nrows
     yf = lambda inch: inch / fig_h
-    fig.subplots_adjust(left=0.01, right=0.99, top=0.93, bottom=yf(1.3),
-                        wspace=0.02, hspace=0.16)
+    fig.subplots_adjust(left=0.005, right=0.995, top=1 - yf(0.1),
+                        bottom=yf(legend_in), wspace=0.0, hspace=0.16)
 
-    # Legend 1: the two structures (reference CPK vs EWF single highlight colour).
-    struct_handles = [
-        Line2D([0], [0], marker="o", linestyle="none", markersize=12,
-               markerfacecolor=_REF_SWATCH_HEX, markeredgecolor="black", markeredgewidth=0.6),
-        Line2D([0], [0], marker="o", linestyle="none", markersize=12,
-               markerfacecolor=_EWF_HEX, markeredgecolor="black", markeredgewidth=0.6),
-    ]
-    leg1 = fig.legend(struct_handles, [ref_label, cmp_label], loc="center",
-                      ncol=2, frameon=False, fontsize=11,
-                      bbox_to_anchor=(0.5, yf(0.98)))
+    # Legend 1: the EWF structure (its single highlight colour).
+    ewf_handle = [Line2D([0], [0], marker="o", linestyle="none", markersize=15,
+                         markerfacecolor=_EWF_HEX, markeredgecolor="black",
+                         markeredgewidth=0.6)]
+    leg1 = fig.legend(ewf_handle, [cmp_label], loc="center", frameon=False,
+                      fontsize=fontsize, bbox_to_anchor=(0.5, yf(0.72)))
     fig.add_artist(leg1)
 
-    # Legend 2: CPK element key for the reference structure.
+    # Legend 2: CPK element key for the reference structure (same font size).
     order = ["H", "C", "N", "O", "F", "P", "S", "Si", "Cl", "Br", "I"]
     elems = [e for e in order if e in present_elems] + \
             sorted(present_elems - set(order))
     if elems:
         elem_handles = [
-            Line2D([0], [0], marker="o", linestyle="none", markersize=11,
+            Line2D([0], [0], marker="o", linestyle="none", markersize=14,
                    markerfacecolor=_CPK_COLORS.get(e, _DEFAULT_CPK),
                    markeredgecolor="black", markeredgewidth=0.5)
             for e in elems
         ]
         fig.legend(elem_handles, elems, loc="center", ncol=min(len(elems), 11),
-                   frameon=False, fontsize=9.5, bbox_to_anchor=(0.5, yf(0.30)),
-                   handletextpad=0.2, columnspacing=1.1,
-                   title="Reference CPK element colours", title_fontsize=9.5)
+                   frameon=False, fontsize=fontsize, bbox_to_anchor=(0.5, yf(0.28)),
+                   handletextpad=0.2, columnspacing=1.1)
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     png_path = os.path.splitext(out_path)[0] + ".png"
@@ -768,19 +902,22 @@ def main():
         return
 
     # --- structure-overlay figure ------------------------------------------
+    tex_path = os.path.abspath(args.tex)
+    figure_relpath = None
     if not args.no_figure:
         fig_path, fig_err = build_overlay_figure(results, os.path.abspath(args.figure))
         if fig_path:
             png_path = os.path.splitext(fig_path)[0] + ".png"
             print(f"\nOverlay figure written : {fig_path}")
             print(f"Overlay figure (PNG)   : {png_path}")
+            # Path for \includegraphics, relative to the .tex directory.
+            figure_relpath = os.path.relpath(fig_path, os.path.dirname(tex_path))
         else:
             print(f"\nOverlay figure NOT produced : {fig_err}")
 
-    # --- LaTeX table + PDF --------------------------------------------------
-    tex_path = os.path.abspath(args.tex)
+    # --- LaTeX table (+ figure) + PDF --------------------------------------
     with open(tex_path, "w") as fh:
-        fh.write(build_latex_table(results, ref_root, cmp_root))
+        fh.write(build_latex_table(results, ref_root, cmp_root, figure_relpath))
     print(f"\nLaTeX table written : {tex_path}")
 
     if args.no_pdf:

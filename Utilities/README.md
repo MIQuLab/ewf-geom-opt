@@ -141,9 +141,11 @@ the corresponding log.
 
 The generated document uses the ACS `achemso` document class with `booktabs` rules
 and `siunitx`-aligned numeric columns. The table `\caption` spells out what every
-column means, so the table is self-contained when dropped into a manuscript. The PDF
-is compiled with **tectonic**; if tectonic is not on `PATH` the `.tex` is still written
-and a note explains how to install it.
+column means, so the table is self-contained when dropped into a manuscript. When the
+structure-overlay figure is produced it is **embedded in the same document** (as
+`Figure 1`, via `\includegraphics`) and referenced from the discussion text, so the
+table and figure travel together. The PDF is compiled with **tectonic**; if tectonic is
+not on `PATH` the `.tex` is still written and a note explains how to install it.
 
 ### Structure-overlay figure
 
@@ -158,14 +160,20 @@ optimized geometries superimposed:
   red O, yellow S, beige Si, …); the EWF structure is drawn in **one consistent
   highlight colour on every atom** — a vivid magenta-purple (`#B026C9`) chosen to stay
   visible against every CPK colour in the set. Wherever the two geometries diverge, the
-  magenta EWF atoms/bonds stand out on all atoms. A legend keys the two structures, and
-  a CPK element key for the reference is shown below.
+  magenta EWF atoms/bonds stand out on all atoms. The figure is labelled with the EWF
+  highlight colour and a "Reference CPK element colors" key, in the same serif font and
+  size as the LaTeX document.
 - **Double / triple bonds** — bond order is inferred from the interatomic distance and
   element pair and shown as PyMOL valence lines (e.g. the C=O in acetone, the C≡C in
   acetylene).
-- **Best viewing angle** — each molecule is auto-oriented with PyMOL's `orient`
-  (principal axes) plus a slight tilt for depth, in perspective, with a zoom buffer so
-  atoms are never clipped at the tile edges.
+- **Occlusion-aware viewing angle** — for each molecule the camera direction is chosen
+  (by searching over orientations) to avoid hiding any atom behind a nearer one, minimise
+  crowding, and spread the atoms out; a small out-of-plane tilt is then added so the view
+  is not exactly edge-on (which would otherwise collapse a multiple bond along a linear
+  axis, e.g. the C≡C of acetylene, into a single line). A zoom buffer keeps atoms off the
+  tile edges. This keeps every atom — and every bond — visible for arbitrary structures.
+- **Consistent typography** — tile titles and legends use the same serif (Times-like)
+  font as the achemso LaTeX table/PDF.
 - **Bonds** are inferred from covalent radii (Cordero 2008, ~1.15× tolerance) using the
   reference geometry, so both structures share the same connectivity.
 - **Files** — a vector file at `--figure` (default `geometry_overlay.pdf`) and a
