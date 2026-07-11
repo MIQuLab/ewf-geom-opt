@@ -2154,6 +2154,11 @@ def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
     """
     skip_set = set(skip_indices or ())
     status_files = []
+    # Display label for the log: the solve wave's internal stage name is 'fci',
+    # but the per-fragment solver actually used may be FCI, SCI, SCI_SBD, or SQD
+    # (multi-solver / external eigensolvers).  Report the neutral 'CI' so the
+    # message is correct regardless of which solver each fragment runs.
+    stage_label = "CI" if stage == "fci" else stage
     for i in range(nfrag):
         status_path = status_file_path(workdir, i, stage, cfg)
         if i in skip_set:
@@ -2162,7 +2167,7 @@ def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
             # consistent with the fresh-submission branch.
             with open(status_path, "w") as fh:
                 fh.write("DONE\n")
-            print(f"[driver] Restart: reusing {stage} fragment {i:>3d} "
+            print(f"[driver] Restart: reusing {stage_label} fragment {i:>3d} "
                   f"(output already on disk)")
             status_files.append(status_path)
             continue
@@ -2178,7 +2183,7 @@ def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
         # job itself overwrites the file with RUNNING/DONE/FAILED.
         with open(status_path, "w") as fh:
             fh.write(f"SUBMITTED {jid}\n")
-        print(f"[driver] Submitted {stage} fragment {i:>3d}  -> "
+        print(f"[driver] Submitted {stage_label} fragment {i:>3d}  -> "
               f"Slurm job {jid}  ({sh})")
         status_files.append(status_path)
     return status_files
@@ -2319,7 +2324,7 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     assembly = str(cfg["ewf"].get("assembly", "rdm_t")).lower()
     if assembly == "rdm_t_lambda":
         print(f"[{tag}] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes "
-              f"+ CCSD Λ/Z-vector relaxed density; amplitude response, "
+              f"+ Λ/Z-vector relaxed density; amplitude response, "
               f"frozen-bath)")
 
         def _read_rdm_file(path):
