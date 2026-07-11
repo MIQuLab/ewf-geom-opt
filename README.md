@@ -178,11 +178,28 @@ Together the three modes let the fragmentation error be measured separately agai
 
 ---
 
+## Run tasks
+
+`calculation.run_task` selects **what the driver produces** at the input geometry — an axis orthogonal to `run_mode` (which selects *what system* is solved). It is the first question the interactive generator asks. Four tasks are available:
+
+| `run_task` | Produces | Notes |
+|---|---|---|
+| **`geomopt`** (default) | A full geometry optimization | Uses the `geomopt.optimizer` backend (geomeTRIC / Sella / PyBerny); sets `geomopt.enabled: true`. |
+| **`gradient`** | One single-point energy **and** analytic nuclear gradient | The classic `--single-point` behavior; `geomopt.enabled: false`. |
+| **`energy`** | One single-point energy **only** (gradient skipped) | Skips the CPHF / Λ-relaxation gradient assembly — cheaper when only the energy is needed. Supported for all three run modes (`ewf`, `unfragmented_EWF_limit`, `true_unfragmented`). |
+| **`circuits`** | LUCJ quantum-circuit **size analysis** for the SQD fragments | Builds and transpiles the LUCJ ansatz per fragment and writes a `circuit_metadata.json` (qubit count, ISA gate histogram, circuit / two-qubit depth). No cluster solve, no SBD, no energy/gradient, and **no IBM Runtime job is submitted**. |
+
+The task can be overridden per invocation with `--task {geomopt,gradient,energy,circuits}` (and the legacy `--single-point` still forces `gradient`). Configs without `run_task` fall back to the `geomopt.enabled` flag for backward compatibility.
+
+**The `circuits` task** exists purely to collect circuit sizes for the fragments that would be solved with SQD. Fragment selection mirrors the multi-solver split: with `multi_solver` **disabled** it builds a circuit for *every* fragment; with it **enabled** it builds circuits only for fragments whose `norb ≥ multi_solver.norb_threshold` (the SQD-eligible clusters). Each fragment's DUMP wave still runs (the LUCJ circuit is built from the cluster FCIDUMP), but only the circuit is transpiled — for the real `sqd.qiskit_backend` target, so device-accurate depths and gate counts are recorded — and nothing is executed on the QPU. Fetching the backend target is a read-only metadata call (IBM credentials/network required), not a job submission. The config generated for this task carries a minimal `sqd:` block (just the LUCJ / IBM-backend knobs) and no `sbd:` block or CPU/GPU choice.
+
+---
+
 ## Usage
 
 ### Generating a config (`calculation_setup.py`)
 
-`config.yaml` spans many options across run modes, solvers, the CPU/GPU SBD eigensolver, the SQD quantum-sampling source, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — the target compute environment, the geometry optimizer (geomeTRIC / Sella / PyBerny), the run mode, the geometry file, whether to use per-fragment multi-solver, and which external eigensolver to use (**none / SCI-SBD / SQD**) on **CPU or GPU** — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
+`config.yaml` spans many options across run tasks, run modes, solvers, the CPU/GPU SBD eigensolver, the SQD quantum-sampling source, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — first the **run task** (geometry optimization / gradient / energy-only / quantum-circuit size analysis; see *Run tasks*), then the target compute environment, the geometry optimizer (geomeTRIC / Sella / PyBerny), the run mode, the geometry file, whether to use per-fragment multi-solver, and which external eigensolver to use (**none / SCI-SBD / SQD**) on **CPU or GPU** — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. (The `circuits` task takes a shortened path: after the run task it asks only for the compute environment, geometry, and multi-solver choice.) Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
 
 ```bash
 cd Source
@@ -209,6 +226,7 @@ ewf:
     approximate_solver: SCI   # used when norb >= norb_threshold  (FCI / SCI / SCI_SBD / SQD)
 
 calculation:
+  run_task: geomopt           # geomopt | gradient | energy | circuits (see Run tasks)
   run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented (see Run modes)
   geometry_file: propylene.txt
   basis: sto-3g
@@ -291,12 +309,17 @@ Only the block matching the selected optimizer is read; the others are ignored. 
 
 ### Running
 
-```bash
-# Single-point EWF energy + analytic gradient at the input geometry
-python EWF-CI_Geom_Opt_HPC.py --config config.yaml --single-point
+The driver runs whatever `calculation.run_task` specifies; `--task` overrides it for a single invocation (see *Run tasks*):
 
-# Full geometry optimization (geomopt.enabled in config.yaml)
+```bash
+# Whatever the config's run_task selects (geomopt by default)
 python EWF-CI_Geom_Opt_HPC.py --config config.yaml
+
+# Force a specific task, overriding calculation.run_task
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --task geomopt    # geometry optimization
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --task gradient   # single-point E + gradient (== --single-point)
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --task energy     # single-point energy only
+python EWF-CI_Geom_Opt_HPC.py --config config.yaml --task circuits   # LUCJ circuit-size analysis (no solve, no IBM job)
 
 # Run fragment workers inline instead of via Slurm (single workstation)
 python EWF-CI_Geom_Opt_HPC.py --config config.yaml --no-slurm
