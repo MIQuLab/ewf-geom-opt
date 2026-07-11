@@ -665,13 +665,13 @@ def main():
     # no solve, no SBD, no CPU/GPU choice).
     runtype_label = ask_choice(
         "1) Choice of runtype?",
-        ["geometry optimization [1]", "gradient [2]", "energy only [3]",
-         "quantum circuits size analysis [4]"])
+        ["geometry optimization", "gradient", "energy only",
+         "quantum circuits analysis"])
     run_task = {
-        "geometry optimization [1]": "geomopt",
-        "gradient [2]": "gradient",
-        "energy only [3]": "energy",
-        "quantum circuits size analysis [4]": "circuits",
+        "geometry optimization": "geomopt",
+        "gradient": "gradient",
+        "energy only": "energy",
+        "quantum circuits analysis": "circuits",
     }[runtype_label]
     circuits = (run_task == "circuits")
 
