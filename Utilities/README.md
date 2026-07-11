@@ -8,11 +8,12 @@ lists them and points here.
 |---|---|
 | [`slurm_jobs_check.py`](slurm_jobs_check.py) | Post-mortem diagnostic for the workflow's multi-layer Slurm jobs — resolves every job, runs `seff`, and explains failures (especially out-of-memory), pointing at the exact config knob to raise. |
 | [`geom_compare.py`](geom_compare.py) | Low-level, single-reference geometry comparison (Kabsch alignment → RMSD / max deviation). |
-| [`fragmentation_effect_analysis.py`](fragmentation_effect_analysis.py) | Batch driver: walks two directory trees, compares each molecule, reports RMSD, max deviation, MO counts, and step counts, and emits an ACS-style LaTeX table + PDF and a structure-overlay figure. |
+| [`fragmentation_effect_analysis.py`](fragmentation_effect_analysis.py) | Batch driver: compares **EWF SCI** optimized geometries against the **unfragmented SCI** reference across molecules; emits an ACS-style LaTeX table + PDF and a structure-overlay figure (unfragmented CPK, EWF SCI magenta). |
+| [`quantum_sampling_effect_analysis.py`](quantum_sampling_effect_analysis.py) | Same framework, SQD counterpart: compares **EWF SQD** optimized geometries against the **EWF SCI** reference; same table + overlay figure (EWF SCI CPK, EWF SQD magenta), with an `N SQD solver` column. |
 
 Contents:
 
-- [Geometry comparison](#geometry-comparison) — `geom_compare.py` + `fragmentation_effect_analysis.py`
+- [Geometry comparison](#geometry-comparison) — `geom_compare.py`, `fragmentation_effect_analysis.py`, `quantum_sampling_effect_analysis.py`
 - [Slurm job diagnostics](#slurm-job-diagnostics) — `slurm_jobs_check.py`
 
 ---
@@ -228,6 +229,27 @@ multi-frame `.xyz` files it reads only the **first** frame — use
 ```bash
 python geom_compare.py reference.xyz candidate1.xyz candidate2.xyz
 ```
+
+---
+
+## Quantum-sampling-effect variant (`quantum_sampling_effect_analysis.py`)
+
+Same framework as `fragmentation_effect_analysis.py`, but the reference and compared
+trees are both **fragmented EWF** runs: it compares each molecule's **EWF SQD** optimized
+geometry against the **EWF SCI** reference. Both runs write `jobs_EWF/ewf_geomopt_optim.xyz`,
+so the reference and compared subpaths are identical; the last frame is compared. The
+overlay figure draws the EWF SCI reference in CPK element colors and the EWF SQD structure
+in magenta. The table columns are **N atoms**, **RMSD (Å)**, **Max Δ (Å)**, **Max EWF MOs**,
+**N SQD solver** (fragments solved with the SQD solver, tagged `[SQD, …]` in the log),
+**Full MOs** (total `n(MO)` from the EWF log), **EWF SQD steps**, and **EWF SCI steps**.
+
+```bash
+conda activate classical
+python quantum_sampling_effect_analysis.py <EWF_SCI_reference_path> <EWF_SQD_compared_path>
+```
+
+The optional flags (`--tex`, `--no-pdf`, `--figure`, `--no-figure`, `--reference-subpath`,
+`--compared-subpath`) match `fragmentation_effect_analysis.py`.
 
 ---
 
