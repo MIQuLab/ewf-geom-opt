@@ -103,9 +103,9 @@ python fragmentation_effect_analysis.py \
 |---|---|---|
 | `--reference-subpath` | `jobs_TRUEUNFRAG/true_unfragmented_geomopt_optim.xyz` | Relative path to the reference `.xyz` inside each molecule folder. |
 | `--compared-subpath`  | `jobs_EWF/ewf_geomopt_optim.xyz` | Relative path to the compared `.xyz` inside each molecule folder. |
-| `--tex`               | `geometry_comparison.tex` | Path for the generated ACS-style LaTeX table (PDF is written alongside with the same stem). |
+| `--tex`               | `geometry_comparison_frag_effect.tex` | Path for the generated ACS-style LaTeX table (PDF is written alongside with the same stem). |
 | `--no-pdf`            | *off* | Write the `.tex` file but skip compiling it to PDF. |
-| `--figure`            | `geometry_overlay.pdf` | Path for the tiled structure-overlay figure (a PNG is written alongside with the same stem). |
+| `--figure`            | `geometry_overlay_frag_effect.pdf` | Path for the tiled structure-overlay figure (a PNG is written alongside with the same stem). |
 | `--no-figure`         | *off* | Skip generating the structure-overlay figure. |
 
 ---
@@ -115,10 +115,10 @@ python fragmentation_effect_analysis.py \
 The script produces four things:
 
 1. A **plain-text table + summary** on stdout.
-2. An **ACS-style LaTeX table** written to `--tex` (default `geometry_comparison.tex`).
-3. A **compiled PDF** (same stem, e.g. `geometry_comparison.pdf`) for convenient preview,
+2. An **ACS-style LaTeX table** written to `--tex` (default `geometry_comparison_frag_effect.tex`).
+3. A **compiled PDF** (same stem, e.g. `geometry_comparison_frag_effect.pdf`) for convenient preview,
    unless `--no-pdf` is given or tectonic is unavailable.
-4. A **tiled structure-overlay figure** (`--figure`, default `geometry_overlay.pdf`,
+4. A **tiled structure-overlay figure** (`--figure`, default `geometry_overlay_frag_effect.pdf`,
    plus a `.png`), unless `--no-figure` is given.
 
 Sample stdout:
@@ -183,7 +183,7 @@ optimized geometries superimposed:
   font as the achemso LaTeX table/PDF.
 - **Bonds** are inferred from covalent radii (Cordero 2008, ~1.15× tolerance) using the
   reference geometry, so both structures share the same connectivity.
-- **Files** — a vector file at `--figure` (default `geometry_overlay.pdf`) and a
+- **Files** — a vector file at `--figure` (default `geometry_overlay_frag_effect.pdf`) and a
   300 dpi `.png` alongside it, both publication quality.
 
 ### How the log metrics are extracted
@@ -249,7 +249,10 @@ python quantum_sampling_effect_analysis.py <EWF_SCI_reference_path> <EWF_SQD_com
 ```
 
 The optional flags (`--tex`, `--no-pdf`, `--figure`, `--no-figure`, `--reference-subpath`,
-`--compared-subpath`) match `fragmentation_effect_analysis.py`.
+`--compared-subpath`) match `fragmentation_effect_analysis.py`, but the default output
+names differ so the two tools never overwrite each other: `--tex` defaults to
+`geometry_comparison_qs_effect.tex` (PDF alongside) and `--figure` to
+`geometry_overlay_qs_effect.pdf` (PNG alongside).
 
 ---
 

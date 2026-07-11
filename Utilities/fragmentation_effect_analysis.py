@@ -784,18 +784,18 @@ def main():
              f"(default: {COMPARED_SUBPATH}).",
     )
     parser.add_argument(
-        "--tex", default="geometry_comparison.tex",
+        "--tex", default="geometry_comparison_frag_effect.tex",
         help="Path for the generated ACS-style LaTeX table "
-             "(PDF written alongside; default: geometry_comparison.tex).",
+             "(PDF written alongside; default: geometry_comparison_frag_effect.tex).",
     )
     parser.add_argument(
         "--no-pdf", action="store_true",
         help="Write the .tex file but skip compiling it to PDF.",
     )
     parser.add_argument(
-        "--figure", default="geometry_overlay.pdf",
+        "--figure", default="geometry_overlay_frag_effect.pdf",
         help="Path for the tiled structure-overlay figure (a PNG is written "
-             "alongside; default: geometry_overlay.pdf).",
+             "alongside; default: geometry_overlay_frag_effect.pdf).",
     )
     parser.add_argument(
         "--no-figure", action="store_true",
