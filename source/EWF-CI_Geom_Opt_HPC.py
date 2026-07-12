@@ -398,7 +398,7 @@ def load_config(path):
     #     ``steps`` which drive ``Sella.run(...)``.
     go = cfg.setdefault("geomopt", {})
     go.setdefault("enabled", True)
-    optimizer = str(go.setdefault("optimizer", "geometric")).lower()
+    optimizer = str(go.setdefault("optimizer", "sella")).lower()
     go["optimizer"] = optimizer
     if optimizer not in _VALID_OPTIMIZERS:
         raise ValueError(

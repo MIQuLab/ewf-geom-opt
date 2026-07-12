@@ -55,8 +55,8 @@ The optimizer is imported **lazily**, only when its backend is selected via `geo
 
 | `geomopt.optimizer` | Package |
 |---|---|
+| `sella` (default) | [Sella](https://github.com/zadorlab/sella) (+ [ASE](https://wiki.fysik.dtu.dk/ase/)) — `pip install sella ase` |
 | `geometric` | [geomeTRIC](https://geometric.readthedocs.io/) — `pip install geometric` |
-| `sella` | [Sella](https://github.com/zadorlab/sella) (+ [ASE](https://wiki.fysik.dtu.dk/ase/)) — `pip install sella ase` |
 | `berny` | [PyBerny](https://github.com/jhrmnn/pyberny) — `pip install pyberny` |
 
 ### External SBD eigensolver (only for the `SCI_SBD` / `SQD` solvers)
@@ -308,11 +308,12 @@ sqd:                          # only used when a cluster solver is SQD (see belo
 
 geomopt:
   enabled: true
-  optimizer: geometric        # geometric | berny | sella (see Optimizer backend)
-  geometric:                  # only the selected backend's block is read
-    maxiter: 100
-    coordsys: tric
-    convergence_set: GAU
+  optimizer: sella            # sella | geometric | berny (see Optimizer backend)
+  sella:                      # only the selected backend's block is read
+    fmax:  0.1                # eV / Angstrom (max-force convergence)
+    steps: 25                 # max optimizer steps
+    order: 0                  # 0 = minimisation, 1 = saddle
+    internal: true            # use internal coordinates
 ```
 
 ### Per-fragment solver selection (`multi_solver`)
@@ -360,11 +361,11 @@ The optimization step itself — the rule that turns each `(E, gradient)` into t
 
 | `geomopt.optimizer` | Backend | Options block | Notes |
 |---|---|---|---|
-| **`geometric`** (default) | [geomeTRIC](https://geometric.readthedocs.io/) | `geomopt.geometric` | Internal-coordinate optimizer; keys forwarded verbatim to `geometric.optimize.run_optimizer` (`maxiter`, `coordsys`, `convergence_set`, individual `convergence_*` overrides, …). |
+| **`sella`** (default) | [Sella](https://github.com/zadorlab/sella) | `geomopt.sella` | ASE-based; `fmax` (eV/Å) and `steps` drive `Sella.run(...)`, remaining keys go to `sella.Sella(...)` (e.g. `internal`, `order`). |
+| **`geometric`** | [geomeTRIC](https://geometric.readthedocs.io/) | `geomopt.geometric` | Internal-coordinate optimizer; keys forwarded verbatim to `geometric.optimize.run_optimizer` (`maxiter`, `coordsys`, `convergence_set`, individual `convergence_*` overrides, …). |
 | **`berny`** | [PyBerny](https://github.com/jhrmnn/pyberny) | `geomopt.berny` | Keys forwarded verbatim to `berny.Berny` (`maxsteps`, `gradientmax`, `gradientrms`, `stepmax`, `steprms`, `trust`); thresholds are in atomic units. |
-| **`sella`** | [Sella](https://github.com/zadorlab/sella) | `geomopt.sella` | ASE-based; `fmax` (eV/Å) and `steps` drive `Sella.run(...)`, remaining keys go to `sella.Sella(...)` (e.g. `internal`, `order`). |
 
-Only the block matching the selected optimizer is read; the others are ignored. Each backend is imported lazily, so only the optimizer you actually select needs to be installed (`pip install geometric`, `pip install pyberny`, or `pip install sella ase`). All three write the running trajectory to the same `<prefix>_optim.xyz` multi-XYZ file and the same per-step `step_NNN/` layout. Configs without an `optimizer` key default to `geometric`, so existing setups are unaffected.
+Only the block matching the selected optimizer is read; the others are ignored. Each backend is imported lazily, so only the optimizer you actually select needs to be installed (`pip install sella ase`, `pip install geometric`, or `pip install pyberny`). All three write the running trajectory to the same `<prefix>_optim.xyz` multi-XYZ file and the same per-step `step_NNN/` layout. Configs without an `optimizer` key default to `sella`.
 
 > The interactive [`Source/calculation_setup.py`](Source/calculation_setup.py) asks for the optimizer up front and emits only the relevant block.
 

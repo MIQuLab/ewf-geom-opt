@@ -250,7 +250,7 @@ def _emit_sbd_exec_options(a, advanced, gpu, is_v100, sqd):
 
 
 def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
-                 gpu_type=None, optimizer="geometric", advanced_sbd=False,
+                 gpu_type=None, optimizer="sella", advanced_sbd=False,
                  run_task="geomopt"):
     """Assemble the focused config.yaml text for the chosen options.
 
@@ -700,7 +700,7 @@ def main():
         advanced_sbd = False
     else:
         optimizer_label = ask_choice(
-            "3) Geometry optimizer?", ["GeomeTRIC", "Sella", "Berny"])
+            "3) Geometry optimizer?", ["Sella", "GeomeTRIC", "Berny"])
         optimizer = OPTIMIZER_TOKENS[optimizer_label]  # config token
 
         run_mode = ask_choice(
