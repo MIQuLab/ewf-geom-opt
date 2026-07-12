@@ -61,7 +61,7 @@ The optimizer is imported **lazily**, only when its backend is selected via `geo
 
 ### External SBD eigensolver (only for the `SCI_SBD` / `SQD` solvers)
 
-- The **SBD** binary — a separate C++/MPI build (MPI + OpenMP + BLAS/LAPACK); see [`Code_for_SQD_incorporation/sbd`](Code_for_SQD_incorporation/sbd). Not needed for FCI / SCI solvers or for the `circuits` task.
+- The **SBD** binary — a separate C++/MPI build (MPI + OpenMP + BLAS/LAPACK); see [`SBD repository`](https://github.com/r-ccs-cms/sbd). Not needed for FCI / SCI solvers or for the `circuits` task.
 - An **MPI launcher** (`mpirun`) reachable from the compute nodes.
 
 ### SQD quantum sampling (only for the `SQD` solver with on-the-fly sampling)
