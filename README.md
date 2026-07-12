@@ -87,7 +87,7 @@ The standalone tools in [`Utilities/`](Utilities/) have **their own dependencies
 The EWF energy is a functional of global density matrices assembled from independent per-fragment cluster solutions:
 
 $$
-E[\gamma_1,\lambda_2] = E_{\mathrm{HF}} + \operatorname{Tr}\!\big(F\,\Delta\gamma_1\big) + \frac{1}{2}\sum_{pqrs}(pq|rs)\,(\lambda_2)_{pqrs},
+E[\gamma_1,\lambda_2] = E_{\mathrm{HF}} + \mathrm{Tr}\big(F\,\Delta\gamma_1\big) + \frac{1}{2}\sum_{pqrs}(pq|rs)\,(\lambda_2)_{pqrs},
 \qquad \Delta\gamma_1 = \gamma_1 - \gamma_1^{\mathrm{HF}}
 $$
 
@@ -112,7 +112,7 @@ $$
 Here `d/dx` is the *total* derivative with respect to a nuclear coordinate `x` (i.e. the physical gradient we want), `∂/∂x|_(γ fixed)` is the *partial* derivative that treats the assembled density `γ` as constant while differentiating the integrals only, and $\langle\,\cdot\,,\,\cdot\,\rangle$ is the natural pairing on the density space that contracts **all** indices of each component — a matrix trace (Frobenius inner product) for the one-particle part $\gamma_1$ and a full four-index contraction for the two-particle cumulant $\lambda_2$:
 
 $$
-\big\langle A,\,B\big\rangle \;\equiv\; \operatorname{Tr}\!\big(A_1^{\top} B_1\big) \;+\; \sum_{pqrs}(A_2)_{pqrs}\,(B_2)_{pqrs}.
+\big\langle A,\,B\big\rangle \;\equiv\; \mathrm{Tr}\big(A_1^{\top} B_1\big) \;+\; \sum_{pqrs}(A_2)_{pqrs}\,(B_2)_{pqrs}.
 $$
 
 `build_ewf_grad` computes **(a)** exactly — including the HF orbital (CPHF) relaxation of the integrals — by treating `γ1`, `λ2` as constants in the MO basis.
@@ -135,10 +135,10 @@ And `dγ/dx` collects every way the assembled density moves with the nuclei:
 
 $$
 \begin{aligned}
-\frac{d\gamma}{dx} = \;&\sum_x \frac{\partial\mathcal{A}}{\partial T_x}\frac{dT_x}{dx} && \text{(i)\ \ cluster amplitudes re-solve}\\
-+\;&\sum_x \frac{\partial\mathcal{A}}{\partial C_x}\frac{dC_x}{dx} && \text{(ii)\ \ bath/cluster orbitals redefine}\\
-+\;&\sum_x \frac{\partial\mathcal{A}}{\partial P_x}\frac{dP_x}{dx} && \text{(iii)\ fragment projectors shift}\\
-+\;&\phantom{\sum_x}\frac{\partial\mathcal{A}}{\partial C}\frac{dC}{dx} && \text{(iv)\ HF orbitals relax}
+\frac{d\gamma}{dx} \;&=\; \sum_x \frac{\partial\mathcal{A}}{\partial T_x}\frac{dT_x}{dx} \qquad \text{(i) cluster amplitudes re-solve} \\
+&+\; \sum_x \frac{\partial\mathcal{A}}{\partial C_x}\frac{dC_x}{dx} \qquad \text{(ii) bath / cluster orbitals redefine} \\
+&+\; \sum_x \frac{\partial\mathcal{A}}{\partial P_x}\frac{dP_x}{dx} \qquad \text{(iii) fragment projectors shift} \\
+&+\; \frac{\partial\mathcal{A}}{\partial C}\frac{dC}{dx} \qquad \text{(iv) HF orbitals relax}
 \end{aligned}
 $$
 
