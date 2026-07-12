@@ -222,11 +222,11 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
     """Return a standalone ACS-style (achemso) LaTeX document containing the table
     (and, if ``figure_relpath`` is given, the structure-overlay figure)."""
     caption = (
-        "Comparison of the optimized geometries obtained from EWF SCI "
+        "Comparison of the optimized geometries obtained from EWF-(FCI,SCI) "
         "calculations against the unfragmented SCI reference calculations, for "
         "each molecule. "
         "Here \\textbf{N atoms} is number of atoms, "
-        "\\textbf{RMSD} is root-mean-square deviation between the EWF SCI and "
+        "\\textbf{RMSD} is root-mean-square deviation between the EWF-(FCI,SCI) and "
         "unfragmented SCI calculations, "
         "\\textbf{Max $\\Delta$} is largest single-atom displacement, "
         "\\textbf{Max EWF MOs} is number of molecular orbitals in the largest "
@@ -235,7 +235,7 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
         "solver, "
         "\\textbf{Full MOs} is the total number of MOs in the unfragmented molecule, "
         "and \\textbf{EWF steps} and \\textbf{Ref. Steps} are number of "
-        "geometry-optimization cycles in the EWF SCI and unfragmented SCI runs, "
+        "geometry-optimization cycles in the EWF-(FCI,SCI) and unfragmented SCI runs, "
         "respectively."
     )
 
@@ -277,7 +277,7 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
     # Highlight the molecule with the highest discrepancy (largest RMSD).
     worst = max(results, key=lambda r: r["rmsd"])
     discussion = (
-        "As can be seen from the Table, the highest discrepancy between EWF SCI "
+        "As can be seen from the Table, the highest discrepancy between EWF-(FCI,SCI) "
         "and unfragmented SCI calculations is observed in "
         f"{escape_latex(worst['molecule'])}, where RMSD and maximum deviation are "
         f"{DIST_FMT.format(worst['rmsd'])} and {DIST_FMT.format(worst['max_dev'])} "
@@ -296,8 +296,8 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
             "  \\centering\n"
             f"  \\includegraphics[width=\\textwidth]{{{figure_relpath}}}\n"
             "  \\caption{Overlay of the optimized geometries for each molecule. The "
-            "unfragmented SCI reference is shown in CPK element colors and the EWF "
-            "SCI--SBD structure in a single highlight color (magenta).}\n"
+            "unfragmented SCI reference is shown in CPK element colors and the "
+            "EWF-(FCI,SCI) structure in a single highlight color (magenta).}\n"
             "  \\label{fig:overlay}\n"
             "\\end{figure*}\n"
         )
@@ -314,8 +314,8 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
 \\makeatother
 
 \\author{{Automated Report}}
-\\affiliation{{EWF SCI--SBD vs.\\ unfragmented geometry comparison}}
-\\title{{Optimized-geometry comparison: fragmented (EWF) SCI--SBD vs.\\ unfragmented reference}}
+\\affiliation{{EWF-(FCI,SCI) vs.\\ unfragmented geometry comparison}}
+\\title{{Optimized-geometry comparison: EWF-(FCI,SCI) vs.\\ unfragmented reference}}
 
 % Reference tree (unfragmented): {escape_latex(ref_root)}
 % Compared  tree (EWF):          {escape_latex(cmp_root)}
@@ -655,7 +655,7 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
 
 
 def build_overlay_figure(results, out_path,
-                         cmp_label="EWF SCI-SBD", dpi=300):
+                         cmp_label="EWF-(FCI,SCI)", dpi=300):
     """
     Publication-quality tiled figure: one tile per molecule, overlaying the
     aligned reference and EWF structures as ray-traced 3D ball-and-stick models

@@ -228,20 +228,20 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
     """Return a standalone ACS-style (achemso) LaTeX document containing the table
     (and, if ``figure_relpath`` is given, the structure-overlay figure)."""
     caption = (
-        "Comparison of the optimized geometries obtained from EWF SQD "
-        "calculations against the EWF SCI reference calculations, for "
+        "Comparison of the optimized geometries obtained from EWF-(FCI,SQD) "
+        "calculations against the EWF-(FCI,SCI) reference calculations, for "
         "each molecule. "
         "Here \\textbf{N atoms} is number of atoms, "
-        "\\textbf{RMSD} is root-mean-square deviation between the EWF SQD and "
-        "EWF SCI calculations, "
+        "\\textbf{RMSD} is root-mean-square deviation between the EWF-(FCI,SQD) and "
+        "EWF-(FCI,SCI) calculations, "
         "\\textbf{Max $\\Delta$} is largest single-atom displacement, "
         "\\textbf{Max EWF MOs} is number of molecular orbitals in the largest "
         "EWF cluster, "
         "\\textbf{N SQD solver} is the number of fragments treated with the SQD "
         "solver, "
         "\\textbf{Full MOs} is the total number of MOs in the molecule, "
-        "and \\textbf{EWF SQD steps} and \\textbf{EWF SCI steps} are number of "
-        "geometry-optimization cycles in the EWF SQD and EWF SCI runs, "
+        "and \\textbf{EWF-(FCI,SQD) steps} and \\textbf{EWF-(FCI,SCI) steps} are number of "
+        "geometry-optimization cycles in the EWF-(FCI,SQD) and EWF-(FCI,SCI) runs, "
         "respectively."
     )
 
@@ -273,18 +273,21 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
                "S[table-format=3.0] "        # EWF SQD steps
                "S[table-format=3.0]")        # EWF SCI steps
 
+    # Three header rows so the long EWF-(FCI,*) labels (and Max EWF MOs) stack
+    # vertically; each column's label is bottom-aligned onto the last row.
     header = (
-        "{Molecule} & {N atoms} & {RMSD} & {Max $\\Delta$} & "
-        "{Max EWF} & {N SQD} & {Full} & {EWF SQD} & {EWF SCI} \\\\\n"
-        " & & {(\\si{\\angstrom})} & {(\\si{\\angstrom})} & "
-        "{MOs} & {solver} & {MOs} & {steps} & {steps} \\\\"
+        " & & & & {Max} & & & {EWF-} & {EWF-} \\\\\n"
+        " & & {RMSD} & {Max $\\Delta$} & {EWF} & {N SQD} & {Full} "
+        "& {(FCI,SQD)} & {(FCI,SCI)} \\\\\n"
+        "{Molecule} & {N atoms} & {(\\si{\\angstrom})} & {(\\si{\\angstrom})} "
+        "& {MOs} & {solver} & {MOs} & {steps} & {steps} \\\\"
     )
 
     # Highlight the molecule with the highest discrepancy (largest RMSD).
     worst = max(results, key=lambda r: r["rmsd"])
     discussion = (
-        "As can be seen from the Table, the highest discrepancy between EWF SQD "
-        "and EWF SCI calculations is observed in "
+        "As can be seen from the Table, the highest discrepancy between EWF-(FCI,SQD) "
+        "and EWF-(FCI,SCI) calculations is observed in "
         f"{escape_latex(worst['molecule'])}, where RMSD and maximum deviation are "
         f"{DIST_FMT.format(worst['rmsd'])} and {DIST_FMT.format(worst['max_dev'])} "
         "\\si{\\angstrom}, respectively."
@@ -302,8 +305,8 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
             "  \\centering\n"
             f"  \\includegraphics[width=\\textwidth]{{{figure_relpath}}}\n"
             "  \\caption{Overlay of the optimized geometries for each molecule. The "
-            "EWF SCI reference is shown in CPK element colors and the EWF SQD "
-            "structure in a single highlight color (magenta).}\n"
+            "EWF-(FCI,SCI) reference is shown in CPK element colors and the "
+            "EWF-(FCI,SQD) structure in a single highlight color (magenta).}\n"
             "  \\label{fig:overlay}\n"
             "\\end{figure*}\n"
         )
@@ -320,11 +323,11 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
 \\makeatother
 
 \\author{{Automated Report}}
-\\affiliation{{EWF SQD vs.\\ EWF SCI geometry comparison}}
-\\title{{Optimized-geometry comparison: EWF SQD vs.\\ EWF SCI reference}}
+\\affiliation{{EWF-(FCI,SQD) vs.\\ EWF-(FCI,SCI) geometry comparison}}
+\\title{{Optimized-geometry comparison: EWF-(FCI,SQD) vs.\\ EWF-(FCI,SCI) reference}}
 
-% Reference tree (EWF SCI): {escape_latex(ref_root)}
-% Compared  tree (EWF SQD): {escape_latex(cmp_root)}
+% Reference tree (EWF-(FCI,SCI)): {escape_latex(ref_root)}
+% Compared  tree (EWF-(FCI,SQD)): {escape_latex(cmp_root)}
 
 \\begin{{document}}
 
@@ -661,7 +664,7 @@ def _render_pair_png(cmd, atoms, ref_xyz, cmp_xyz, out_png, size=1000):
 
 
 def build_overlay_figure(results, out_path,
-                         cmp_label="EWF SQD", dpi=300):
+                         cmp_label="EWF-(FCI,SQD)", dpi=300):
     """
     Publication-quality tiled figure: one tile per molecule, overlaying the
     aligned EWF SCI reference and EWF SQD structures as ray-traced 3D
