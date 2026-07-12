@@ -617,36 +617,41 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a(f"  enabled: {'true' if run_task == 'geomopt' else 'false'}"
       f"{' ' * (18 if run_task == 'geomopt' else 17)}"
       "# driven by calculation.run_task (true only for run_task: geomopt)")
-    a(f"  optimizer: {optimizer}            # geometric | berny | sella")
-    a(f"  prefix: {run_mode}_geomopt")
-    a('  step_subdir_fmt: "step_{step:03d}"')
-    if optimizer == "geometric":
-        # Keys forwarded verbatim to geometric.optimize.run_optimizer.
-        a("  geometric:")
-        a("    maxiter: 100")
-        a("    coordsys: tric")
-        a("    convergence_energy: 1.0e-3   # Eh")
-        a("    convergence_grms:   5.0e-3   # Eh / Bohr")
-        a("    convergence_gmax:   5.0e-3   # Eh / Bohr")
-        a("    convergence_drms:   1.2e-2   # Angstrom")
-        a("    convergence_dmax:   1.8e-2   # Angstrom")
-    elif optimizer == "berny":
-        # Keys forwarded verbatim to berny.Berny(...); thresholds are in a.u.
-        # and mirror Gaussian's default convergence set.
-        a("  berny:")
-        a("    maxsteps:    100")
-        a("    gradientmax: 4.5e-4   # Eh / Bohr")
-        a("    gradientrms: 3.0e-4   # Eh / Bohr")
-        a("    stepmax:     1.8e-3   # Bohr")
-        a("    steprms:     1.2e-3   # Bohr")
-    elif optimizer == "sella":
-        # fmax (eV/Angstrom) and steps drive Sella.run(); other keys are
-        # forwarded to sella.Sella(...).
-        a("  sella:")
-        a("    fmax:  0.1           # eV / Angstrom (max-force convergence)")
-        a("    steps: 25            # max optimizer steps")
-        a("    order: 0            # 0 = minimisation (default), 1 = saddle")
-        a("    internal: true      # use internal coordinates")
+    # The optimizer, per-step prefix/subdir, and the optimizer's own options
+    # block are only meaningful for the geomopt task; the single-point (gradient
+    # / energy) and circuit tasks emit just `enabled: false` above (the driver
+    # fills defaults for the rest but never uses them).
+    if run_task == "geomopt":
+        a(f"  optimizer: {optimizer}            # geometric | berny | sella")
+        a(f"  prefix: {run_mode}_geomopt")
+        a('  step_subdir_fmt: "step_{step:03d}"')
+        if optimizer == "geometric":
+            # Keys forwarded verbatim to geometric.optimize.run_optimizer.
+            a("  geometric:")
+            a("    maxiter: 100")
+            a("    coordsys: tric")
+            a("    convergence_energy: 1.0e-3   # Eh")
+            a("    convergence_grms:   5.0e-3   # Eh / Bohr")
+            a("    convergence_gmax:   5.0e-3   # Eh / Bohr")
+            a("    convergence_drms:   1.2e-2   # Angstrom")
+            a("    convergence_dmax:   1.8e-2   # Angstrom")
+        elif optimizer == "berny":
+            # Keys forwarded verbatim to berny.Berny(...); thresholds are in a.u.
+            # and mirror Gaussian's default convergence set.
+            a("  berny:")
+            a("    maxsteps:    100")
+            a("    gradientmax: 4.5e-4   # Eh / Bohr")
+            a("    gradientrms: 3.0e-4   # Eh / Bohr")
+            a("    stepmax:     1.8e-3   # Bohr")
+            a("    steprms:     1.2e-3   # Bohr")
+        elif optimizer == "sella":
+            # fmax (eV/Angstrom) and steps drive Sella.run(); other keys are
+            # forwarded to sella.Sella(...).
+            a("  sella:")
+            a("    fmax:  0.1           # eV / Angstrom (max-force convergence)")
+            a("    steps: 25            # max optimizer steps")
+            a("    order: 0            # 0 = minimisation (default), 1 = saddle")
+            a("    internal: true      # use internal coordinates")
     a("")
     return "\n".join(L)
 
