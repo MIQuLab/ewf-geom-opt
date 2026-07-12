@@ -145,6 +145,8 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
         n_reps=int(sqd_cfg.get("n_reps", 1)),
         thresh_two_q=float(sqd_cfg.get("thresh_two_q", 1.0)),
         thresh_meas=float(sqd_cfg.get("thresh_meas", 0.10)),
+        max_alpha_beta_connections=int(
+            sqd_cfg.get("maximum_alpha_beta_connections", 4)),
         verbose=verbose,
     )
     # Match the existing convention (`python str(dict)` form) so the
@@ -178,7 +180,8 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
 def run_qiskit_sampling(fcidump_path: str, backend_name: str,
                         default_shots: int, n_reps: int,
                         thresh_two_q: float = 1.0, thresh_meas: float = 0.10,
-                        verbose=None, submit: bool = True):
+                        verbose=None, submit: bool = True,
+                        max_alpha_beta_connections: int = 4):
     """Construct the LUCJ ansatz from the FCIDUMP and sample on an IBM backend.
 
     Lifted from the original ``produce_quantum_sample.py``.  ffsim,
@@ -198,6 +201,13 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     not consume IBM Runtime time.  In that case ``counts`` is ``None``.  Note
     that transpiling still needs a real backend target, so IBM connectivity is
     required even without submission.
+
+    ``max_alpha_beta_connections`` caps the number of LUCJ alpha-beta
+    interaction pairs.  These sit on every 4th orbital (0, 4, 8, ...); keeping
+    only the first ``max_alpha_beta_connections`` of them limits the alpha-beta
+    coupling qubits (fewer entangling resources / shallower circuit).  ``0``
+    removes them entirely; a value larger than the available orbitals is a
+    no-op (config ``sqd.maximum_alpha_beta_connections``, default 4).
     """
     # Local imports keep optional dependencies optional.
     import numpy as np
@@ -246,8 +256,13 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     t2 = mc.t2
 
     # LUCJ alpha-alpha and alpha-beta interaction pairs (heavy-hex compliant).
+    # The alpha-beta connections sit on every 4th orbital (0, 4, 8, ...); the
+    # count is capped at ``max_alpha_beta_connections`` to limit the number of
+    # ancilla/alpha-beta coupling qubits (sqd.maximum_alpha_beta_connections).
     alpha_alpha_indices = [(p, p + 1) for p in range(norb - 1)]
     alpha_beta_indices = [(p, p) for p in range(0, norb, 4)]
+    if max_alpha_beta_connections is not None and max_alpha_beta_connections >= 0:
+        alpha_beta_indices = alpha_beta_indices[:max_alpha_beta_connections]
 
     t0 = time.time()
     compressed_operator = ffsim.UCJOpSpinBalanced.from_t_amplitudes(
@@ -324,6 +339,7 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
             "num_qubits": int(isa_circuit.num_qubits),       # full ISA / device width
             "num_qubits_logical": int(2 * norb),             # LUCJ ansatz width
             "num_active_qubits": int(len(active_qubits)),    # physical qubits used
+            "n_alpha_beta_connections": int(len(alpha_beta_indices)),
             "gate_counts": {str(k): int(v)
                             for k, v in isa_circuit.count_ops().items()},
             "two_qubit_gate_count": int(
@@ -398,6 +414,8 @@ def analyze_quantum_circuit(cluster_h5_path: str, workdir: str,
         n_reps=int(sqd_cfg.get("n_reps", 1)),
         thresh_two_q=float(sqd_cfg.get("thresh_two_q", 1.0)),
         thresh_meas=float(sqd_cfg.get("thresh_meas", 0.10)),
+        max_alpha_beta_connections=int(
+            sqd_cfg.get("maximum_alpha_beta_connections", 4)),
         verbose=verbose, submit=False,
     )
     meta_path = os.path.join(workdir, "circuit_metadata.json")
