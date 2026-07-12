@@ -48,3 +48,10 @@ Code_for_SQD_incorporation/
 
 # Folder for reference output files
 Example_Output_Files/
+
+# LaTeX / tectonic build artifacts from the Utilities analysis tools
+# (achemso regenerates the acs-*.bib control file on demand; the .aux/.bbl are
+# transient.  Generated .tex/.pdf/.png outputs are left tracked on purpose.)
+Utilities/*.aux
+Utilities/*.bbl
+Utilities/acs-*.bib
