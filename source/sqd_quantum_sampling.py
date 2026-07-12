@@ -326,6 +326,8 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
             "num_active_qubits": int(len(active_qubits)),    # physical qubits used
             "gate_counts": {str(k): int(v)
                             for k, v in isa_circuit.count_ops().items()},
+            "two_qubit_gate_count": int(
+                sum(1 for instr in isa_circuit.data if _is_two_qubit(instr))),
             "depth": int(isa_circuit.depth()),
             "two_qubit_depth": int(isa_circuit.depth(_is_two_qubit)),
         }

@@ -10,11 +10,13 @@ lists them and points here.
 | [`geom_compare.py`](geom_compare.py) | Low-level, single-reference geometry comparison (Kabsch alignment → RMSD / max deviation). |
 | [`fragmentation_effect_analysis.py`](fragmentation_effect_analysis.py) | Batch driver: compares **EWF SCI** optimized geometries against the **unfragmented SCI** reference across molecules; emits an ACS-style LaTeX table + PDF and a structure-overlay figure (unfragmented CPK, EWF SCI magenta). |
 | [`quantum_sampling_effect_analysis.py`](quantum_sampling_effect_analysis.py) | Same framework, SQD counterpart: compares **EWF SQD** optimized geometries against the **EWF SCI** reference; same table + overlay figure (EWF SCI CPK, EWF SQD magenta), with an `N SQD solver` column. |
+| [`circuit_data_analysis.py`](circuit_data_analysis.py) | Collects LUCJ circuit sizes (qubits / 2-qubit depth / CNOT count) for the smallest and largest SQD-treated EWF cluster per molecule, across one or more folders of molecule subfolders; emits a LaTeX table + PDF. |
 | [`bulk_calculations_setup.py`](bulk_calculations_setup.py) | Interactive **bulk** setup: builds one ready-to-run folder (code template + geometry + `config.yaml`) per geometry in an input folder, from a single set of answers. |
 
 Contents:
 
 - [Geometry comparison](#geometry-comparison) — `geom_compare.py`, `fragmentation_effect_analysis.py`, `quantum_sampling_effect_analysis.py`
+- [SQD circuit-size analysis](#sqd-circuit-size-analysis) — `circuit_data_analysis.py`
 - [Slurm job diagnostics](#slurm-job-diagnostics) — `slurm_jobs_check.py`
 - [Bulk calculation setup](#bulk-calculation-setup) — `bulk_calculations_setup.py`
 
@@ -255,6 +257,29 @@ The optional flags (`--tex`, `--no-pdf`, `--figure`, `--no-figure`, `--reference
 names differ so the two tools never overwrite each other: `--tex` defaults to
 `geometry_comparison_qs_effect.tex` (PDF alongside) and `--figure` to
 `geometry_overlay_qs_effect.pdf` (PNG alongside).
+
+---
+
+# SQD circuit-size analysis
+
+[`circuit_data_analysis.py`](circuit_data_analysis.py) collects LUCJ quantum-circuit sizes for the SQD-treated EWF clusters and reports, **per molecule, the smallest and largest such cluster**.
+
+It takes **one or more folders** (a single folder is fine), each containing per-molecule subfolders (`acetone`, `ethanol`, …). For each molecule it walks the run tree, reads every `circuit_metadata.json` sidecar written by the SQD quantum-sampling code, and picks the SQD-treated cluster with the fewest and the most molecular orbitals. That metadata is produced by **any** run that builds the LUCJ ansatz, so the tool reads all of them uniformly:
+
+- a `run_task: circuits` run → `jobs_EWF/circuit_frag_<i>/circuit_metadata.json`
+- an SQD single-point (`gradient` / `energy`) run → `jobs_EWF/sqd_scratch_<i>/circuit_metadata.json`
+- an SQD `geomopt` run → `jobs_EWF/step_<NNN>/sqd_scratch_<i>/circuit_metadata.json`
+
+> **Note:** for **geometry-optimization** runs only the first step (`step_000`) is used, so the reported circuit sizes are consistent with the single-geometry runtypes (any `step_<NNN>` with `NNN != 000` is ignored).
+
+The output is a LaTeX table (compiled to PDF with `tectonic` if available) plus a plain-text table, one row per molecule, with columns **Molecule**, then **SQD Max MOs** and **SQD Min MOs**, each split into **Qubits**, **2-qubit gate depth**, and **CNOTs**. Qubits = 2 × the cluster's MO count; **CNOTs** is the native two-qubit (CNOT-equivalent) gate count of the transpiled circuit (`ecr` on Eagle, `cz`/`rzz` on Heron).
+
+```bash
+conda activate classical   # only for tectonic (the PDF); the tool itself is stdlib-only
+python circuit_data_analysis.py <folder1> [<folder2> ...]
+```
+
+Options: `--tex <path>` (default `sqd_circuit_sizes.tex`), `--no-pdf`. Molecule folders that contain no `circuit_metadata.json` (e.g. runs without an SQD solver) are listed as skipped. Requires only the Python standard library, plus `tectonic` on `PATH` for the PDF.
 
 ---
 
