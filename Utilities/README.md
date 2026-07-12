@@ -10,11 +10,13 @@ lists them and points here.
 | [`geom_compare.py`](geom_compare.py) | Low-level, single-reference geometry comparison (Kabsch alignment → RMSD / max deviation). |
 | [`fragmentation_effect_analysis.py`](fragmentation_effect_analysis.py) | Batch driver: compares **EWF SCI** optimized geometries against the **unfragmented SCI** reference across molecules; emits an ACS-style LaTeX table + PDF and a structure-overlay figure (unfragmented CPK, EWF SCI magenta). |
 | [`quantum_sampling_effect_analysis.py`](quantum_sampling_effect_analysis.py) | Same framework, SQD counterpart: compares **EWF SQD** optimized geometries against the **EWF SCI** reference; same table + overlay figure (EWF SCI CPK, EWF SQD magenta), with an `N SQD solver` column. |
+| [`bulk_calculations_setup.py`](bulk_calculations_setup.py) | Interactive **bulk** setup: builds one ready-to-run folder (code template + geometry + `config.yaml`) per geometry in an input folder, from a single set of answers. |
 
 Contents:
 
 - [Geometry comparison](#geometry-comparison) — `geom_compare.py`, `fragmentation_effect_analysis.py`, `quantum_sampling_effect_analysis.py`
 - [Slurm job diagnostics](#slurm-job-diagnostics) — `slurm_jobs_check.py`
+- [Bulk calculation setup](#bulk-calculation-setup) — `bulk_calculations_setup.py`
 
 ---
 
@@ -276,3 +278,24 @@ python slurm_jobs_check.py --workdir jobs_EWF --json report.json
 ```
 
 Requires only the Python standard library (plus `seff` / `sacct` on `PATH`); read-only (never calls `squeue` / `scancel` or touches the run), so it is safe to run at any time, including while jobs are still in flight. It exits non-zero if any job failed, and degrades gracefully to the on-disk `.status` records when `seff` / `sacct` are unavailable.
+
+---
+
+# Bulk calculation setup
+
+[`bulk_calculations_setup.py`](bulk_calculations_setup.py) is the many-geometry companion of `Source/calculation_setup.py`. Where `calculation_setup.py` writes a single `config.yaml` for one geometry, this asks the **same** setup questions once and then materialises a ready-to-run folder for **every** geometry in an input folder. It imports and reuses `calculation_setup.build_config` from the sibling `Source/` folder, so the per-run configs are identical to what `calculation_setup.py` would produce (the repo's `Source/` folder must be present alongside `Utilities/`).
+
+Three extra questions are asked first:
+
+1. **Path to folder with input geometries** — every regular (non-hidden) file in it is treated as one geometry.
+2. **Path to template of code for the runs** — the run-code folder whose contents are copied into each run folder (`__pycache__`, `*.pyc`, `.git`, `.DS_Store`, and any stale `config.yaml` are skipped).
+3. **Output folder name for bulk calculations.**
+
+It does **not** ask for a geometry file name: each input geometry is paired with its own run folder. For every geometry file `<name>.<ext>` it creates `<output>/<name>/`, copies the template's contents into it, copies the geometry file in, and writes a `config.yaml` whose `calculation.geometry_file` points at that geometry.
+
+```bash
+cd Utilities
+python bulk_calculations_setup.py
+```
+
+Guardrails: geometry stems must be unique (two files mapping to the same folder name is a hard error); existing run folders are skipped or replaced after a single prompt; a failed geometry is reported and its partial folder removed without aborting the rest of the batch. Each generated `config.yaml` is a template — fill in `basis`/charge/spin, Slurm resources, and any executable paths per run folder before submitting.

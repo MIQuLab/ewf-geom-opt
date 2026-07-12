@@ -208,6 +208,17 @@ python calculation_setup.py
 
 The result is a short, readable template rather than the full option set — the recommended starting point for a new calculation. The reference below documents the individual options it produces.
 
+### Bulk setup (`bulk_calculations_setup.py`)
+
+To run the **same settings across many geometries**, [`Utilities/bulk_calculations_setup.py`](Utilities/bulk_calculations_setup.py) asks the same setup questions as `calculation_setup.py` once (it reuses `calculation_setup.build_config` from `Source/`, so the configs are identical), preceded by three extra questions: the **input-geometries folder**, the **run-code template folder**, and the **output folder name**. It does *not* ask for a geometry file name — each input geometry is paired with its own run folder. For every geometry file it creates `<output>/<geometry_stem>/`, copies the template's contents in, copies the geometry file in, and writes a `config.yaml` whose `calculation.geometry_file` points at that geometry. See [`Utilities/README.md`](Utilities/README.md) for details.
+
+```bash
+cd Utilities
+python bulk_calculations_setup.py
+```
+
+Each generated `config.yaml` is a template (fill in `basis`/charge/spin, Slurm resources, and any executable paths per run folder before submitting).
+
 ### Configuration
 
 All settings live in [`Source/config.yaml`](Source/config.yaml):
@@ -393,12 +404,14 @@ Typical use cases:
 
 ## Utilities
 
-Standalone analysis tools live in [`Utilities/`](Utilities/); each is documented in full in **[`Utilities/README.md`](Utilities/README.md)**.
+Standalone helper tools live in [`Utilities/`](Utilities/); each is documented in full in **[`Utilities/README.md`](Utilities/README.md)**.
 
 | Tool | Purpose |
 |---|---|
 | [`slurm_jobs_check.py`](Utilities/slurm_jobs_check.py) | Post-mortem diagnostic for the workflow's multi-layer Slurm jobs (DUMP / SOLVE / SBD sub-jobs): resolves each JobID, runs `seff`, and explains failures — especially out-of-memory — pointing at the exact config knob to raise. |
 | [`geom_compare.py`](Utilities/geom_compare.py) | Kabsch-aligned RMSD / max-deviation comparison of optimized geometries against a reference structure. |
 | [`fragmentation_effect_analysis.py`](Utilities/fragmentation_effect_analysis.py) | Batch comparison of fragmented (EWF) vs. unfragmented optimized geometries across many molecules, emitting an ACS-style LaTeX table + a structure-overlay figure. |
+| [`quantum_sampling_effect_analysis.py`](Utilities/quantum_sampling_effect_analysis.py) | Same framework, SQD counterpart: batch comparison of EWF SQD vs. EWF SCI optimized geometries, emitting the same LaTeX table + structure-overlay figure. |
+| [`bulk_calculations_setup.py`](Utilities/bulk_calculations_setup.py) | Interactive **bulk** setup: one ready-to-run folder (code template + geometry + `config.yaml`) per geometry in an input folder, from a single set of answers (reuses `Source/calculation_setup.py`). |
 
 See **[`Utilities/README.md`](Utilities/README.md)** for requirements, usage, options, and output formats.
