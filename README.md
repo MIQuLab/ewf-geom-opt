@@ -86,65 +86,77 @@ The standalone tools in [`Utilities/`](Utilities/) have **their own dependencies
 
 The EWF energy is a functional of global density matrices assembled from independent per-fragment cluster solutions:
 
-```
-E[γ1, λ2] = E_HF + Tr(F · Δγ1) + ½ Tr( (pq|rs) · λ2 ),     Δγ1 = γ1 − γ1^HF
-```
+$$
+E[\gamma_1,\lambda_2] = E_{\mathrm{HF}} + \operatorname{Tr}\!\big(F\,\Delta\gamma_1\big) + \frac{1}{2}\sum_{pqrs}(pq|rs)\,(\lambda_2)_{pqrs},
+\qquad \Delta\gamma_1 = \gamma_1 - \gamma_1^{\mathrm{HF}}
+$$
 
 Here `E_HF` is the reference Hartree–Fock total energy at the current geometry; `F` is the closed-shell Fock matrix in the MO basis; `γ1` is the assembled global **one-particle** correlated density matrix in the MO basis (occupied + virtual blocks); `γ1^HF` is the HF reference one-particle density (diagonal with `2` on occupied MOs, `0` on virtual); `Δγ1 = γ1 − γ1^HF` is the correlation correction to the one-particle density (the object that couples to `F`); `λ2` is the assembled global **two-particle** cumulant (the connected part of the 2-RDM); and `(pq|rs)` are the two-electron repulsion integrals in the MO basis (chemists' notation).
 
 The chain of geometry (`x`) dependence runs from the AO integrals through the HF orbitals, the IAO fragments and DMET bath, the cluster Hamiltonians, and finally the cluster amplitudes — all of which feed the assembly map:
 
-```
-γ = (γ1, λ2) = 𝒜( {T_x}, {C_x}, {P_x}, C )
-```
+$$
+\gamma = (\gamma_1,\lambda_2) = \mathcal{A}\big(\{T_x\},\,\{C_x\},\,\{P_x\},\,C\big)
+$$
 
 Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
 
-### The density-response term `(∂E/∂γ)·(dγ/dx)`
+### The density-response term
 
 Because `γ` enters the energy both explicitly through the integrals and implicitly because the embedding rebuilds `γ` at every geometry, the chain rule splits the total derivative into exactly two pieces:
 
-```
-dE/dx  =  ∂E/∂x |_(γ fixed)        +     (∂E/∂γ) : (dγ/dx)
-          └─────────┬─────────┘          └────────┬────────┘
-        (a) frozen-density gradient      (b) density-response term
-```
+$$
+\frac{dE}{dx} = \underbrace{\left.\frac{\partial E}{\partial x}\right|_{\gamma\ \mathrm{fixed}}}_{\text{(a) frozen-density gradient}} \;+\; \underbrace{\left\langle \frac{\partial E}{\partial \gamma},\ \frac{d\gamma}{dx}\right\rangle}_{\text{(b) density-response term}}
+$$
 
-Here `d/dx` is the *total* derivative with respect to a nuclear coordinate `x` (i.e. the physical gradient we want), `∂/∂x|_(γ fixed)` is the *partial* derivative that treats the assembled density `γ` as constant while differentiating the integrals only, and `:` denotes the full-tensor contraction on all indices of the density (matrix trace for `γ1`, four-index contraction for `λ2`).
+Here `d/dx` is the *total* derivative with respect to a nuclear coordinate `x` (i.e. the physical gradient we want), `∂/∂x|_(γ fixed)` is the *partial* derivative that treats the assembled density `γ` as constant while differentiating the integrals only, and $\langle\,\cdot\,,\,\cdot\,\rangle$ is the natural pairing on the density space that contracts **all** indices of each component — a matrix trace (Frobenius inner product) for the one-particle part $\gamma_1$ and a full four-index contraction for the two-particle cumulant $\lambda_2$:
+
+$$
+\big\langle A,\,B\big\rangle \;\equiv\; \operatorname{Tr}\!\big(A_1^{\top} B_1\big) \;+\; \sum_{pqrs}(A_2)_{pqrs}\,(B_2)_{pqrs}.
+$$
 
 `build_ewf_grad` computes **(a)** exactly — including the HF orbital (CPHF) relaxation of the integrals — by treating `γ1`, `λ2` as constants in the MO basis.
 
 What is `∂E/∂γ`, concretely? Differentiating the functional at fixed integrals gives
 
-```
-∂E/∂γ1_pq    =  F_pq           (the Fock matrix)
-∂E/∂λ2_pqrs  =  ½ (pq|rs)      (the two-electron integrals)
-```
+$$
+\frac{\partial E}{\partial (\gamma_1)_{pq}} = F_{pq} \quad\text{(the Fock matrix)},
+\qquad
+\frac{\partial E}{\partial (\lambda_2)_{pqrs}} = \tfrac{1}{2}(pq|rs) \quad\text{(the two-electron integrals)}
+$$
 
-— the one- and two-body Hamiltonian matrices, which are emphatically **not zero**. Here `p, q, r, s` are MO indices, and `∂E/∂γ` denotes the functional derivative of the energy with respect to each element of the assembled density (the object that gets contracted with `dγ/dx`). And `dγ/dx` collects every way the assembled density moves with the nuclei:
+— the one- and two-body Hamiltonian matrices, which are emphatically **not zero**. Here `p, q, r, s` are MO indices, and `∂E/∂γ` denotes the functional derivative of the energy with respect to each element of the assembled density. Substituting these into the pairing above writes term (b) out in full — an explicit contraction over **every** index of each density component:
 
-```
-dγ/dx =  Σ_x (∂𝒜/∂T_x)(dT_x/dx)     ← (i)   cluster amplitudes re-solve
-       + Σ_x (∂𝒜/∂C_x)(dC_x/dx)     ← (ii)  bath/cluster orbitals redefine
-       + Σ_x (∂𝒜/∂P_x)(dP_x/dx)     ← (iii) fragment projectors shift
-       +     (∂𝒜/∂C )(dC /dx)        ← (iv)  HF orbitals relax
-```
+$$
+\left\langle \frac{\partial E}{\partial \gamma},\ \frac{d\gamma}{dx}\right\rangle = \sum_{pq} F_{pq}\,\frac{d(\gamma_1)_{pq}}{dx} \;+\; \frac{1}{2}\sum_{pqrs}(pq|rs)\,\frac{d(\lambda_2)_{pqrs}}{dx}.
+$$
+
+And `dγ/dx` collects every way the assembled density moves with the nuclei:
+
+$$
+\begin{aligned}
+\frac{d\gamma}{dx} = \;&\sum_x \frac{\partial\mathcal{A}}{\partial T_x}\frac{dT_x}{dx} && \text{(i)\ \ cluster amplitudes re-solve}\\
++\;&\sum_x \frac{\partial\mathcal{A}}{\partial C_x}\frac{dC_x}{dx} && \text{(ii)\ \ bath/cluster orbitals redefine}\\
++\;&\sum_x \frac{\partial\mathcal{A}}{\partial P_x}\frac{dP_x}{dx} && \text{(iii)\ fragment projectors shift}\\
++\;&\phantom{\sum_x}\frac{\partial\mathcal{A}}{\partial C}\frac{dC}{dx} && \text{(iv)\ HF orbitals relax}
+\end{aligned}
+$$
 
 `dT_x/dx`, `dC_x/dx`, `dP_x/dx`, `dC/dx` are the total geometry derivatives of the same per-cluster quantities introduced under the assembly map above; each is coupled to the geometry through its own defining equation (the cluster amplitude equations, the DMET bath construction, the fragment projector definition, the HF/SCF stationarity condition), so `dγ/dx` in full generality requires four coupled response solves.
 
-**Why term (b) is nonzero for EWF but zero for a variational method:** for a variational wavefunction (FCI, optimized CASSCF, HF) the density extremizes `E` for the given integrals, so the response `dγ/dx` lies along directions in which `E` is flat and the contraction `(∂E/∂γ):(dγ/dx)` vanishes identically — this is the Hellmann–Feynman theorem. EWF breaks this: the assembled `γ` is built by projection of independent cluster solutions and is *not* the density that extremizes `E[γ]` for the global integrals. Even when each cluster solver returns an exact eigenstate (each *cluster* energy stationary), the projected *global* energy is not stationary with respect to the cluster amplitudes:
+**Why term (b) is nonzero for EWF but zero for a variational method:** for a variational wavefunction (FCI, optimized CASSCF, HF) the density extremizes `E` for the given integrals, so the response `dγ/dx` lies along directions in which `E` is flat and the pairing $\langle \partial E/\partial\gamma,\ d\gamma/dx\rangle$ vanishes identically — this is the Hellmann–Feynman theorem. EWF breaks this: the assembled `γ` is built by projection of independent cluster solutions and is *not* the density that extremizes `E[γ]` for the global integrals. Even when each cluster solver returns an exact eigenstate (each *cluster* energy stationary), the projected *global* energy is not stationary with respect to the cluster amplitudes:
 
-```
-∂E_global/∂T_x  ≠ 0        ← projection breaks cluster-level Hellmann–Feynman
-```
+$$
+\frac{\partial E_{\mathrm{global}}}{\partial T_x} \neq 0 \qquad \text{(projection breaks cluster-level Hellmann–Feynman)}
+$$
 
 so the density-response term contributes a real piece of `dE/dx` (here `E_global` is the assembled `E[γ1, λ2]` from the very first equation of this section, and the inequality reads *for at least one cluster `x`*).
 
 **The Lagrangian trick:** computing `dγ/dx` head-on would require solving the four response equations above for each of the 3N nuclear coordinates — 3N embedding re-solves. The Z-vector / Lagrangian method instead augments `E` with each defining equation times a multiplier, chooses the multipliers to make the augmented functional stationary in all internal variables, and then
 
-```
-(∂E/∂γ):(dγ/dx)  ≡  Σ_x Λ_x (∂H_x/∂x)|_explicit  +  (projector overlap terms)  +  (Z-vector terms)
-```
+$$
+\left\langle \frac{\partial E}{\partial \gamma},\ \frac{d\gamma}{dx}\right\rangle \equiv \sum_x \Lambda_x \left.\frac{\partial H_x}{\partial x}\right|_{\mathrm{explicit}} + (\text{projector overlap terms}) + (\text{Z-vector terms})
+$$
 
 Here `Λ_x` is the per-cluster set of Lagrange multipliers (Z-vectors) — one adjoint solve per defining equation (amplitude Λ for the amplitude equations, orbital Z for the bath/HF orbital rotations, projector multipliers for the fragment projectors) — and `H_x` is the effective cluster Hamiltonian on fragment `x` (its explicit `x`-derivative is the only *nuclear* derivative that appears on the right-hand side). The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
 
