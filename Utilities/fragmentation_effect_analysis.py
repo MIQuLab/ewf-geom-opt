@@ -190,11 +190,17 @@ def h5_largest_fragment_norb(molecule_dir):
     ``None`` when h5py is unavailable or no such files exist."""
     if not _HAVE_H5PY:
         return None
+    # cluster_*.h5 and rdm_*.h5 record the SAME per-fragment norb, so scan only
+    # one set: prefer the DUMP cluster files, fall back to the rdm files.  This
+    # halves the metadata reads on a multi-step geomopt run.
+    paths = glob.glob(os.path.join(molecule_dir, "**", "cluster_*.h5"),
+                      recursive=True)
+    if not paths:
+        paths = glob.glob(os.path.join(molecule_dir, "**", "rdm_*.h5"),
+                          recursive=True)
     norbs = []
-    for pat in ("cluster_*.h5", "rdm_*.h5"):
-        for path in glob.glob(os.path.join(molecule_dir, "**", pat),
-                              recursive=True):
-            norbs.extend(_norbs_in_h5(path))
+    for path in paths:
+        norbs.extend(_norbs_in_h5(path))
     return max(norbs) if norbs else None
 
 
