@@ -27,12 +27,13 @@ Output
 A LaTeX table (compiled to PDF with ``tectonic`` if available) plus a plain-text
 table on stdout, with one row per molecule and columns:
 
-    Molecule | SQD Max MOs (Qubits, 2-qubit depth, CNOTs)
-             | SQD Min MOs (Qubits, 2-qubit depth, CNOTs)
+    Molecule | SQD Max MOs (MOs, Qubits, 2-qubit depth, CNOTs)
+             | SQD Min MOs (MOs, Qubits, 2-qubit depth, CNOTs)
 
 "SQD Max/Min MOs" is the SQD cluster with the most / fewest molecular orbitals;
-for each, the transpiled LUCJ circuit's qubit count (= 2 x cluster MOs), 2-qubit
-gate depth, and CNOT (native 2-qubit) gate count are shown.
+for each, the cluster's MO (active-space) count, the transpiled LUCJ circuit's
+qubit count (= 2 x cluster MOs), 2-qubit gate depth, and CNOT (native 2-qubit)
+gate count are shown.
 """
 
 import os
@@ -177,7 +178,8 @@ def build_latex_table(results, input_dirs):
         "LUCJ quantum-circuit sizes for the smallest and largest EWF clusters "
         "treated with the SQD solver, per molecule.  \\textbf{SQD Max MOs} / "
         "\\textbf{SQD Min MOs} are the SQD-treated clusters with the most / "
-        "fewest molecular orbitals; for each, \\textbf{Qubits} is the LUCJ "
+        "fewest molecular orbitals; for each, \\textbf{MOs} is the cluster's "
+        "molecular-orbital (active-space) count, \\textbf{Qubits} is the LUCJ "
         "ansatz qubit count (equal to twice the cluster's MO count), "
         "\\textbf{2Q depth} is the two-qubit-gate circuit depth, and "
         "\\textbf{CNOTs} is the native two-qubit (CNOT-equivalent) gate count of "
@@ -189,26 +191,29 @@ def build_latex_table(results, input_dirs):
     for label, a in results:
         cmax, cmin = a["cmax"], a["cmin"]
         rows.append(
-            "{mol} & {qx} & {dx} & {cx} & {qn} & {dn} & {cn} \\\\".format(
+            "{mol} & {mox} & {qx} & {dx} & {cx} & {mon} & {qn} & {dn} & {cn} "
+            "\\\\".format(
                 mol=escape_latex(label),
-                qx=_cell(cmax["qubits"]), dx=_cell(cmax["two_q_depth"]),
-                cx=_cell(cmax["cnots"]),
-                qn=_cell(cmin["qubits"]), dn=_cell(cmin["two_q_depth"]),
-                cn=_cell(cmin["cnots"]),
+                mox=_cell(cmax["norb"]), qx=_cell(cmax["qubits"]),
+                dx=_cell(cmax["two_q_depth"]), cx=_cell(cmax["cnots"]),
+                mon=_cell(cmin["norb"]), qn=_cell(cmin["qubits"]),
+                dn=_cell(cmin["two_q_depth"]), cn=_cell(cmin["cnots"]),
             )
         )
     body = "\n".join(rows)
 
     colspec = ("l "
-               "S[table-format=3.0] S[table-format=5.0] S[table-format=6.0] "
-               "S[table-format=3.0] S[table-format=5.0] S[table-format=6.0]")
+               "S[table-format=3.0] S[table-format=3.0] S[table-format=5.0] "
+               "S[table-format=6.0] "
+               "S[table-format=3.0] S[table-format=3.0] S[table-format=5.0] "
+               "S[table-format=6.0]")
 
     header = (
-        "{Molecule} & \\multicolumn{3}{c}{SQD Max MOs} & "
-        "\\multicolumn{3}{c}{SQD Min MOs} \\\\\n"
-        "    \\cmidrule(lr){2-4}\\cmidrule(lr){5-7}\n"
-        "     & {Qubits} & {2Q depth} & {CNOTs} & {Qubits} & {2Q depth} & "
-        "{CNOTs} \\\\"
+        "{Molecule} & \\multicolumn{4}{c}{SQD Max MOs} & "
+        "\\multicolumn{4}{c}{SQD Min MOs} \\\\\n"
+        "    \\cmidrule(lr){2-5}\\cmidrule(lr){6-9}\n"
+        "     & {MOs} & {Qubits} & {2Q depth} & {CNOTs} & {MOs} & {Qubits} & "
+        "{2Q depth} & {CNOTs} \\\\"
     )
 
     roots = ", ".join(escape_latex(d) for d in input_dirs)
@@ -325,16 +330,18 @@ def main():
         return 1
 
     # --- plain-text table --------------------------------------------------
-    print(f"\n{'Molecule':<24} | {'SQD Max MOs (Qubits/2Qdepth/CNOTs)':>34} | "
-          f"{'SQD Min MOs (Qubits/2Qdepth/CNOTs)':>34}")
-    print("-" * 98)
+    print(f"\n{'Molecule':<24} | {'SQD Max MOs (MOs/Qubits/2Qdepth/CNOTs)':>40} | "
+          f"{'SQD Min MOs (MOs/Qubits/2Qdepth/CNOTs)':>40}")
+    print("-" * 110)
     for label, a in results:
         mx, mn = a["cmax"], a["cmin"]
-        mxs = f"{_txt(mx['qubits'])}/{_txt(mx['two_q_depth'])}/{_txt(mx['cnots'])}"
-        mns = f"{_txt(mn['qubits'])}/{_txt(mn['two_q_depth'])}/{_txt(mn['cnots'])}"
-        print(f"{label:<24} | {mxs:>34} | {mns:>34}")
-    print("\n(Qubits = 2 x cluster MOs; max/min chosen by the cluster MO count; "
-          "geomopt runs use step 000.)")
+        mxs = (f"{_txt(mx['norb'])}/{_txt(mx['qubits'])}/"
+               f"{_txt(mx['two_q_depth'])}/{_txt(mx['cnots'])}")
+        mns = (f"{_txt(mn['norb'])}/{_txt(mn['qubits'])}/"
+               f"{_txt(mn['two_q_depth'])}/{_txt(mn['cnots'])}")
+        print(f"{label:<24} | {mxs:>40} | {mns:>40}")
+    print("\n(MOs = cluster molecular-orbital count; Qubits = 2 x MOs; "
+          "max/min chosen by the cluster MO count; geomopt runs use step 000.)")
 
     if no_data:
         print(f"\nSkipped (no circuit data) : {', '.join(no_data)}")
