@@ -49,7 +49,7 @@ import subprocess
 import numpy as np
 
 # Optional: read the authoritative per-cluster orbital count straight from the
-# DUMP/solve HDF5 artefacts (cluster_*.h5 / rdm_*.h5).  These are the ground
+# DUMP cluster_*.h5 artefacts (never the larger rdm_*.h5).  These are the ground
 # truth for cluster sizes; the log line can under-report because a historical
 # name-keyed per-cluster printout collapsed same-element fragments (e.g.
 # acetone's three "C" atoms) onto a single norb, hiding the larger cluster.
@@ -171,17 +171,17 @@ def parse_largest_fragment_norb(logpath):
 
 
 def _norbs_in_h5(path):
-    """Every ``norb`` recorded in one cluster/rdm HDF5 file.
+    """Every per-fragment ``norb`` recorded in one cluster_*.h5 file (stored as
+    a group attr on ``fragment_<i>``).
 
-    cluster_*.h5 stores norb as a per-fragment group attr (``fragment_<i>``);
-    rdm_*.h5 stores it as a root attr.  Handle both.
+    Metadata-only: reads just the scalar ``norb`` attribute, never the cluster
+    tensors (c_cluster / heff / fock / eris), so the cost is independent of the
+    file size -- a multi-GB cluster file is read as fast as a tiny one.
     """
     out = []
     try:
         with h5py.File(path, "r") as h5:
-            if "norb" in h5.attrs:                    # rdm_*.h5 (root attr)
-                out.append(int(h5.attrs["norb"]))
-            for key in h5.keys():                     # cluster_*.h5 (group attr)
+            for key in h5.keys():                     # fragment_<i> group
                 grp = h5[key]
                 if hasattr(grp, "attrs") and "norb" in grp.attrs:
                     out.append(int(grp.attrs["norb"]))
@@ -190,22 +190,43 @@ def _norbs_in_h5(path):
     return out
 
 
+def _find_cluster_files(molecule_dir):
+    """Cluster dump files under ``molecule_dir``, via bounded-depth globs.
+
+    Cluster dumps live at most a couple of levels down -- directly in the
+    molecule dir, in a workdir (jobs_EWF/ or an examples step_000/), or in
+    jobs_EWF/step_<NNN>/.  We deliberately AVOID a recursive ``**`` walk: an
+    EWF run's workdir also holds SQD/SBD scratch trees (sqd_scratch_*/iter_*/
+    batch_* with many thousands of tiny determinant files), and recursively
+    stat-ing all of them -- especially on a networked filesystem like BeeGFS --
+    is orders of magnitude slower than globbing the handful of cluster files we
+    actually want.  Bounded globs only list the few directories at each fixed
+    depth and never descend into the scratch subtrees.
+    """
+    seen, out = set(), []
+    for depth in ("cluster_*.h5",
+                  os.path.join("*", "cluster_*.h5"),
+                  os.path.join("*", "*", "cluster_*.h5")):
+        for path in glob.glob(os.path.join(molecule_dir, depth)):
+            if path not in seen:
+                seen.add(path)
+                out.append(path)
+    return out
+
+
 def h5_largest_fragment_norb(molecule_dir):
-    """Largest EWF cluster ``norb`` from cluster_*.h5 / rdm_*.h5 under
-    ``molecule_dir`` (searched recursively, across every geomopt step), or
-    ``None`` when h5py is unavailable or no such files exist."""
+    """Largest EWF cluster ``norb`` from cluster_*.h5 under ``molecule_dir``
+    (across every geomopt step), or ``None`` when h5py is unavailable or no
+    cluster files exist.
+
+    ONLY the DUMP cluster_*.h5 files are read -- never the rdm_*.h5 files.  The
+    rdm files carry the same per-fragment norb but also hold the (potentially
+    multi-GB) global-density tensors, so we leave them untouched entirely.
+    """
     if not _HAVE_H5PY:
         return None
-    # cluster_*.h5 and rdm_*.h5 record the SAME per-fragment norb, so scan only
-    # one set: prefer the DUMP cluster files, fall back to the rdm files.  This
-    # halves the metadata reads on a multi-step geomopt run.
-    paths = glob.glob(os.path.join(molecule_dir, "**", "cluster_*.h5"),
-                      recursive=True)
-    if not paths:
-        paths = glob.glob(os.path.join(molecule_dir, "**", "rdm_*.h5"),
-                          recursive=True)
     norbs = []
-    for path in paths:
+    for path in _find_cluster_files(molecule_dir):
         norbs.extend(_norbs_in_h5(path))
     return max(norbs) if norbs else None
 
@@ -213,9 +234,9 @@ def h5_largest_fragment_norb(molecule_dir):
 def largest_fragment_norb(molecule_dir, logpath):
     """Largest EWF per-cluster orbital count for one molecule.
 
-    Prefers the authoritative ``norb`` in the cluster_*.h5 / rdm_*.h5 artefacts
-    (ground truth, independent of log formatting); falls back to parsing the
-    log's per-cluster ``norb=`` lines when no HDF5 files are found.
+    Prefers the authoritative ``norb`` in the cluster_*.h5 artefacts (ground
+    truth, independent of log formatting); falls back to parsing the log's
+    per-cluster ``norb=`` lines when no cluster HDF5 files are found.
     """
     n = h5_largest_fragment_norb(molecule_dir)
     if n is not None:
@@ -989,7 +1010,7 @@ def main():
         print(f"Largest max-deviation        : {DIST_FMT.format(worst_maxdev['max_dev'])} Å  ({worst_maxdev['molecule']})")
         print("\nNotes:")
         print("  * Max EWF MOs  = largest EWF cluster norb, read from "
-              "cluster_*.h5 / rdm_*.h5 when present (else the log).")
+              "cluster_*.h5 when present (else the log).")
         print("  * N SQD solver = number of fragments solved with the SQD solver.")
         print("  * Full MOs     = total n(MO) of the molecule (from the EWF log).")
         print("  * *steps       = number of geometry-optimisation cycles "
