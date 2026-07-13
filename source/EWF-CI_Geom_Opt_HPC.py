@@ -2380,17 +2380,26 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     # Per-fragment solver actually used (recorded by the solve stage).  In
     # multi-solver mode this varies with cluster size, so annotate each
     # cluster's energy line with its solver + orbital count.
-    per_frag_solver = {}
+    #
+    # This MUST be aligned positionally with rdm_files (fragment-index order),
+    # NOT keyed by fragment name: element names are not unique (e.g. acetone's
+    # three "C" atoms), so a name-keyed dict collides -- every same-element
+    # fragment would then report the LAST-written fragment's solver/norb.  That
+    # bug hid the norb=23 carbonyl-C cluster behind a norb=16 methyl-C one, so
+    # the log (and the log-parsing Utilities) reported 16 for a cluster the
+    # H5 file correctly records as 23.  cluster_names / cluster_energies are
+    # built by iterating rdm_files in this same order by every assembly route.
+    per_frag_info = [None] * len(rdm_files)
     if multi_solver:
-        for path in rdm_files:
+        for i, path in enumerate(rdm_files):
             with h5py.File(path, "r") as h5:
-                per_frag_solver[str(h5.attrs["name"])] = (
+                per_frag_info[i] = (
                     str(h5.attrs["solver"]), int(h5.attrs["norb"]))
 
     print(f"[{tag}] Per-cluster energies (heff + eris):")
-    for name, e in zip(cluster_names, cluster_energies):
-        if name in per_frag_solver:
-            sv, norb = per_frag_solver[name]
+    for name, e, info in zip(cluster_names, cluster_energies, per_frag_info):
+        if info is not None:
+            sv, norb = info
             print(f"   {name:>20s}  E_cluster = {e:.10f} Ha  "
                   f"[{sv}, norb={norb}]")
         else:

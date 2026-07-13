@@ -46,6 +46,17 @@ import argparse
 import subprocess
 import numpy as np
 
+# Optional: read the authoritative per-cluster orbital count straight from the
+# DUMP/solve HDF5 artefacts (cluster_*.h5 / rdm_*.h5).  These are the ground
+# truth for cluster sizes; the log line can under-report because a historical
+# name-keyed per-cluster printout collapsed same-element fragments (e.g.
+# acetone's three "C" atoms) onto a single norb, hiding the larger cluster.
+try:
+    import h5py
+    _HAVE_H5PY = True
+except ImportError:                                   # h5py optional
+    _HAVE_H5PY = False
+
 # Reuse the vetted alignment / comparison routine from the existing tool.
 from geom_compare import align_and_compare, _is_float
 
@@ -151,6 +162,53 @@ def parse_largest_fragment_norb(logpath):
     """Largest per-cluster orbital count (max norb over EWF E_cluster lines)."""
     norbs = [int(n) for n in _CLUSTER_NORB_RE.findall(_read(logpath))]
     return max(norbs) if norbs else None
+
+
+def _norbs_in_h5(path):
+    """Every ``norb`` recorded in one cluster/rdm HDF5 file.
+
+    cluster_*.h5 stores norb as a per-fragment group attr (``fragment_<i>``);
+    rdm_*.h5 stores it as a root attr.  Handle both.
+    """
+    out = []
+    try:
+        with h5py.File(path, "r") as h5:
+            if "norb" in h5.attrs:                    # rdm_*.h5 (root attr)
+                out.append(int(h5.attrs["norb"]))
+            for key in h5.keys():                     # cluster_*.h5 (group attr)
+                grp = h5[key]
+                if hasattr(grp, "attrs") and "norb" in grp.attrs:
+                    out.append(int(grp.attrs["norb"]))
+    except (OSError, KeyError, ValueError):
+        pass
+    return out
+
+
+def h5_largest_fragment_norb(molecule_dir):
+    """Largest EWF cluster ``norb`` from cluster_*.h5 / rdm_*.h5 under
+    ``molecule_dir`` (searched recursively, across every geomopt step), or
+    ``None`` when h5py is unavailable or no such files exist."""
+    if not _HAVE_H5PY:
+        return None
+    norbs = []
+    for pat in ("cluster_*.h5", "rdm_*.h5"):
+        for path in glob.glob(os.path.join(molecule_dir, "**", pat),
+                              recursive=True):
+            norbs.extend(_norbs_in_h5(path))
+    return max(norbs) if norbs else None
+
+
+def largest_fragment_norb(molecule_dir, logpath):
+    """Largest EWF per-cluster orbital count for one molecule.
+
+    Prefers the authoritative ``norb`` in the cluster_*.h5 / rdm_*.h5 artefacts
+    (ground truth, independent of log formatting); falls back to parsing the
+    log's per-cluster ``norb=`` lines when no HDF5 files are found.
+    """
+    n = h5_largest_fragment_norb(molecule_dir)
+    if n is not None:
+        return n
+    return parse_largest_fragment_norb(logpath) if logpath else None
 
 
 def parse_full_norb(logpath):
@@ -858,7 +916,7 @@ def main():
         ref_log = find_log(os.path.join(ref_root, molecule))
         cmp_log = find_log(os.path.join(cmp_root, molecule))
 
-        frag_norb = parse_largest_fragment_norb(cmp_log) if cmp_log else None
+        frag_norb = largest_fragment_norb(os.path.join(cmp_root, molecule), cmp_log)
         full_norb = parse_full_norb(ref_log) if ref_log else None
         ewf_steps = parse_num_steps(cmp_log) if cmp_log else None
         ref_steps = parse_num_steps(ref_log) if ref_log else None
@@ -910,7 +968,8 @@ def main():
         print(f"Max RMSD                     : {DIST_FMT.format(worst_rmsd['rmsd'])} Å  ({worst_rmsd['molecule']})")
         print(f"Largest max-deviation        : {DIST_FMT.format(worst_maxdev['max_dev'])} Å  ({worst_maxdev['molecule']})")
         print("\nNotes:")
-        print("  * Max EWF MOs = max norb across EWF per-cluster energies.")
+        print("  * Max EWF MOs = largest EWF cluster norb, read from "
+              "cluster_*.h5 / rdm_*.h5 when present (else the log).")
         print("  * Full MOs    = unfragmented full active-space norb.")
         print("  * *steps           = number of geometry-optimisation cycles "
               "('Cycles evaluated', else max step index + 1).")
