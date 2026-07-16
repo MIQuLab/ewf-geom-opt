@@ -343,8 +343,12 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# single-solver value"
           f" (ignored when multi_solver.enabled is true)")
-        a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff"
-          " (ignored by SQD, which draws its subspace from quantum samples)")
+        # Only meaningful for a SCI / SCI_SBD solver; SQD draws its subspace
+        # from quantum samples, so omit the line entirely for SQD runs (in
+        # multi-solver mode the high-accuracy solver is FCI, which also ignores
+        # it, so no fragment uses the cutoff when the approximate solver is SQD).
+        if not sqd:
+            a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff")
         if multi:
             a("  multi_solver:")
             a("    enabled: true")
@@ -356,7 +360,9 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     else:
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / SQD")
-        a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI / SQD)")
+        # Omit for SQD (uses quantum samples, not a determinant cutoff).
+        if not sqd:
+            a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI)")
     a("")
 
     # --- calculation block --------------------------------------------------
