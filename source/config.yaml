@@ -34,9 +34,10 @@ calculation:
   # Workflow-level restart: when true (or when the driver is invoked with
   # --restart) the driver scans the workdir and reuses every artefact that
   # is already complete -- step_<NNN>/result.json (cached E + gradient),
-  # per-fragment cluster_<i>.h5 / rdm_<i>.h5, and completed SCI_SBD / SQD
-  # sub-jobs (iter_*/[batch_*/]sbd_job.status == DONE, plus any existing
-  # sqd_scratch_*/count_dict.txt).  Default off: wipe stale files and rerun.
+  # step_<NNN>/hf.chk (cached converged RHF), per-fragment cluster_<i>.h5
+  # / rdm_<i>.h5, and completed SCI_SBD / SQD sub-jobs (iter_*/[batch_*/]
+  # sbd_job.status == DONE, plus any existing sqd_scratch_*/count_dict.txt).
+  # Default off: wipe stale files and rerun.
   restart: false                 # true | false  (or use --restart on CLI)
 
 # Slurm resources for the fragmented DUMP + solve waves.
@@ -56,7 +57,7 @@ slurm:
   SQD:
     partition: defq
     ntasks: 2
-    mem: 100G
+    mem: 170G
 
 # Sample-based Quantum Diagonalization (SQD) -- present because a solver
 # is SQD.  Each SQD iteration submits 'n_batches' parallel SBD Slurm jobs
@@ -68,10 +69,11 @@ sqd:
   sbd_exe_path_gpu: '/home/liz7/isilon/Zhen/sbd-main/apps/test/diag'
   mpi_launcher: '/home/liz7/isilon/Zhen/mpich/bin/mpirun'   # absolute path (PATH-independent)
   proc_type: 1            # 1 = GPU (CPUs as support)
-  gpus_per_batch: 4       # GPUs per SBD batch -> --gpus-per-node
-  cpus_per_gpu: 16      # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
+  gpus_per_batch: 1       # GPUs per SBD batch -> --gpus-per-node
+  cpus_per_gpu: 8       # support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)
   sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)
-  sbd_block: 20
+  sbd_advanced_memory: false   # EXPERIMENTAL when true: GPU RAM/VRAM guardrails (det-cache caps, comm-size split, tuned block). false = stable defaults (commit 0000c598)
+  sbd_block: 8
   sbd_dav_iteration: 10   # SQD: relaxed vs SCI_SBD's 100 (per-batch SBD is much more expensive)
   sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this exact '1.e-5' notation
   sbd_init: 0
@@ -79,7 +81,7 @@ sqd:
   sbd_carryover_ratio: 0.5
   # --- SQD recovery loop --------------------------------------------
   iterations: 5            # number of SQD configuration-recovery cycles
-  n_batches: 2             # parallel SBD batches submitted per iteration
+  n_batches: 4             # parallel SBD batches submitted per iteration
   samples_per_batch: 2000   # bitstrings sampled per batch
   energy_tol: 1.0e-8       # energy convergence between SQD iterations
   occupancies_tol: 1.0e-5  # orbital-occupancy convergence between iterations
@@ -107,6 +109,7 @@ sqd:
   qiskit_backend: ibm_cleveland   # IBM backend name for SamplerV2
   default_shots: 100000           # shots per Qiskit SamplerV2 job
   n_reps: 1                       # LUCJ ansatz repetitions
+  maximum_alpha_beta_connections: 4   # max LUCJ alpha-beta interaction pairs (placed on orbitals 0,4,8,...); caps the alpha-beta coupling qubits
   thresh_two_q: 1.0               # ffsim two-qubit-gate threshold
   thresh_meas: 0.10               # ffsim measurement threshold
   # Slurm for each SBD sub-job (one per SQD batch + one for ext-SQD).
@@ -123,8 +126,8 @@ sqd:
     sbatch:
       partition: merzk-a100
       mem: 500G
-      # extra:
-      #   exclude: node01,node02   # skip nodes that fail mpirun
+      extra:
+        exclude: m002   # skip nodes that fail mpirun
 
 geomopt:
   enabled: true                  # set false for a single-point energy + gradient
@@ -132,7 +135,7 @@ geomopt:
   prefix: ewf_geomopt
   step_subdir_fmt: "step_{step:03d}"
   sella:
-    fmax:  0.01           # eV / Angstrom (max-force convergence)
+    fmax:  0.1           # eV / Angstrom (max-force convergence)
     steps: 25            # max optimizer steps
     order: 0            # 0 = minimisation (default), 1 = saddle
     internal: true      # use internal coordinates

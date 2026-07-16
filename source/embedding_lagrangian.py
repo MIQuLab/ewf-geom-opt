@@ -219,7 +219,7 @@ def assemble_global_rdms_rdm_t_lambda(rdm_files, mol, mf, ovlp, nocc_global,
     dm1, dm2_cumulant, e_corr, _l1, _l2 = make_relaxed_global_rdms(
         mf, t1_global, t2_global, verbose=verbose)
 
-    print(f"[lagrangian] global effective-CCSD correlation energy "
+    print(f"[lagrangian] global effective correlation energy "
           f"(diagnostic): {e_corr:.10f} Ha")
     print(f"[lagrangian] Λ-relaxed (Z-vector) global density built; "
           f"amplitude response included (frozen-bath approximation)")

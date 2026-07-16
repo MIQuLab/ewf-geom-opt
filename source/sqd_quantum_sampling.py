@@ -138,13 +138,15 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
             "to point at a count_dict.txt, or enable on-the-fly Qiskit sampling.")
 
     # Fresh Qiskit sample for this cluster Hamiltonian.
-    counts = run_qiskit_sampling(
+    counts, circuit_meta = run_qiskit_sampling(
         fcidump_path=fcidump_path,
         backend_name=str(sqd_cfg.get("qiskit_backend", "ibm_cleveland")),
         default_shots=int(sqd_cfg.get("default_shots", 100_000)),
         n_reps=int(sqd_cfg.get("n_reps", 1)),
         thresh_two_q=float(sqd_cfg.get("thresh_two_q", 1.0)),
         thresh_meas=float(sqd_cfg.get("thresh_meas", 0.10)),
+        max_alpha_beta_connections=int(
+            sqd_cfg.get("maximum_alpha_beta_connections", 4)),
         verbose=verbose,
     )
     # Match the existing convention (`python str(dict)` form) so the
@@ -154,18 +156,58 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
     if verbose:
         verbose.info("  SQD: wrote %d unique bitstrings -> %s",
                      len(counts), count_path)
+    # Sidecar circuit-metadata JSON next to count_dict.txt: the IBM Runtime job
+    # id, qubit counts, ISA gate histogram, and circuit / two-qubit depth for
+    # this fragment's quantum sample.  Best-effort -- a metadata write failure
+    # must never sink an otherwise-successful sample.
+    meta_path = os.path.join(os.path.dirname(count_path), "circuit_metadata.json")
+    try:
+        circuit_meta = dict(circuit_meta or {})
+        circuit_meta.setdefault("frag_idx", int(frag_idx))
+        circuit_meta.setdefault("count_dict", os.path.basename(count_path))
+        circuit_meta["n_unique_bitstrings"] = len(counts)
+        with open(meta_path, "w") as fh:
+            json.dump(circuit_meta, fh, indent=2, sort_keys=True)
+        if verbose:
+            verbose.info("  SQD: wrote circuit metadata (job %s) -> %s",
+                         circuit_meta.get("job_id", "?"), meta_path)
+    except OSError as exc:
+        if verbose:
+            verbose.info("  SQD: could not write circuit metadata: %s", exc)
     return count_path
 
 
 def run_qiskit_sampling(fcidump_path: str, backend_name: str,
                         default_shots: int, n_reps: int,
                         thresh_two_q: float = 1.0, thresh_meas: float = 0.10,
-                        verbose=None) -> dict:
+                        verbose=None, submit: bool = True,
+                        max_alpha_beta_connections: int = 4):
     """Construct the LUCJ ansatz from the FCIDUMP and sample on an IBM backend.
 
     Lifted from the original ``produce_quantum_sample.py``.  ffsim,
     qiskit_ibm_runtime and the zigzag layout helper are imported lazily
     so that FCI / SCI / SCI_SBD-only runs never need them installed.
+
+    Returns ``(counts, circuit_metadata)`` where ``counts`` is the measurement
+    dictionary and ``circuit_metadata`` is a JSON-serialisable dict describing
+    the circuit -- ``job_id`` (when submitted), ``backend``, qubit counts, the
+    ISA ``gate_counts`` (``count_ops``), and the total / two-qubit circuit
+    depth.  The metadata is captured here (the transpiled ISA circuit is only
+    live at this point) so the caller can persist it.
+
+    ``submit=False`` builds and transpiles the circuit and captures the metadata
+    but does NOT run the sampler -- used by the ``run_task: circuits`` analysis,
+    which only needs the circuit size (depth / qubits / gate counts) and must
+    not consume IBM Runtime time.  In that case ``counts`` is ``None``.  Note
+    that transpiling still needs a real backend target, so IBM connectivity is
+    required even without submission.
+
+    ``max_alpha_beta_connections`` caps the number of LUCJ alpha-beta
+    interaction pairs.  These sit on every 4th orbital (0, 4, 8, ...); keeping
+    only the first ``max_alpha_beta_connections`` of them limits the alpha-beta
+    coupling qubits (fewer entangling resources / shallower circuit).  ``0``
+    removes them entirely; a value larger than the available orbitals is a
+    no-op (config ``sqd.maximum_alpha_beta_connections``, default 4).
     """
     # Local imports keep optional dependencies optional.
     import numpy as np
@@ -214,8 +256,13 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     t2 = mc.t2
 
     # LUCJ alpha-alpha and alpha-beta interaction pairs (heavy-hex compliant).
+    # The alpha-beta connections sit on every 4th orbital (0, 4, 8, ...); the
+    # count is capped at ``max_alpha_beta_connections`` to limit the number of
+    # ancilla/alpha-beta coupling qubits (sqd.maximum_alpha_beta_connections).
     alpha_alpha_indices = [(p, p + 1) for p in range(norb - 1)]
     alpha_beta_indices = [(p, p) for p in range(0, norb, 4)]
+    if max_alpha_beta_connections is not None and max_alpha_beta_connections >= 0:
+        alpha_beta_indices = alpha_beta_indices[:max_alpha_beta_connections]
 
     t0 = time.time()
     compressed_operator = ffsim.UCJOpSpinBalanced.from_t_amplitudes(
@@ -263,6 +310,62 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     ])
     isa_circuit = hardware_pm.run(circuit)
 
+    # ---- Circuit metrics for the sidecar metadata JSON --------------------
+    # Captured here because the transpiled ISA circuit only exists at this
+    # point.  depth() with a 2-qubit filter gives the entangling-gate (e.g.
+    # cz) depth; count_ops() is the full ISA gate histogram; the qubit counts
+    # distinguish the full device width, the 2*norb logical LUCJ ansatz, and
+    # the physical qubits that actually carry a gate.  Best-effort: a metrics
+    # failure must never sink an otherwise-valid sampling job.
+    try:
+        def _is_two_qubit(instr):
+            op = instr.operation if hasattr(instr, "operation") else instr[0]
+            return op.num_qubits == 2
+
+        active_qubits = set()
+        for instr in isa_circuit.data:
+            op = instr.operation if hasattr(instr, "operation") else instr[0]
+            if op.name == "barrier":
+                continue
+            for q in instr.qubits:
+                active_qubits.add(isa_circuit.find_bit(q).index)
+
+        circuit_metadata = {
+            "backend": backend_name,
+            "default_shots": int(default_shots),
+            "n_reps": int(n_reps),
+            "norb": int(norb),
+            "nelec": [int(nela), int(nela)],
+            "num_qubits": int(isa_circuit.num_qubits),       # full ISA / device width
+            "num_qubits_logical": int(2 * norb),             # LUCJ ansatz width
+            "num_active_qubits": int(len(active_qubits)),    # physical qubits used
+            "n_alpha_beta_connections": int(len(alpha_beta_indices)),
+            "gate_counts": {str(k): int(v)
+                            for k, v in isa_circuit.count_ops().items()},
+            "two_qubit_gate_count": int(
+                sum(1 for instr in isa_circuit.data if _is_two_qubit(instr))),
+            "depth": int(isa_circuit.depth()),
+            "two_qubit_depth": int(isa_circuit.depth(_is_two_qubit)),
+        }
+    except Exception as exc:  # pragma: no cover - metrics are best-effort
+        circuit_metadata = {"backend": backend_name,
+                            "metrics_error": repr(exc)}
+
+    if not submit:
+        # Circuit-size analysis only: no job submitted, no counts.
+        circuit_metadata["submitted"] = False
+        _msg = (f"  SQD circuits: transpiled LUCJ ansatz on {backend_name} "
+                f"(qubits={circuit_metadata.get('num_active_qubits', '?')}, "
+                f"depth={circuit_metadata.get('depth', '?')}, "
+                f"2q depth={circuit_metadata.get('two_qubit_depth', '?')}); "
+                f"job NOT submitted")
+        if verbose:
+            verbose.info(_msg)
+        else:
+            print(_msg, flush=True)
+        return None, circuit_metadata
+
+    circuit_metadata["submitted"] = True
     sampler = SamplerV2(mode=backend)
     sampler.options.dynamical_decoupling.enable = True
     sampler.options.dynamical_decoupling.sequence_type = "XY4"
@@ -271,12 +374,58 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     sampler.options.default_shots = int(default_shots)
 
     job = sampler.run([isa_circuit])
+    circuit_metadata["job_id"] = job.job_id()
+    # Log the job id unconditionally: the driver does not pass a verbose logger,
+    # so a bare print is what reliably reaches the run log; mirror it to the
+    # verbose logger too when one is supplied.
+    _msg = f"  SQD: submitted IBM Runtime job {job.job_id()} on {backend_name}"
     if verbose:
-        verbose.info("  SQD: submitted IBM Runtime job %s", job.job_id())
+        verbose.info(_msg)
+    else:
+        print(_msg, flush=True)
     result = job.result()
     pub_result = result[0]
     counts = pub_result.data.meas.get_counts()
-    return dict(counts)
+    return dict(counts), circuit_metadata
+
+
+def analyze_quantum_circuit(cluster_h5_path: str, workdir: str,
+                            sqd_cfg: dict, frag_idx: int = 0,
+                            verbose=None) -> Optional[str]:
+    """Build + transpile the LUCJ ansatz for one fragment and write its
+    circuit-size metadata to ``workdir/circuit_metadata.json`` WITHOUT
+    submitting an IBM Runtime job.  Backs the ``run_task: circuits`` analysis:
+    it records the same fields as a real sample's sidecar (qubit counts, ISA
+    gate histogram, circuit / two-qubit depth) so a later script can collect
+    circuit depth, qubit count, and CNOT/CZ counts per fragment.
+
+    Returns the metadata JSON path.
+    """
+    os.makedirs(workdir, exist_ok=True)
+    fcidump_path = os.path.abspath(os.path.join(workdir, "fci_dump.txt"))
+    norb, nocc = write_fcidump_from_cluster_h5(cluster_h5_path, fcidump_path)
+    if verbose:
+        verbose.info("  SQD circuits: wrote FCIDUMP %s (norb=%d, nocc=%d)",
+                     fcidump_path, norb, nocc)
+    _counts, circuit_meta = run_qiskit_sampling(
+        fcidump_path=fcidump_path,
+        backend_name=str(sqd_cfg.get("qiskit_backend", "ibm_cleveland")),
+        default_shots=int(sqd_cfg.get("default_shots", 100_000)),
+        n_reps=int(sqd_cfg.get("n_reps", 1)),
+        thresh_two_q=float(sqd_cfg.get("thresh_two_q", 1.0)),
+        thresh_meas=float(sqd_cfg.get("thresh_meas", 0.10)),
+        max_alpha_beta_connections=int(
+            sqd_cfg.get("maximum_alpha_beta_connections", 4)),
+        verbose=verbose, submit=False,
+    )
+    meta_path = os.path.join(workdir, "circuit_metadata.json")
+    circuit_meta = dict(circuit_meta or {})
+    circuit_meta.setdefault("frag_idx", int(frag_idx))
+    with open(meta_path, "w") as fh:
+        json.dump(circuit_meta, fh, indent=2, sort_keys=True)
+    if verbose:
+        verbose.info("  SQD circuits: wrote circuit metadata -> %s", meta_path)
+    return meta_path
 
 
 # Tiny helper kept for tests / scripts that want to read back a saved sample.
