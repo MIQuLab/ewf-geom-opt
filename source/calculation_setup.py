@@ -726,9 +726,16 @@ def main():
         gpu_type = None
         advanced_sbd = False
     else:
-        optimizer_label = ask_choice(
-            "5) Geometry optimizer?", ["Sella", "GeomeTRIC", "Berny"])
-        optimizer = OPTIMIZER_TOKENS[optimizer_label]  # config token
+        # The geometry optimizer only matters for run_task 'geomopt'; the
+        # gradient / energy tasks do a single point and never optimize, so we
+        # skip the question and leave the (unused) default -- build_config emits
+        # only 'geomopt: enabled: false' for them.
+        if run_task == "geomopt":
+            optimizer_label = ask_choice(
+                "5) Geometry optimizer?", ["Sella", "GeomeTRIC", "Berny"])
+            optimizer = OPTIMIZER_TOKENS[optimizer_label]  # config token
+        else:
+            optimizer = "sella"
 
         run_mode = ask_choice(
             "6) Fragmentation type?",
