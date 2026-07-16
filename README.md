@@ -59,6 +59,10 @@ The optimizer is imported **lazily**, only when its backend is selected via `geo
 | `geometric` | [geomeTRIC](https://geometric.readthedocs.io/) — `pip install geometric` |
 | `berny` | [PyBerny](https://github.com/jhrmnn/pyberny) — `pip install pyberny` |
 
+### GPU-accelerated HF (optional, only for `hf.gpu: true`)
+
+- [**gpu4pyscf**](https://github.com/pyscf/gpu4pyscf) — runs the reference SCF on an NVIDIA GPU. Install the build matching your CUDA toolkit, e.g. `pip install gpu4pyscf-cuda12x`. Not needed for the default CPU SCF; density fitting (`hf.density_fit: true`) is independent and works on CPU without it. See *Configuration → Hartree–Fock acceleration*.
+
 ### External SBD eigensolver (only for the `SCI_SBD` / `SQD` solvers)
 
 - The **SBD** binary — a separate C++/MPI build (MPI + OpenMP + BLAS/LAPACK); see [`SBD repository`](https://github.com/r-ccs-cms/sbd). Not needed for FCI / SCI solvers or for the `circuits` task.
@@ -261,7 +265,7 @@ The task can be overridden per invocation with `--task {geomopt,gradient,energy,
 
 ### Generating a config (`calculation_setup.py`)
 
-`config.yaml` spans many options across run tasks, run modes, solvers, the CPU/GPU SBD eigensolver, the SQD quantum-sampling source, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — first the **run task** (geometry optimization / gradient / energy-only / quantum-circuit size analysis; see *Run tasks*), then the target compute environment, the geometry optimizer (geomeTRIC / Sella / PyBerny), the run mode, the geometry file, whether to use per-fragment multi-solver, and which external eigensolver to use (**none / SCI-SBD / SQD**) on **CPU or GPU** — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. (The `circuits` task takes a shortened path: after the run task it asks only for the compute environment, geometry, and multi-solver choice.) Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
+`config.yaml` spans many options across run tasks, run modes, solvers, the CPU/GPU SBD eigensolver, the SQD quantum-sampling source, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — first the **run task** (geometry optimization / gradient / energy-only / quantum-circuit size analysis; see *Run tasks*), then the target compute environment, whether to use **GPU-accelerated HF** and **density fitting** (see *Hartree–Fock acceleration*), the geometry optimizer (geomeTRIC / Sella / PyBerny), the run mode, the geometry file, whether to use per-fragment multi-solver, and which external eigensolver to use (**none / SCI-SBD / SQD**) on **CPU or GPU** — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with everything else left at sensible defaults. (The `circuits` task takes a shortened path: after the run task, the compute environment, and the HF-acceleration questions it asks only for the geometry and multi-solver choice.) Lines you still need to fill in (geometry, basis, executable paths, resources) are flagged with `<-- UPDATE`.
 
 ```bash
 cd Source
@@ -305,6 +309,10 @@ calculation:
   basis: sto-3g
   ...
 
+hf:                           # Hartree–Fock acceleration (both optional; default false)
+  gpu: false                  # run the initial SCF on GPU via gpu4pyscf
+  density_fit: false          # RHF(mol).density_fit(); DF propagates into the Vayesta MP2 bath
+
 slurm:                        # Slurm resources: dump wave + PER-SOLVER solve blocks
   dump: { ... }               # integral/cluster dump wave
   FCI:  { ... }               # solve job for FCI fragments      (light)
@@ -327,6 +335,15 @@ geomopt:
     order: 0                  # 0 = minimisation, 1 = saddle
     internal: true            # use internal coordinates
 ```
+
+### Hartree–Fock acceleration (`hf`)
+
+The reference RHF that seeds every fragment can optionally be sped up. Both knobs are independent and default to `false` (the classic CPU, four-index-ERI SCF); answer **yes** to both in `calculation_setup.py` for a GPU + density-fitted HF.
+
+- **`density_fit`** — builds `scf.RHF(mol).density_fit()`. Vayesta detects the density-fitted mean field (`mf.with_df`) and **automatically** builds the MP2 / BNO bath from three-index Cholesky-decomposed integrals (CDERIs) instead of the full four-index ERIs, which is the main cost saver for larger clusters. Density fitting introduces a small, well-controlled approximation to the HF (and hence bath) energy; it works on CPU and needs no extra package.
+- **`gpu`** — runs the initial SCF on an NVIDIA GPU via [`gpu4pyscf`](https://github.com/pyscf/gpu4pyscf). The converged result is handed back to Vayesta as an ordinary **CPU** mean field (the embedding itself runs on the host), so this only accelerates the SCF step. Requires `gpu4pyscf` on the compute node; the driver raises a clear error if it is selected without it.
+
+Independently of these two options, **every driver SCF also caches the converged AO integrals** — overlap, core Hamiltonian, Fock, and effective potential — as `.npy` files in `hf_npy/` next to `hf.chk`. On restart (or in each DUMP worker) the reused mean field pins these arrays, so the host skips rebuilding them — the `veff` / Fock build is the expensive part for large systems, and it is the data the chkfile does *not* store (see *Restarting an interrupted run*).
 
 ### Per-fragment solver selection (`multi_solver`)
 
@@ -437,7 +454,7 @@ The driver announces the mode on startup (`[driver] Restart mode: ON -- reusing 
 | Layer | Artefact | Effect on restart |
 |---|---|---|
 | **Optimizer step** | `step_<NNN>/result.json` (cached `{coords_bohr, energy, gradient}`) | Whole step skipped: cached `(E, ∇E)` returned to the optimizer, no DUMP/SOLVE waves submitted. Coords must match within `1e-8` Bohr (guards against the optimizer choosing a different geometry at the same step index). |
-| **RHF single point** | `step_<NNN>/hf.chk` (PySCF chkfile: mol + `mo_coeff`, `mo_energy`, `mo_occ`, `e_tot`) | The step's converged RHF is reused instead of a fresh `mf.kernel()` — one full SCF saved per step and per DUMP worker of that step. A geometry / basis / charge / spin / symmetry mismatch (checked against the mol stored inside the chkfile, coords to `1e-10` Bohr) forces a fresh SCF; the chkfile is then overwritten. |
+| **RHF single point** | `step_<NNN>/hf.chk` (PySCF chkfile: mol + `mo_coeff`, `mo_energy`, `mo_occ`, `e_tot`) plus `step_<NNN>/hf_npy/` (cached AO `ovlp` / `hcore` / `fock` / `veff`) | The step's converged RHF is reused instead of a fresh `mf.kernel()` — one full SCF saved per step and per DUMP worker of that step. When present, the `hf_npy/` arrays are pinned onto the reused mean field so the host also skips rebuilding the AO integrals the chkfile does not store (the `veff` / Fock build — the costly part for large systems). A geometry / basis / charge / spin / symmetry mismatch (checked against the mol stored inside the chkfile, coords to `1e-10` Bohr; and the cached-array AO dimension) forces a fresh SCF; the chkfile and `.npy` cache are then overwritten. |
 | **DUMP wave** (all solvers) | `step_<NNN>/cluster_<i>.h5` (valid HDF5, ≥ 1 group) | That fragment's DUMP job is not submitted; a `DONE` status file is stamped and the worker pool skips it. |
 | **SOLVE wave** (all solvers) | `step_<NNN>/rdm_<i>.h5` (valid HDF5, ≥ 1 group) | That fragment's SOLVE job is not submitted; the RDMs are consumed from the existing file. |
 | **SCI_SBD sub-jobs** | `step_<NNN>/rdm_<i>.h5` | Coarse-grained by design: `SCI_SBD` writes `rdm_<i>.h5` only after its full determinant-growth converges, so a completed fragment resumes at the assembly stage; a partially-grown fragment (no `rdm_<i>.h5`) is redone from scratch. Any orphaned `sci_sbd_scratch_<i>/iter_*/` from the previous attempt are reused in place: PySCF drives fresh SCI growth cycles from `iter_001` onward and the SBD binary overwrites each cycle's files (`sbd_job.status`, `matrixformwf.txt`, etc.) as it goes. |
