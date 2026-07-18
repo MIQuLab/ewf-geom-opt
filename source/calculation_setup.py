@@ -413,6 +413,13 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         else:
             a("  python_executable: python")
         a("  poll_interval: 15")
+        a("  # Throttle for the SOLVE wave: max per-fragment solve jobs kept in")
+        a("  # flight at once.  0 = unlimited (submit all -- historical default).")
+        a("  # For large systems (many fragments) whose solve jobs spawn nested")
+        a("  # SBD sub-jobs (SCI_SBD / SQD), set a finite cap (e.g. 16-32) so the")
+        a("  # parent jobs do not exhaust the per-user Slurm job / GPU budget and")
+        a("  # starve their own SBD children (which otherwise sit queued forever).")
+        a("  max_concurrent_solve: 0")
         if hpc == "MSU":
             # Per-sub-job env: the parent job's conda env does not propagate to
             # the DUMP/solve sub-jobs on MSU compute nodes, so put the env's bin

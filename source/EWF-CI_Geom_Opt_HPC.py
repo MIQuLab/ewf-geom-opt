@@ -76,6 +76,7 @@ import argparse
 import copy
 import json
 import os
+import random
 import shlex
 import subprocess
 import sys
@@ -387,6 +388,19 @@ def load_config(path):
     sl = cfg.setdefault("slurm", {})
     sl.setdefault("python_executable", sys.executable or "python")
     sl.setdefault("poll_interval", 15)
+    # Cap on how many per-fragment SOLVE jobs are kept in flight at once during
+    # the cluster-solve wave.  0 (default) = unlimited (submit them all -- the
+    # historical behavior).  A positive value throttles submission so that
+    # SOLVE jobs which themselves spawn nested SBD sub-jobs (SCI_SBD / SQD) do
+    # not exhaust the per-user Slurm job / GPU budget and starve their own
+    # children -- the cause of large-fragment-count (e.g. > 150) deadlocks where
+    # the SBD inputs are written but the SBD jobs never leave the queue.  Only
+    # the solve wave is throttled; the DUMP wave spawns no child jobs.
+    sl.setdefault("max_concurrent_solve", 0)
+    try:
+        sl["max_concurrent_solve"] = int(sl["max_concurrent_solve"])
+    except (TypeError, ValueError):
+        sl["max_concurrent_solve"] = 0
     # Slurm resource blocks.  The DUMP wave uses ``slurm.dump``; the
     # cluster-solve wave uses a PER-SOLVER block named after the resolved
     # solver (``slurm.FCI`` / ``slurm.SCI`` / ``slurm.SCI_SBD``), so each
@@ -1309,28 +1323,71 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
     return sh_path
 
 
+# sbatch hardening: many concurrent submissions (a large solve wave, or SOLVE
+# jobs each spawning SBD sub-jobs) can overload slurmctld, making sbatch time
+# out or transiently fail.  Each attempt has a wall-clock timeout; TRANSIENT
+# failures are retried with exponential backoff + jitter.  A non-transient
+# failure (unknown flag, invalid partition) is surfaced immediately so real
+# config bugs are not masked by retries.
+_SBATCH_TIMEOUT_S = 120
+_SBATCH_MAX_RETRIES = 5
+_TRANSIENT_SBATCH_MARKERS = (
+    "socket timed out", "unable to contact slurm controller", "try again",
+    "resource temporarily unavailable", "temporarily unavailable",
+    "communication connection failure", "connection refused", "timed out",
+)
+
+
+def _sbatch_backoff_sleep(base):
+    """Sleep ``base`` seconds plus up to ``base`` of random jitter (so a fleet
+    of retrying submitters does not resynchronize into another storm)."""
+    time.sleep(base + random.uniform(0.0, base))
+
+
 def submit_slurm_job(sh_path):
     """`sbatch --parsable <sh_path>` -> str job id.
 
     On failure, surface sbatch's stderr to the user (the default
     ``CalledProcessError`` only shows the exit code, which makes it
-    impossible to diagnose e.g. an unknown ``--memory`` flag).
+    impossible to diagnose e.g. an unknown ``--memory`` flag).  Transient
+    controller-overload failures / timeouts are retried (see
+    ``_SBATCH_*`` above); persistent failures raise.
     """
-    proc = subprocess.run(
-        ["sbatch", "--parsable", sh_path],
-        capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
-        msg = (
+    delay = 5.0
+    for attempt in range(_SBATCH_MAX_RETRIES + 1):
+        try:
+            proc = subprocess.run(
+                ["sbatch", "--parsable", sh_path],
+                capture_output=True, text=True, check=False,
+                timeout=_SBATCH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            if attempt < _SBATCH_MAX_RETRIES:
+                print(f"[driver] sbatch timed out (> {_SBATCH_TIMEOUT_S}s) for "
+                      f"{sh_path}; retry {attempt + 1}/{_SBATCH_MAX_RETRIES}")
+                _sbatch_backoff_sleep(delay)
+                delay = min(delay * 2, 60.0)
+                continue
+            raise RuntimeError(
+                f"sbatch timed out (> {_SBATCH_TIMEOUT_S}s) on all "
+                f"{_SBATCH_MAX_RETRIES + 1} attempts for {sh_path}; the Slurm "
+                f"controller may be overloaded.")
+        if proc.returncode == 0:
+            return proc.stdout.strip().split(";")[0]
+        stderr = proc.stderr or ""
+        transient = any(m in stderr.lower() for m in _TRANSIENT_SBATCH_MARKERS)
+        if transient and attempt < _SBATCH_MAX_RETRIES:
+            print(f"[driver] sbatch transient error for {sh_path}; retry "
+                  f"{attempt + 1}/{_SBATCH_MAX_RETRIES}: {stderr.strip()[:200]}")
+            _sbatch_backoff_sleep(delay)
+            delay = min(delay * 2, 60.0)
+            continue
+        raise RuntimeError(
             f"sbatch failed (exit {proc.returncode}) for {sh_path}\n"
             f"--- sbatch stdout ---\n{proc.stdout}\n"
             f"--- sbatch stderr ---\n{proc.stderr}\n"
             f"Hint: check #SBATCH directives in {sh_path}; common causes "
             f"are unknown flags such as --memory (use --mem), or an "
-            f"unavailable partition."
-        )
-        raise RuntimeError(msg)
-    jid = proc.stdout.strip().split(";")[0]
-    return jid
+            f"unavailable partition.")
 
 
 def wait_for_slurm_jobs(status_files, poll_interval=15):
@@ -2328,7 +2385,7 @@ def discover_n_fragments(mf, threshold):
 
 
 def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
-                  skip_indices=None):
+                  skip_indices=None, max_concurrent=0, poll=15):
     """sbatch one job per fragment for ``stage`` and return the list of
     per-fragment status-file paths (in fragment-index order).
 
@@ -2338,41 +2395,73 @@ def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
     ``DONE`` by a previous run, or synthetically stamped here if the file
     is missing but the output artefact is present) is still returned in
     the list, so :func:`wait_for_slurm_jobs` treats them as terminal.
+
+    ``max_concurrent`` > 0 throttles submission so that at most that many jobs
+    are in flight (``SUBMITTED`` / ``RUNNING``) at once: the remaining fragments
+    are held back and released as running jobs reach a terminal state.  This
+    keeps a solve wave whose jobs spawn nested SBD sub-jobs (SCI_SBD / SQD) from
+    exhausting the per-user Slurm budget and starving its own children.  ``0``
+    (default) submits everything at once (historical behavior).  ``poll`` is the
+    seconds between capacity checks while throttling.  Restart is unaffected:
+    ``skip_indices`` fragments are stamped ``DONE`` up front and never occupy a
+    throttle slot.
     """
     skip_set = set(skip_indices or ())
-    status_files = []
     # Display label for the log: the solve wave's internal stage name is 'fci',
     # but the per-fragment solver actually used may be FCI, SCI, SCI_SBD, or SQD
     # (multi-solver / external eigensolvers).  Report the neutral 'CI' so the
     # message is correct regardless of which solver each fragment runs.
     stage_label = "CI" if stage == "fci" else stage
-    for i in range(nfrag):
-        status_path = status_file_path(workdir, i, stage, cfg)
-        if i in skip_set:
-            # Fragment already complete on disk from an earlier run.  Stamp a
-            # DONE status file so the wait loop skips it and the log stays
-            # consistent with the fresh-submission branch.
-            with open(status_path, "w") as fh:
-                fh.write("DONE\n")
-            print(f"[driver] Restart: reusing {stage_label} fragment {i:>3d} "
-                  f"(output already on disk)")
-            status_files.append(status_path)
-            continue
+    status_files = [status_file_path(workdir, i, stage, cfg)
+                    for i in range(nfrag)]
+
+    # Fragments already complete on disk from an earlier run: stamp a DONE
+    # status file so the wait loop skips them.  They never occupy a throttle
+    # slot and are not resubmitted.
+    for i in sorted(skip_set):
+        with open(status_files[i], "w") as fh:
+            fh.write("DONE\n")
+        print(f"[driver] Restart: reusing {stage_label} fragment {i:>3d} "
+              f"(output already on disk)")
+
+    def _submit_one(i):
         sh = write_slurm_script(
             stage, i, cfg, workdir, config_path, script_path)
         # Seed the status file BEFORE sbatch so we never see a missing
         # file during the brief gap between submission and job start-up.
-        with open(status_path, "w") as fh:
+        with open(status_files[i], "w") as fh:
             fh.write("SUBMITTED\n")
         jid = submit_slurm_job(sh)
-        # Append the job id for traceability; the trailing 'SUBMITTED'
-        # token keeps wait_for_slurm_jobs in 'queued' state until the
-        # job itself overwrites the file with RUNNING/DONE/FAILED.
-        with open(status_path, "w") as fh:
+        # The trailing 'SUBMITTED' token keeps wait_for_slurm_jobs in 'queued'
+        # state until the job itself overwrites the file with RUNNING/DONE/FAILED.
+        with open(status_files[i], "w") as fh:
             fh.write(f"SUBMITTED {jid}\n")
         print(f"[driver] Submitted {stage_label} fragment {i:>3d}  -> "
               f"Slurm job {jid}  ({sh})")
-        status_files.append(status_path)
+
+    pending = [i for i in range(nfrag) if i not in skip_set]
+
+    if max_concurrent and max_concurrent > 0:
+        submitted = []
+        p = 0
+        while p < len(pending):
+            in_flight = sum(
+                1 for j in submitted
+                if not _is_terminal_status(read_status(status_files[j])))
+            while p < len(pending) and in_flight < max_concurrent:
+                _submit_one(pending[p])
+                submitted.append(pending[p])
+                p += 1
+                in_flight += 1
+            if p < len(pending):
+                # Window full -- wait for a running solve job to finish (and
+                # free a slot for its and the next fragment's SBD children)
+                # before submitting more.
+                time.sleep(poll)
+    else:
+        for i in pending:
+            _submit_one(i)
+
     return status_files
 
 
@@ -2487,12 +2576,16 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
         skip_solve = ([i for i in range(nfrag) if _is_valid_h5(rdm_files[i])]
                       if restart else [])
         n_solve_new = nfrag - len(skip_solve)
+        max_conc = int(cfg["slurm"].get("max_concurrent_solve", 0) or 0)
+        throttle_note = (f", <= {max_conc} in flight" if max_conc > 0
+                         else "")
         print(f"[{tag}] === Wave 2/2 : submitting {n_solve_new} solve "
               f"(FCI/SCI) job(s)"
-              f"{f' (skipping {len(skip_solve)} already complete)' if skip_solve else ''} ===")
+              f"{f' (skipping {len(skip_solve)} already complete)' if skip_solve else ''}"
+              f"{throttle_note} ===")
         fci_status_files = _submit_stage(
             "fci", nfrag, cfg, workdir, config_path, script_path,
-            skip_indices=skip_solve)
+            skip_indices=skip_solve, max_concurrent=max_conc, poll=poll)
         wait_for_slurm_jobs(fci_status_files, poll_interval=poll)
 
     missing = wait_for_files_visible(rdm_files, label="RDM")

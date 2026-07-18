@@ -44,6 +44,12 @@ calculation:
 slurm:
   python_executable: python
   poll_interval: 15
+  # Throttle for the SOLVE wave: max per-fragment solve jobs kept in flight at
+  # once.  0 = unlimited (submit all).  For large systems (many fragments) whose
+  # solve jobs spawn nested SBD sub-jobs (SCI_SBD / SQD), set a finite cap (e.g.
+  # 16-32) so the parent jobs do not exhaust the per-user Slurm job / GPU budget
+  # and starve their own SBD children (which otherwise sit queued forever).
+  max_concurrent_solve: 0
   dump:                        # integral / cluster dump wave
     partition: defq
     ntasks: 2
