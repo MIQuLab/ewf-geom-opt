@@ -19,7 +19,7 @@ The central contribution of this project is a pair of density-assembly routes �
 | File | Role |
 |---|---|
 | `EWF-CI_Geom_Opt_HPC.py` | Main driver: run-mode dispatch, fragment construction, Slurm orchestration, RDM assembly dispatch, optimizer backends (geomeTRIC / PyBerny / Sella) |
-| `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + CCSD Λ (Z-vector) relaxed density |
+| `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + Λ (Z-vector) relaxed density |
 | `isolated_casci_gradient.py` | Analytic gradients: the EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) and the full-system CASCI gradient `build_grad` |
 | `external_sci.py` | `SCI_SBD` solver: PySCF Selected-CI growth with the external SBD eigensolver (CPU or GPU), driven through files and per-cycle Slurm sub-jobs |
 | `sqd_solver.py` | `SQD` solver: sample-based quantum diagonalization — quantum-sampled bitstrings drive an iterative SBD subspace-recovery loop (one Slurm job per parallel batch) followed by a final ext-SQD SBD job with PyCI single-excitation augmentation |
@@ -164,7 +164,7 @@ $$
 
 Here `Λ_x` is the per-cluster set of Lagrange multipliers (Z-vectors) — one adjoint solve per defining equation (amplitude Λ for the amplitude equations, orbital Z for the bath/HF orbital rotations, projector multipliers for the fragment projectors) — and `H_x` is the effective cluster Hamiltonian on fragment `x` (its explicit `x`-derivative is the only *nuclear* derivative that appears on the right-hand side). The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
 
-**Scope of this project — one line of `dγ/dx` at a time.** In principle the full density-response term (b) requires closing **all four** lines of the `dγ/dx` expansion above — cluster amplitudes (i), bath/cluster orbitals (ii), fragment projectors (iii), and HF orbitals (iv). This project addresses **only line (i)** as an initial effort: `rdm_t_lambda` builds the amplitude response `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density by solving the CCSD Λ equations on a global effective wavefunction (`embedding_lagrangian.py` — see its Stage-1 docstring). Lines (ii)–(iv) — the geometry response of the DMET bath, of the occupied-fragment projectors, and of the HF/SCF orbitals — are **not yet closed**; they remain folded into the frozen-density (a) piece under the "frozen-bath" approximation (with the HF CPHF response of the *integrals* included there, but not the response of `γ` itself to the HF-orbital rotations). Closing lines (ii)–(iv) is the natural next stage of the methodology development: it requires adjoint solves for each of the remaining coupling equations (DMET bath overlap, fragment projector, HF stationarity) and is what would eventually let geometry optimization reach tight convergence in the fragmented EWF regime. The current gradient floor observed in propylene (~1e-3 Eh/Bohr) is a direct signature of these three missing response lines.
+**Scope of this project — one line of `dγ/dx` at a time.** In principle the full density-response term (b) requires closing **all four** lines of the `dγ/dx` expansion above — cluster amplitudes (i), bath/cluster orbitals (ii), fragment projectors (iii), and HF orbitals (iv). This project addresses **only line (i)** as an initial effort: `rdm_t_lambda` builds the amplitude response `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density by solving the Λ equations on a global effective wavefunction (`embedding_lagrangian.py` — see its Stage-1 docstring). Lines (ii)–(iv) — the geometry response of the DMET bath, of the occupied-fragment projectors, and of the HF/SCF orbitals — are **not yet closed**; they remain folded into the frozen-density (a) piece under the "frozen-bath" approximation (with the HF CPHF response of the *integrals* included there, but not the response of `γ` itself to the HF-orbital rotations). Closing lines (ii)–(iv) is the natural next stage of the methodology development: it requires adjoint solves for each of the remaining coupling equations (DMET bath overlap, fragment projector, HF stationarity) and is what would eventually let geometry optimization reach tight convergence in the fragmented EWF regime. The current gradient floor observed in propylene (~1e-3 Eh/Bohr) is a direct signature of these three missing response lines.
 
 ---
 
@@ -175,28 +175,28 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `ewf.assembly` | Construction | Origin |
 |---|---|---|
 | `democratic` | Cluster RDMs, democratically partitioned (4-index split) | mirrors Vayesta `make_rdm{1,2}_demo_rhf` |
-| `ci` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→CCSD conversion → global CCSD RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
-| `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default CCSD 2-RDM route |
+| `ci` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→cluster amplitudes conversion → global RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
+| `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default 2-RDM route |
 | **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global RDM | **this project** |
-| **`rdm_t_lambda`** | `rdm_t` amplitudes + CCSD **Λ solve** → relaxed global RDMs | **this project** |
+| **`rdm_t_lambda`** | `rdm_t` amplitudes + **Λ solve** → relaxed global RDMs | **this project** |
 
 ### `ci`: the CI-coefficient assembly (baseline, revised ordering)
 
 Vayesta's global-wavefunction route converts each fragment's FCI/SCI CI vector to CISD coefficients (`RFCI_WaveFunction.as_cisd`), applies the occupied-fragment projector at the CISD level, converts to T-amplitudes (`as_ccsd`) **per fragment**, rotates and accumulates them into one global `(T1, T2)`, and feeds a single `ccsd_rdm` call.
 
-The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→CCSD conversion `T2 = C2 − T1⊗T1` is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Vayesta's per-fragment conversion instead subtracts `Σ_x (P_x·T1)⊗(P_x·T1)`, which misses every cross-fragment product of the exact `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)`; converting once with the global T1 includes them.
+The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→ `T2 = C2 − T1⊗T1` conversion is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Vayesta's per-fragment conversion instead subtracts `Σ_x (P_x·T1)⊗(P_x·T1)`, which misses every cross-fragment product of the exact `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)`; converting once with the global T1 includes them.
 
 Two approximations remain included:
 
 1. **CISD truncation of the cluster wavefunction.** `as_cisd` reads only the single- and double-excitation rows of the CI vector — triples and higher determinants of the FCI/SCI solution are discarded before the amplitudes are ever formed.
-2. **The `l = t` linearization.** Vayesta sets `l1, l2 = t1, t2` (the TCCSD shortcut) in place of solving the CCSD Λ equations, so the global RDMs carry no amplitude response.
+2. **The `l = t` linearization.** Vayesta sets `l1, l2 = t1, t2` (the TCCSD shortcut) in place of solving the Λ equations, so the global RDMs carry no amplitude response.
 
 ### `rdm_t`: amplitudes from the exact RDM cumulant
 
 `rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci` mode uses):
 
 ```
-CI-coefficient (ci):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global CCSD RDM
+CI-coefficient (ci):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global RDM
 Vayesta democratic:            cluster RDMs → 4-index democratic projection → global RDM
 rdm_t (this project):          cluster RDMs → effective T1,T2 → global RDM
                                 └── novel front-end ──┘└── Vayesta back-end ─┘
@@ -213,7 +213,7 @@ is the new feature introduced in this project; it was not previously available i
 
 ### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 
-`embedding_lagrangian.py` upgrades the second baked-in approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the CCSD Λ equations** for it:
+`embedding_lagrangian.py` upgrades the second baked-in approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the Λ equations** for it:
 
 | Function | Role |
 |---|---|
@@ -221,7 +221,7 @@ is the new feature introduced in this project; it was not previously available i
 | `make_relaxed_global_rdms` | Builds `pyscf.cc.CCSD(mf)`, injects `(T1, T2)`, solves Λ (`solve_lambda`), returns the relaxed `(γ1, λ2)` — amplitudes are **not** re-optimized |
 | `assemble_global_rdms_rdm_t_lambda` | Driver-facing assembler, same signature as the other `assemble_global_rdms_*` |
 
-Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective CCSD amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding CCSD Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard CCSD relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds line **(i)** of the density-response expansion above — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)`, the cluster-amplitude line — into the assembled density itself. The remaining lines **(ii)–(iv)** (bath / cluster orbitals, fragment projectors, HF orbitals) are still left approximated by the frozen-bath treatment in `build_ewf_grad`, so `rdm_t_lambda` closes one of the four density-response contributions and is the starting point — not the endpoint — of the Lagrangian programme.
+Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds line **(i)** of the density-response expansion above — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)`, the cluster-amplitude line — into the assembled density itself. The remaining lines **(ii)–(iv)** (bath / cluster orbitals, fragment projectors, HF orbitals) are still left approximated by the frozen-bath treatment in `build_ewf_grad`, so `rdm_t_lambda` closes one of the four density-response contributions and is the starting point — not the endpoint — of the Lagrangian programme.
 
 ---
 
