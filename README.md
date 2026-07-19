@@ -223,6 +223,20 @@ is the new feature introduced in this project; it was not previously available i
 
 Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds line **(i)** of the density-response expansion above — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)`, the cluster-amplitude line — into the assembled density itself. The remaining lines **(ii)–(iv)** (bath / cluster orbitals, fragment projectors, HF orbitals) are still left approximated by the frozen-bath treatment in `build_ewf_grad`, so `rdm_t_lambda` closes one of the four density-response contributions and is the starting point — not the endpoint — of the Lagrangian programme.
 
+### Recovering the unfragmented correlation in the `rdm_t` / `rdm_t_lambda` routes
+
+The EWF energy is a functional of the assembled global one-particle density $\gamma_1$ and two-particle cumulant $\lambda_2$ (see *Background*), so the quality of each optimization step is set by how closely those global objects reproduce the correlated density of the *unfragmented* molecule. The `rdm_t` and `rdm_t_lambda` routes are designed to make that reproduction as complete as possible for the high-level, CI-type cluster solvers this project targets (`FCI` / `SCI` / `SQD`).
+
+Each cluster's contribution enters through **effective amplitudes formed directly from its full one- and two-particle RDMs** — exactly the RDMs the solver returns:
+
+$$
+T_1^{\mathrm{eff}} = \Delta\gamma_1^{ov}, \qquad T_2^{\mathrm{eff}} = \lambda_2^{oovv},
+$$
+
+where $\Delta\gamma_1^{ov}$ is the occupied–virtual block of the correlated one-particle density and $\lambda_2^{oovv}$ is the occupied-occupied/virtual-virtual block of the two-particle cumulant. Because these RDMs carry the imprint of **every excitation class the cluster solver includes** — the higher determinants that `FCI` / `SCI` / `SQD` retain, not only singles and doubles — the effective doubles that enter the global density are dressed by that higher-order correlation. The assembled `rdm_t` density is therefore a closer approximation to the correlated (full-CI) density of the unfragmented system, recovering more of the correlation that a per-fragment treatment can otherwise dilute.
+
+On the assembly side the route is deliberately coupled-cluster-*structured*: the effective amplitudes are combined through the well-established CCSD RDM machinery, which yields a smooth, differentiable global density and — in `rdm_t_lambda` — a proper $\Lambda$ (Z-vector) amplitude-response density for consistent analytic gradients. The advantage is greatest where the cluster correlation is genuinely multi-determinantal (stretched bonds, near-degeneracies) and grows as the clusters enlarge and the `SCI` / `SQD` subspace approaches the full-CI limit; for small, weakly correlated clusters near equilibrium the effective amplitudes already sit close to their coupled-cluster counterparts.
+
 ---
 
 ## Run modes
