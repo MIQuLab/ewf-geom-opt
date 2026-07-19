@@ -5,36 +5,22 @@ calculation_setup.py -- interactive generator for a FOCUSED config.yaml
 
 ``config.yaml`` for this workflow has grown many options spanning several run
 types (fragmented EWF, unfragmented limits, multi-solver, the external SBD
-eigensolver on CPU/GPU, two HPC sites).  Most are irrelevant to any single run.
+eigensolver on CPU/GPU).  Most are irrelevant to any single run.
 
 This script asks a handful of questions and writes a config.yaml that contains
 ONLY the blocks relevant to the requested calculation, with every other option
 populated from sensible defaults.  The result is a short, readable template --
 you still have to fill in the run-specific values it marks with ``<-- UPDATE``
-(geometry, basis, executable paths, account/partition, resources, SBD preamble).
+(geometry, basis, resources).
 
-Questions
----------
-1. HPC type ........... CCF or MSU
-2. Geometry optimizer . GeomeTRIC | Sella | Berny (PyBerny)
-3. Fragmentation type . EWF | unfragmented_EWF_limit | true_unfragmented
-4. (EWF only) .......... use multi-solver?            yes / no
-5. External eigensolver none | SCI-SBD | SQD
-6. (SBD/SQD only) ...... GPU or CPU
-
-Notes
------
-* Workflow-level restart is NOT a prompt: the emitted template carries
-  ``calculation.restart: false`` and the CLI ``--restart`` / ``--no-restart``
-  flags of ``EWF-CI_Geom_Opt_HPC.py`` override it per invocation.  Restart
-  applies uniformly to every solver (FCI / SCI / SCI_SBD / SQD) -- the SQD
-  block therefore no longer carries its own ``sqd_restart`` knob.
-
-HPC-specific Slurm handling
----------------------------
-* CCF : every #SBATCH block uses ``partition`` and NO ``time``.
-* MSU : every #SBATCH block uses ``account`` (default ``merzjrke``) INSTEAD of
-        ``partition``, and adds ``time`` (default ``12:00:00``).
+HPC site definitions
+--------------------
+The Slurm/environment specifics of a cluster (SBD executables, MPI launchers,
+whether it uses ``--account`` / ``--time`` / ``--partition``, per-job-type
+partitions and time limits, and the CPU/GPU module + PATH setup) live in a
+``<name>_HPC_settings.yaml`` file (see :mod:`hpc_settings`).  This script
+discovers those files in the working directory and asks which cluster to target;
+generate one first with ``Utilities/hpc_settings_setup.py`` if none exist.
 
 Run:
     python calculation_setup.py
@@ -42,6 +28,8 @@ Run:
 
 import os
 import sys
+
+import hpc_settings
 
 # --- Geometry-optimizer backends -------------------------------------------
 # Menu label -> config token written as ``geomopt.optimizer``.  GeomeTRIC and
@@ -52,54 +40,45 @@ OPTIMIZER_TOKENS = {
     "Berny": "berny",
 }
 
-# --- HPC-site defaults -----------------------------------------------------
-MSU_ACCOUNT_DEFAULT = "merzjrke"
-MSU_TIME_DEFAULT = "12:00:00"
-CCF_CPU_PARTITION = "defq"
-CCF_GPU_PARTITION = "merzk-a100"
-# The per-cycle SBD iteration jobs are heavier than the DUMP/solve waves and
-# run on the dedicated CCF CPU partition.
-CCF_CPU_SBD_PARTITION = "merzk"
 
-# --- CCF SBD environment defaults ------------------------------------------
-CCF_SBD_EXE_CPU = "/mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag"
-CCF_SBD_EXE_GPU = "/home/liz7/isilon/Zhen/sbd-main/apps/test/diag"
-# GPU build uses MPICH; CPU build uses OpenMPI (matching sbd.proc_type / the
-# preambles above).
-CCF_MPI_LAUNCHER_GPU = "/home/liz7/isilon/Zhen/mpich/bin/mpirun"
-CCF_MPI_LAUNCHER_CPU = "/home/kaliakd/beegfs/kaliakd/Software/openmpi-4.1.5/bin/mpirun"
-CCF_SBD_PREAMBLE_GPU = [
-    "module load gcc/11.2.0 cuda12.3/toolkit/12.3.2 cudnn8.9-cuda12.3/8.9.7.29 boost/1.85.0",
-    'export PATH="/home/liz7/isilon/Zhen/mpich/bin:$PATH"',
-    'export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblasgpu/lib:$LD_LIBRARY_PATH"',
-    'export PATH="/home/liz7/beegfs/liz7/openblasgpu/bin:$PATH"',
-]
-CCF_SBD_PREAMBLE_CPU = [
-    'export PATH="/home/kaliakd/beegfs/kaliakd/Software/openmpi-4.1.5/bin:$PATH"',
-    'export PATH="/home/liz7/beegfs/liz7/openblas/lib/:$PATH"',
-    'export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblas/lib/:$LD_LIBRARY_PATH"',
-]
+def select_hpc_settings(question="Which HPC settings to use?"):
+    """Discover ``*_HPC_settings.yaml`` in the CWD (and this script's dir, so the
+    shipped CCF/MSU presets are always available) and return a loaded settings
+    dict, prompting when more than one is found.  Exits with a helpful message
+    when none exist."""
+    # Prefer settings files in the working directory; only if there are none
+    # fall back to the CCF/MSU presets shipped next to this script.  This keeps
+    # a user's own definitions un-cluttered while still working out of the box.
+    found = hpc_settings.discover([os.getcwd()])
+    if not found:
+        found = hpc_settings.discover(
+            [os.path.dirname(os.path.abspath(__file__))])
+    if not found:
+        print("\nERROR: no '*_HPC_settings.yaml' file found in the current "
+              "directory.\nGenerate one first with:\n"
+              "   python Utilities/hpc_settings_setup.py\n"
+              "(or copy an existing <name>_HPC_settings.yaml here).",
+              file=sys.stderr)
+        sys.exit(1)
+    if len(found) == 1:
+        label, path = found[0]
+        print(f"\nUsing HPC settings: {label}  ({os.path.basename(path)})")
+    else:
+        labels = [lbl for lbl, _ in found]
+        chosen = ask_choice(question, labels)
+        path = dict(found)[chosen]
+    return hpc_settings.load(path)
 
-# --- MSU SBD environment defaults ------------------------------------------
-# GPU runs: a100 uses the default build, v100 uses a v100-specific build.
-# CPU runs use a separate CPU build.
-MSU_SBD_EXE = "/mnt/home/lizhen6/sbd/apps/chemistry_tpb_selected_basis_diagonalization/diag"
-MSU_SBD_EXE_V100 = "/mnt/home/lizhen6/sbd/apps/chemistry_v100_tpb_selected_basis_diagonalization/diag"
-MSU_SBD_EXE_CPU = "/mnt/home/lizhen6/SBD_Solver/executable/diag"
-MSU_MPI_LAUNCHER = "/mnt/home/lizhen6/mpich/bin/mpirun"
-MSU_SBD_PREAMBLE = [
-    # SBD sub-jobs do not inherit the modules loaded for the main job, so load
-    # them here too (LLVM provides libomp.so, which the SBD binary links).
-    "module purge",
-    "module load powertools GCCcore/13.3.0 LLVM/18.1.8-GCCcore-13.3.0"
-    " OpenBLAS/0.3.27-GCC-13.3.0 CUDA/12.9.1",
-    'export PATH="/mnt/home/lizhen6/mpich/bin:$PATH"',
-]
-# On MSU only a100 GPUs may be used -> request --gpus-per-node=a100:<n>.
-MSU_GPU_TYPE = "a100"
-# MSU compute nodes do not reliably inherit an activated conda env, so the
-# worker subprocesses are launched with an EXPLICIT python interpreter path.
-MSU_PYTHON = "/mnt/home/k0095864/.conda/envs/ewf/bin/python3.1"
+
+def select_gpu_type(H, question="GPU model?"):
+    """Return the GPU-model name to use for a GPU run: the sole model if the
+    site defines one, otherwise ask.  Returns None if the site defines none."""
+    names = hpc_settings.gpu_type_names(H)
+    if not names:
+        return None
+    if len(names) == 1:
+        return names[0]
+    return ask_choice(question, names)
 
 
 # ---------------------------------------------------------------------------
@@ -138,28 +117,40 @@ def ask_text(prompt, default):
 # ---------------------------------------------------------------------------
 # Config rendering helpers
 # ---------------------------------------------------------------------------
-def _sbatch_lines(indent, hpc, partition, ntasks=None, mem=None):
-    """Render the placement/limit lines of one #SBATCH block.
+def _emit_sbd_exe_paths(a, H, gpu, gpu_type):
+    """Emit the SBD executable paths + MPI launcher from the HPC settings.
 
-    CCF -> ``partition`` (no time);  MSU -> ``account`` + ``time`` (no partition).
-    ``ntasks`` is omitted for the SBD sub-job block (it is auto-derived there).
-    """
-    pad = " " * indent
-    out = []
-    if hpc == "CCF":
-        out.append(f"{pad}partition: {partition}")
-    else:  # MSU: account replaces partition
-        out.append(f"{pad}account: {MSU_ACCOUNT_DEFAULT}      # <-- UPDATE if needed")
-    if ntasks is not None:
-        out.append(f"{pad}ntasks: {ntasks}")
-    if mem is not None:
-        out.append(f"{pad}mem: {mem}")
-    if hpc == "MSU":
-        out.append(f"{pad}time: '{MSU_TIME_DEFAULT}'")
-    return out
+    The GPU executable comes from the selected GPU model (``gpu_type``); the
+    CPU executable and the (proc-appropriate) launcher come from the site."""
+    a(f"  sbd_exe_path_cpu: '{hpc_settings.sbd_exe(H, gpu=False)}'")
+    a(f"  sbd_exe_path_gpu: '{hpc_settings.sbd_exe(H, gpu=True, gpu_type=gpu_type)}'")
+    a(f"  mpi_launcher: '{hpc_settings.mpi_launcher(H, gpu)}'   "
+      "# absolute path (PATH-independent)")
 
 
-def _emit_sbd_exec_options(a, advanced, gpu, is_v100, sqd):
+def _emit_gpu_type(a, H, gpu_type):
+    """Emit ``gpu_type`` only when the selected GPU model needs a
+    --gpus-per-node type qualifier (e.g. 'a100' -> --gpus-per-node=a100:<n>)."""
+    qual = hpc_settings.gpus_per_node_type(H, gpu_type)
+    if qual:
+        a(f"  gpu_type: {qual}"
+          f"{' ' * max(1, 9 - len(str(qual)))}"
+          f"# GPU model -> --gpus-per-node={qual}:<n>")
+
+
+def _emit_slurm_preamble(a, H, gpu):
+    """Emit the per-SBD-sub-job env preamble (module load + PATH exports) for
+    the chosen processor, or a commented placeholder when the site defines none."""
+    lines = hpc_settings.env_preamble(H, gpu)
+    if lines:
+        a("    preamble: |               # <-- UPDATE if your environment changes")
+        for ln in lines:
+            a(f"      {ln}")
+    else:
+        a("    # preamble: |             # <-- add module load / PATH exports if needed")
+
+
+def _emit_sbd_exec_options(a, advanced, gpu, sqd):
     """Emit the SBD execution / memory-management options (sbd_block, iteration,
     tolerance and -- only in advanced mode -- the GPU VRAM/determinant caps and
     the wavefunction-partition comm sizes).
@@ -224,7 +215,7 @@ def _emit_sbd_exec_options(a, advanced, gpu, is_v100, sqd):
         a("  sbd_bdet_comm_size: 2   # split beta-dets across ranks")
         a("  sbd_task_comm_size: 2   # split H columns across ranks")
     else:
-        cpg = 8 if is_v100 else 16
+        cpg = 16
         a("  # Wavefunction partition across ranks -- VERIFIED to work on GPU: each")
         a("  # rank stores W ~ (n_alpha/adet)*(n_beta/bdet), so raising these splits")
         a("  # the Davidson vectors (the dominant GPU allocation for large subspaces)")
@@ -250,9 +241,16 @@ def _emit_sbd_exec_options(a, advanced, gpu, is_v100, sqd):
 
 
 def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
-                 gpu_type=None, optimizer="sella", advanced_sbd=False,
-                 run_task="geomopt", hf_gpu=False, hf_density_fit=False):
+                 optimizer="sella", advanced_sbd=False,
+                 run_task="geomopt", hf_gpu=False, hf_density_fit=False,
+                 gpu_type=None):
     """Assemble the focused config.yaml text for the chosen options.
+
+    ``hpc`` is a loaded HPC-settings dict (see :mod:`hpc_settings`) describing
+    the target cluster -- SBD executables, MPI launchers, whether it uses
+    account/time/partition, per-job-type partitions and time limits, and the
+    CPU/GPU environment.  All Slurm placement and environment lines are rendered
+    from it via the ``hpc_settings`` helpers.
 
     ``run_task`` selects what the driver produces at the input geometry:
     ``'geomopt'`` (optimise), ``'gradient'`` (single-point E + gradient),
@@ -268,10 +266,6 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     (``sbd:`` or ``sqd:`` respectively) sharing the same processor / GPU /
     Slurm machinery.
 
-    ``gpu_type`` ('a100' / 'v100') is only meaningful for an MSU GPU run of
-    SCI-SBD or SQD; it selects the default ``cpus_per_gpu`` and SBD-job
-    ``mem`` (a100 -> 16 / 350G, v100 -> 8 / 170G).  It is ignored elsewhere.
-
     ``optimizer`` ('geometric' / 'berny' / 'sella') selects the geometry-
     optimisation backend; only that backend's options block is emitted.
 
@@ -279,6 +273,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     SCF on GPU (gpu4pyscf) and/or density-fit it.  A density-fitted mean field
     propagates into Vayesta's MP2 bath automatically.
     """
+    H = hpc                                    # loaded HPC-settings dict
     circuits = (run_task == "circuits")
     is_ewf = (run_mode == "ewf")
     gpu = (proc == "GPU")
@@ -286,11 +281,6 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     # even though 'circuits' rides on the SQD (LUCJ) sampling code.
     sbd = (external == "SCI_SBD") and not circuits
     sqd = (external == "SQD")
-    # MSU GPU runs pick resources by GPU model; default to a100 if unspecified.
-    msu_gpu = (hpc == "MSU" and gpu)
-    if msu_gpu and gpu_type is None:
-        gpu_type = MSU_GPU_TYPE
-    is_v100 = (msu_gpu and gpu_type == "v100")
 
     # --- solver selection from the answers ---------------------------------
     plain_solver = "SCI"                       # non-SBD default (FCI / SCI)
@@ -313,7 +303,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     # --- header -------------------------------------------------------------
     a("# ===========================================================================")
     a("# config.yaml generated by calculation_setup.py")
-    a(f"#   HPC type           : {hpc}")
+    a(f"#   HPC settings       : {H.get('name', '')}")
     a(f"#   run_task           : {run_task}")
     a(f"#   run_mode           : {run_mode}")
     a(f"#   HF acceleration    : gpu={'yes' if hf_gpu else 'no'}, "
@@ -407,9 +397,10 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     if is_ewf:
         a("# Slurm resources for the fragmented DUMP + solve waves.")
         a("slurm:")
-        if hpc == "MSU":
-            a(f"  python_executable: {MSU_PYTHON}   # explicit interpreter"
-              " (MSU compute nodes lack an active conda env)")
+        py = hpc_settings.python_executable(H)
+        if py != "python":
+            a(f"  python_executable: {py}   # explicit interpreter"
+              " (compute nodes lack an active env)")
         else:
             a("  python_executable: python")
         a("  poll_interval: 15")
@@ -420,55 +411,48 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  # parent jobs do not exhaust the per-user Slurm job / GPU budget and")
         a("  # starve their own SBD children (which otherwise sit queued forever).")
         a("  max_concurrent_solve: 0")
-        if hpc == "MSU":
-            # Per-sub-job env: the parent job's conda env does not propagate to
-            # the DUMP/solve sub-jobs on MSU compute nodes, so put the env's bin
-            # on PATH explicitly (the absolute python_executable above is the
-            # other half of this -- together they fix 'No module named yaml').
-            env_bin = os.path.dirname(MSU_PYTHON)
+        if py != "python":
+            # Per-sub-job env: the parent job's active env does not always
+            # propagate to the DUMP/solve sub-jobs, so put the interpreter's bin
+            # on PATH explicitly (together with the absolute python_executable
+            # above this fixes 'No module named yaml' on such nodes).
+            env_bin = os.path.dirname(py)
             a("  preamble: |                # env setup inside each DUMP/solve sub-job")
             a(f'      export PATH="{env_bin}:$PATH"')
         a("  dump:                        # integral / cluster dump wave")
-        L.extend(_sbatch_lines(4, hpc, CCF_CPU_PARTITION, ntasks=2, mem="100G"))
+        L.extend(hpc_settings.sbatch_lines(H, 4, "dump", "dump", ntasks=2, mem="100G"))
         a("  # Per-solver solve-wave blocks (one job per fragment uses the block named")
-        a("  # after the solver that runs in it).")
+        a("  # after the solver that runs in it).  FCI / plain SCI are light; the")
+        a("  # SCI_SBD / SQD orchestrator jobs use the 'parent' partition/time.")
         solvers_needed = ({high_solver, approx_solver} if multi else {single_solver})
         for s in ("FCI", "SCI", "SCI_SBD", "SQD"):
             if s in solvers_needed:
-                mem = "170G" if s in ("SCI_SBD", "SQD") else "10G"
+                if s in ("SCI_SBD", "SQD"):
+                    pkey, tkey, mem = "parent", "parent", "170G"
+                else:
+                    pkey, tkey, mem = "fci", "fci", "10G"
                 a(f"  {s}:")
-                L.extend(_sbatch_lines(4, hpc, CCF_CPU_PARTITION, ntasks=2, mem=mem))
+                L.extend(hpc_settings.sbatch_lines(
+                    H, 4, pkey, tkey, ntasks=2, mem=mem))
         a("")
 
     # --- sbd block (only when a solver is SCI_SBD) -------------------------
     if sbd:
         a("# External SBD eigensolver (present because a solver is SCI_SBD).")
         a("sbd:")
-        if hpc == "CCF":
-            ccf_launcher = CCF_MPI_LAUNCHER_GPU if gpu else CCF_MPI_LAUNCHER_CPU
-            a(f"  sbd_exe_path_cpu: '{CCF_SBD_EXE_CPU}'")
-            a(f"  sbd_exe_path_gpu: '{CCF_SBD_EXE_GPU}'")
-            a(f"  mpi_launcher: '{ccf_launcher}'   # absolute path (PATH-independent)")
-        else:  # MSU: separate CPU build; GPU a100 default vs v100-specific
-            msu_gpu_exe = MSU_SBD_EXE_V100 if is_v100 else MSU_SBD_EXE
-            a(f"  sbd_exe_path_cpu: '{MSU_SBD_EXE_CPU}'")
-            a(f"  sbd_exe_path_gpu: '{msu_gpu_exe}'")
-            a(f"  mpi_launcher: '{MSU_MPI_LAUNCHER}'   # absolute path (PATH-independent)")
+        _emit_sbd_exe_paths(a, H, gpu, gpu_type)
         a(f"  proc_type: {1 if gpu else 0}            # {'1 = GPU (CPUs as support)' if gpu else '0 = CPU-only'}")
         if gpu:
+            cpg = hpc_settings.cpus_per_gpu(H, gpu_type)
             a("  gpus_per_batch: 4       # GPUs per SBD job -> --gpus-per-node")
-            cpus_per_gpu = 8 if is_v100 else 16
-            a(f"  cpus_per_gpu: {cpus_per_gpu}"
-              f"{' ' * max(1, 8 - len(str(cpus_per_gpu)))}"
+            a(f"  cpus_per_gpu: {cpg}"
+              f"{' ' * max(1, 8 - len(str(cpg)))}"
               "# support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)")
-            if hpc == "MSU":
-                a(f"  gpu_type: {gpu_type}"
-                  f"{' ' * max(1, 9 - len(str(gpu_type)))}"
-                  f"# MSU GPU model -> --gpus-per-node={gpu_type}:<n>")
+            _emit_gpu_type(a, H, gpu_type)
         else:
             a("  cpus_per_batch: 96      # MPI ranks (-np / --ntasks) for the CPU run")
         a("  sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)")
-        _emit_sbd_exec_options(a, advanced_sbd, gpu, is_v100, sqd=False)
+        _emit_sbd_exec_options(a, advanced_sbd, gpu, sqd=False)
         a("  sbd_init: 0")
         a("  sbd_shuffle: 0")
         a("  sbd_carryover_ratio: 0.5")
@@ -490,26 +474,11 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  slurm:")
         a("    poll_interval: 15")
         a("    max_node_retries: 5       # resubmit on another node if mpirun is missing")
-        a("    preamble: |               # <-- UPDATE if your environment changes")
-        if hpc == "CCF":
-            preamble = CCF_SBD_PREAMBLE_GPU if gpu else CCF_SBD_PREAMBLE_CPU
-        else:
-            preamble = MSU_SBD_PREAMBLE
-        for ln in preamble:
-            a(f"      {ln}")
+        _emit_slurm_preamble(a, H, gpu)
         a("    sbatch:")
-        sbd_partition = CCF_GPU_PARTITION if gpu else CCF_CPU_SBD_PARTITION
-        # Per-cycle SBD sub-job memory by site / processor:
-        #   MSU GPU a100 -> 350G, MSU GPU v100 -> 170G, CCF GPU -> 500G,
-        #   MSU CPU -> 760G, CCF CPU -> 1T.
-        if gpu:
-            if msu_gpu:
-                sbd_mem = "170G" if is_v100 else "350G"
-            else:  # CCF GPU
-                sbd_mem = "500G"
-        else:  # CPU
-            sbd_mem = "760G" if hpc == "MSU" else "1T"
-        L.extend(_sbatch_lines(6, hpc, sbd_partition, ntasks=None, mem=sbd_mem))
+        sbd_mem = "500G" if gpu else "1T"   # <-- UPDATE to your node size
+        L.extend(hpc_settings.sbatch_lines(
+            H, 6, "gpu" if gpu else "parent", "sbd", ntasks=None, mem=sbd_mem))
         if gpu:
             a("      extra:")
             a("        exclude: m002   # skip nodes that fail mpirun")
@@ -547,21 +516,12 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("# job augments the recovered subspace with PyCI single excitations and")
         a("# runs SBD with --rdm 1 to produce the per-fragment 1- and 2-RDMs.")
         a("sqd:")
-        if hpc == "CCF":
-            ccf_launcher = CCF_MPI_LAUNCHER_GPU if gpu else CCF_MPI_LAUNCHER_CPU
-            a(f"  sbd_exe_path_cpu: '{CCF_SBD_EXE_CPU}'")
-            a(f"  sbd_exe_path_gpu: '{CCF_SBD_EXE_GPU}'")
-            a(f"  mpi_launcher: '{ccf_launcher}'   # absolute path (PATH-independent)")
-        else:  # MSU
-            msu_gpu_exe = MSU_SBD_EXE_V100 if is_v100 else MSU_SBD_EXE
-            a(f"  sbd_exe_path_cpu: '{MSU_SBD_EXE_CPU}'")
-            a(f"  sbd_exe_path_gpu: '{msu_gpu_exe}'")
-            a(f"  mpi_launcher: '{MSU_MPI_LAUNCHER}'   # absolute path (PATH-independent)")
+        _emit_sbd_exe_paths(a, H, gpu, gpu_type)
         a(f"  proc_type: {1 if gpu else 0}            # {'1 = GPU (CPUs as support)' if gpu else '0 = CPU-only'}")
         if gpu:
             if advanced_sbd:
                 a("  gpus_per_batch: 4       # GPUs per SBD batch -> --gpus-per-node")
-                cpus_per_gpu = 8 if is_v100 else 16
+                cpus_per_gpu = hpc_settings.cpus_per_gpu(H, gpu_type)
             else:
                 # Basic (stable) SQD default: a light single-GPU footprint.
                 a("  gpus_per_batch: 1       # GPUs per SBD batch -> --gpus-per-node")
@@ -569,14 +529,11 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             a(f"  cpus_per_gpu: {cpus_per_gpu}"
               f"{' ' * max(1, 8 - len(str(cpus_per_gpu)))}"
               "# support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)")
-            if hpc == "MSU":
-                a(f"  gpu_type: {gpu_type}"
-                  f"{' ' * max(1, 9 - len(str(gpu_type)))}"
-                  f"# MSU GPU model -> --gpus-per-node={gpu_type}:<n>")
+            _emit_gpu_type(a, H, gpu_type)
         else:
             a("  cpus_per_batch: 96      # MPI ranks (-np / --ntasks) for the CPU run")
         a("  sbd_omp_threads: 1      # OMP threads/rank (keep gpus*cpus_per_gpu*omp <= cores/node)")
-        _emit_sbd_exec_options(a, advanced_sbd, gpu, is_v100, sqd=True)
+        _emit_sbd_exec_options(a, advanced_sbd, gpu, sqd=True)
         a("  sbd_init: 0")
         a("  sbd_shuffle: 0")
         a("  sbd_carryover_ratio: 0.5")
@@ -619,23 +576,11 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  slurm:")
         a("    poll_interval: 15")
         a("    max_node_retries: 5       # resubmit on another node if mpirun is missing")
-        a("    preamble: |               # <-- UPDATE if your environment changes")
-        if hpc == "CCF":
-            preamble = CCF_SBD_PREAMBLE_GPU if gpu else CCF_SBD_PREAMBLE_CPU
-        else:
-            preamble = MSU_SBD_PREAMBLE
-        for ln in preamble:
-            a(f"      {ln}")
+        _emit_slurm_preamble(a, H, gpu)
         a("    sbatch:")
-        sqd_partition = CCF_GPU_PARTITION if gpu else CCF_CPU_SBD_PARTITION
-        if gpu:
-            if msu_gpu:
-                sqd_mem = "170G" if is_v100 else "350G"
-            else:  # CCF GPU
-                sqd_mem = "500G"
-        else:  # CPU
-            sqd_mem = "760G" if hpc == "MSU" else "1T"
-        L.extend(_sbatch_lines(6, hpc, sqd_partition, ntasks=None, mem=sqd_mem))
+        sqd_mem = "500G" if gpu else "1T"   # <-- UPDATE to your node size
+        L.extend(hpc_settings.sbatch_lines(
+            H, 6, "gpu" if gpu else "parent", "sbd", ntasks=None, mem=sqd_mem))
         if gpu:
             a("      extra:")
             a("        exclude: m002   # skip nodes that fail mpirun")
@@ -714,7 +659,7 @@ def main():
     }[runtype_label]
     circuits = (run_task == "circuits")
 
-    hpc = ask_choice("2) HPC type?", ["CCF", "MSU"])
+    H = select_hpc_settings("2) Which HPC settings to use?")
 
     # Hartree-Fock acceleration.  Independent yes/no answers: "yes" to both
     # runs the initial SCF on GPU (gpu4pyscf) AND density-fits it; the
@@ -778,10 +723,10 @@ def main():
             proc = ask_choice(
                 f"10) GPU or CPU-only {external_label} calculation?",
                 ["GPU", "CPU"])
-            if hpc == "MSU" and proc == "GPU":
-                # MSU GPU model sets the default cpus_per_gpu + SBD-job mem
-                # (a100 -> 16 / 350G, v100 -> 8 / 170G).
-                gpu_type = ask_choice("11) MSU GPU type?", ["a100", "v100"])
+            if proc == "GPU":
+                # Pick the GPU model when the site defines more than one
+                # (each has its own SBD build / cpus_per_gpu / --gpus-per-node).
+                gpu_type = select_gpu_type(H, "11) GPU model?")
             # Master switch for the experimental SBD RAM/VRAM guardrails.  "no"
             # keeps the stabler pre-guardrail defaults (commit 0000c598) that
             # work well for routine / smaller calculations; "yes" turns on the
@@ -792,7 +737,7 @@ def main():
                 'these are experimental options.  Answer "no" for more routine '
                 'runs.]')
 
-    text = build_config(hpc, run_mode, multi, external, proc, geometry,
+    text = build_config(H, run_mode, multi, external, proc, geometry,
                         gpu_type=gpu_type, optimizer=optimizer,
                         advanced_sbd=advanced_sbd, run_task=run_task,
                         hf_gpu=hf_gpu, hf_density_fit=hf_density_fit)
@@ -824,10 +769,11 @@ def main():
     print("with defaults elsewhere.  You STILL need to update the run-specific")
     print("values inside it before submitting -- in particular:")
     print("   * calculation.basis (and charge/spin); confirm the geometry file exists")
-    if hpc == "MSU":
-        print(f"   * the Slurm 'account' (default {MSU_ACCOUNT_DEFAULT}) and 'time' "
-              f"(default {MSU_TIME_DEFAULT}) in every sbatch block")
-    else:
+    if hpc_settings.uses_account(H):
+        print("   * the Slurm 'account'"
+              + (" and 'time'" if hpc_settings.uses_time(H) else "")
+              + " in every sbatch block (from the HPC settings)")
+    elif hpc_settings.uses_partition(H):
         print("   * the Slurm 'partition' in every sbatch block")
     if run_mode == "ewf":
         print("   * the per-solver / dump Slurm resources (ntasks, mem)")
