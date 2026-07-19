@@ -282,6 +282,21 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path, rdm=0,
       and must not grow it on its own -- PySCF's ``enlarge_space`` owns subspace
       growth.  ``--dump_matrix_form_wf`` makes SBD write the full CI vector.
     '''
+    # The generated Slurm script ``cd``s into the (absolute) workdir before
+    # launching this command, so every file path passed to the SBD binary must
+    # be ABSOLUTE -- a relative ``workdir/AlphaDets.txt`` would be resolved
+    # against the already-cd'd workdir and double its prefix, so SBD would fail
+    # to open its det / FCIDUMP / wavefunction files.  (matrixformwf.txt stays a
+    # bare basename on purpose: it is an OUTPUT written into the cwd = workdir.)
+    fcidump_path = os.path.abspath(fcidump_path)
+    adet_path = os.path.abspath(adet_path)
+    if bdet_path:
+        bdet_path = os.path.abspath(bdet_path)
+    if savename:
+        savename = os.path.abspath(savename)
+    if loadname:
+        loadname = os.path.abspath(loadname)
+
     layout = sbd_parallel_layout(cfg)
     proc_type = cfg['proc_type']
     exe = cfg['sbd_exe_path_gpu'] if proc_type == 1 else cfg['sbd_exe_path_cpu']
@@ -422,6 +437,18 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
     when the parent job's exported env does not reach the node -- the cause of
     intermittent ``mpirun`` failures on some merzk-a100 nodes.
     '''
+    # Every file path written into the generated script MUST be absolute: the
+    # child SBD job's working directory is the sbatch submission dir, which is
+    # NOT guaranteed to be the directory that holds a relative workdir -- so a
+    # relative status/log/workdir path resolves against the wrong cwd and the
+    # job fails with "No such file or directory" (the status write happens
+    # before the in-script `cd`, and the log redirect after it doubles a
+    # relative workdir prefix).  abspath() runs here in the PARENT process,
+    # whose cwd is the run directory, so it yields the correct locations.
+    workdir = os.path.abspath(workdir)
+    status_path = os.path.abspath(status_path)
+    log_path = os.path.abspath(log_path)
+
     slurm = cfg.get('slurm', {}) or {}
     sbatch = dict(slurm.get('sbatch', {}) or {})
 

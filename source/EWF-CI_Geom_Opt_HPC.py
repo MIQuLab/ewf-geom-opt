@@ -76,6 +76,7 @@ import argparse
 import copy
 import json
 import os
+import random
 import shlex
 import subprocess
 import sys
@@ -256,6 +257,25 @@ def load_config(path):
             f"{', '.join(_VALID_SOLVERS)}.")
     ewf["solver"] = solver
 
+    # ------------------------------------------------------------------
+    # Hartree-Fock acceleration options (optional; both default off, which
+    # keeps the classic CPU, 4-index-ERI SCF).  Honored by build_mol_and_mf:
+    #   gpu          -- run the initial SCF on GPU via gpu4pyscf.  The
+    #                   converged result is handed back to Vayesta as an
+    #                   ordinary CPU mean field (Vayesta runs on the host).
+    #   density_fit  -- build ``RHF(mol).density_fit()``.  The density-fitted
+    #                   mean field propagates automatically into Vayesta's MP2
+    #                   bath (Vayesta uses ``mf.with_df`` when present), so the
+    #                   BNO bath is built from 3-index CDERIs.
+    # Independent of these, every driver SCF also caches the converged AO
+    # ovlp/hcore/fock/veff as .npy next to hf.chk (see build_mol_and_mf), so a
+    # restart or DUMP worker skips rebuilding those integrals for large systems.
+    hf = cfg.setdefault("hf", {})
+    hf.setdefault("gpu", False)
+    hf.setdefault("density_fit", False)
+    hf["gpu"] = bool(hf["gpu"])
+    hf["density_fit"] = bool(hf["density_fit"])
+
     calc = cfg.setdefault("calculation", {})
     # Calculation mode (the alternative-workflow keyword):
     #   "ewf"                   -- (default) embedded wave function: fragment
@@ -368,6 +388,19 @@ def load_config(path):
     sl = cfg.setdefault("slurm", {})
     sl.setdefault("python_executable", sys.executable or "python")
     sl.setdefault("poll_interval", 15)
+    # Cap on how many per-fragment SOLVE jobs are kept in flight at once during
+    # the cluster-solve wave.  0 (default) = unlimited (submit them all -- the
+    # historical behavior).  A positive value throttles submission so that
+    # SOLVE jobs which themselves spawn nested SBD sub-jobs (SCI_SBD / SQD) do
+    # not exhaust the per-user Slurm job / GPU budget and starve their own
+    # children -- the cause of large-fragment-count (e.g. > 150) deadlocks where
+    # the SBD inputs are written but the SBD jobs never leave the queue.  Only
+    # the solve wave is throttled; the DUMP wave spawns no child jobs.
+    sl.setdefault("max_concurrent_solve", 0)
+    try:
+        sl["max_concurrent_solve"] = int(sl["max_concurrent_solve"])
+    except (TypeError, ValueError):
+        sl["max_concurrent_solve"] = 0
     # Slurm resource blocks.  The DUMP wave uses ``slurm.dump``; the
     # cluster-solve wave uses a PER-SOLVER block named after the resolved
     # solver (``slurm.FCI`` / ``slurm.SCI`` / ``slurm.SCI_SBD``), so each
@@ -437,6 +470,91 @@ def _hf_chkfile_path(cfg):
     return os.path.join(cfg["calculation"]["workdir"], "hf.chk")
 
 
+def _hf_npy_dir(cfg):
+    """Directory (next to ``hf.chk``) holding the converged AO mean-field
+    arrays cached as .npy -- ovlp / hcore / fock / veff plus scalars.  These
+    accelerate restart: the chkfile stores only MOs + energies, so without
+    this cache Vayesta would rebuild those integrals (the veff / Fock build is
+    the costly part for large systems) on every reused mean field.
+    """
+    return os.path.join(cfg["calculation"]["workdir"], "hf_npy")
+
+
+def _asnumpy(x):
+    """Host numpy view of a possibly GPU-resident (cupy / gpu4pyscf) array."""
+    if x is None:
+        return None
+    getter = getattr(x, "get", None)          # cupy ndarray.get() -> host
+    if callable(getter):
+        try:
+            return np.asarray(getter())
+        except Exception:
+            pass
+    return np.asarray(x)
+
+
+def _override_hf_integrals(mf, ovlp=None, hcore=None, fock=None, veff=None):
+    """Pin AO-basis ovlp/hcore/fock/veff on ``mf`` so downstream code (Vayesta
+    bath construction) reuses them instead of recomputing.  Valid because they
+    are the converged-HF quantities for this exact geometry; used on restart
+    and after a GPU SCF (where the host must not rebuild them).
+    """
+    if ovlp is not None:
+        mf.get_ovlp = lambda *a, **k: ovlp
+    if hcore is not None:
+        mf.get_hcore = lambda *a, **k: hcore
+    if fock is not None:
+        mf.get_fock = lambda *a, **k: fock
+    if veff is not None:
+        mf.get_veff = lambda *a, **k: veff
+
+
+_HF_NPY_ARRAYS = ("ovlp", "hcore", "fock", "veff")
+
+
+def _dump_hf_npy(mf, npy_dir):
+    """Persist the converged AO mean-field quantities as .npy (best-effort).
+
+    Companion to the chkfile: the chkfile holds MOs + energies, these hold the
+    integrals (ovlp/hcore/fock/veff) plus scalars (e_tot/nao/energy_nuc) that a
+    restart would otherwise recompute.  A failure here just forfeits the
+    speed-up, so it is never fatal.
+    """
+    try:
+        os.makedirs(npy_dir, exist_ok=True)
+        np.save(os.path.join(npy_dir, "ovlp.npy"),  _asnumpy(mf.get_ovlp()))
+        np.save(os.path.join(npy_dir, "hcore.npy"), _asnumpy(mf.get_hcore()))
+        np.save(os.path.join(npy_dir, "fock.npy"),  _asnumpy(mf.get_fock()))
+        np.save(os.path.join(npy_dir, "veff.npy"),  _asnumpy(mf.get_veff()))
+        np.save(os.path.join(npy_dir, "e_tot.npy"), np.array([float(mf.e_tot)]))
+        np.save(os.path.join(npy_dir, "nao.npy"), np.array([int(mf.mol.nao)]))
+        np.save(os.path.join(npy_dir, "energy_nuc.npy"),
+                np.array([float(mf.mol.energy_nuc())]))
+    except Exception as exc:  # pragma: no cover -- filesystem / GPU specific
+        print(f"[HF] warning: could not cache MF .npy data in {npy_dir}: {exc}")
+
+
+def _apply_hf_npy(mf, npy_dir):
+    """If a complete, shape-consistent set of cached AO arrays exists in
+    ``npy_dir``, pin them on ``mf`` (skipping recomputation) and return True.
+    Returns False when the cache is missing, unreadable, or stale (its AO
+    dimension no longer matches this geometry/basis).
+    """
+    paths = {k: os.path.join(npy_dir, f"{k}.npy") for k in _HF_NPY_ARRAYS}
+    if not all(os.path.isfile(p) for p in paths.values()):
+        return False
+    try:
+        arrs = {k: np.load(paths[k]) for k in _HF_NPY_ARRAYS}
+    except Exception:
+        return False
+    nao = mf.mol.nao
+    if any(getattr(a, "shape", (0,))[-1] != nao for a in arrs.values()):
+        return False   # stale cache left from a different geometry / basis
+    _override_hf_integrals(mf, ovlp=arrs["ovlp"], hcore=arrs["hcore"],
+                           fock=arrs["fock"], veff=arrs["veff"])
+    return True
+
+
 def _mol_matches(mol_a, mol_b, atol=1.0e-10):
     """Return True iff two ``gto.Mole`` objects describe the same system
     (atom count/order/symbols, coords within ``atol`` Bohr, and same
@@ -469,7 +587,7 @@ def _mol_matches(mol_a, mol_b, atol=1.0e-10):
     return True
 
 
-def _try_load_hf(mol, chkfile, attach_chkfile=True):
+def _try_load_hf(mol, chkfile, attach_chkfile=True, density_fit=False):
     """If ``chkfile`` contains a converged RHF result for a mol matching
     ``mol``, return a populated ``scf.RHF(mol)`` object with
     ``mo_coeff / mo_energy / mo_occ / e_tot`` restored and
@@ -481,6 +599,10 @@ def _try_load_hf(mol, chkfile, attach_chkfile=True):
     at ``chkfile`` for downstream writes.  The driver wants this (it owns
     the file); concurrent DUMP workers must NOT, or a later write would
     race against the shared file.
+
+    ``density_fit`` rebuilds the reused mean field as ``.density_fit()`` so
+    that Vayesta detects ``mf.with_df`` and builds the MP2 bath from CDERIs --
+    the reused HF must match the density-fitting choice of the run.
     """
     if not os.path.isfile(chkfile):
         return None
@@ -499,6 +621,8 @@ def _try_load_hf(mol, chkfile, attach_chkfile=True):
     except (KeyError, TypeError, ValueError):
         return None
     mf = scf.RHF(mol)
+    if density_fit:
+        mf = mf.density_fit()
     if attach_chkfile:
         mf.chkfile = chkfile   # keep pointing at the same file for downstream writes
     mf.mo_coeff = mo_coeff
@@ -506,6 +630,76 @@ def _try_load_hf(mol, chkfile, attach_chkfile=True):
     mf.mo_occ = mo_occ
     mf.e_tot = e_tot
     mf.converged = True
+    return mf
+
+
+def _dump_chkfile(mol, chkfile, mf):
+    """Persist a converged SCF result to ``chkfile`` (best-effort).  Used for
+    the GPU path, which rebuilds a CPU mean field by hand rather than letting
+    PySCF's ``kernel()`` write the chkfile itself.
+    """
+    try:
+        os.makedirs(os.path.dirname(chkfile), exist_ok=True)
+        scf.chkfile.dump_scf(mol, chkfile, mf.e_tot, mf.mo_energy,
+                             mf.mo_coeff, mf.mo_occ)
+    except Exception as exc:  # pragma: no cover -- filesystem specific
+        print(f"[HF] warning: cannot write chkfile {chkfile}: {exc}; "
+              f"HF result will not be cached this step.")
+
+
+def _run_fresh_hf(mol, chkfile, use_gpu, use_df):
+    """Run a fresh RHF SCF and return a CPU mean field ready for Vayesta.
+
+    ``chkfile`` (or ``None`` for a DUMP worker) is where the converged result
+    is persisted.  ``use_df`` applies ``.density_fit()`` so the density-fitted
+    mean field propagates into Vayesta's MP2 bath.  ``use_gpu`` runs the SCF on
+    GPU via gpu4pyscf; the converged orbitals and AO integrals are then copied
+    onto a CPU mean field (Vayesta runs on the host), with the AO
+    ovlp/hcore/fock/veff pinned so the host never rebuilds them.
+    """
+    if use_gpu:
+        try:
+            from gpu4pyscf.scf import RHF as _GPURHF
+        except ImportError as exc:  # pragma: no cover -- GPU-node dependency
+            raise ImportError(
+                "hf.gpu=true requires the gpu4pyscf package on the compute "
+                "node (e.g. 'pip install gpu4pyscf-cuda12x' matching your CUDA "
+                "toolkit).") from exc
+        gmf = _GPURHF(mol)
+        if use_df:
+            gmf = gmf.density_fit()
+        gmf.kernel()
+        # Copy the converged GPU result onto a CPU mean field for Vayesta and
+        # pin the GPU-built AO integrals so the host does not rebuild them.
+        mf = scf.RHF(mol)
+        if use_df:
+            mf = mf.density_fit()
+        mf.mo_coeff = _asnumpy(gmf.mo_coeff)
+        mf.mo_energy = _asnumpy(gmf.mo_energy)
+        mf.mo_occ = _asnumpy(gmf.mo_occ)
+        mf.e_tot = float(gmf.e_tot)
+        mf.converged = bool(getattr(gmf, "converged", True))
+        _override_hf_integrals(
+            mf, ovlp=_asnumpy(gmf.get_ovlp()), hcore=_asnumpy(gmf.get_hcore()),
+            fock=_asnumpy(gmf.get_fock()), veff=_asnumpy(gmf.get_veff()))
+        if chkfile:
+            _dump_chkfile(mol, chkfile, mf)
+        return mf
+
+    mf = scf.RHF(mol)
+    if use_df:
+        mf = mf.density_fit()
+    # Attach chkfile so PySCF writes mol + MO coeffs + e_tot at the end of
+    # kernel().  ONLY the driver does this (chkfile is None for concurrent DUMP
+    # workers), otherwise parallel kernel() writes collide and corrupt it.
+    if chkfile:
+        try:
+            os.makedirs(os.path.dirname(chkfile), exist_ok=True)
+            mf.chkfile = chkfile
+        except OSError as exc:  # pragma: no cover -- filesystem specific
+            print(f"[HF] warning: cannot attach chkfile {chkfile}: {exc}; "
+                  f"HF result will not be cached this step.")
+    mf.kernel()
     return mf
 
 
@@ -537,8 +731,21 @@ def build_mol_and_mf(cfg, write_chk=True):
     (or when the driver runs with restart off) a fresh RHF is run; the
     driver persists it to the chkfile for future restarts, while workers
     run SCF locally without touching the shared file.
+
+    HF acceleration + .npy integral cache
+    -------------------------------------
+    ``hf.gpu`` runs the SCF on GPU (gpu4pyscf) and ``hf.density_fit`` builds a
+    density-fitted mean field whose DF propagates into Vayesta's MP2 bath.
+    Whenever the driver runs a fresh SCF it also caches the converged AO
+    ovlp/hcore/fock/veff as .npy in ``<workdir>/hf_npy`` (see _dump_hf_npy).  A
+    reused mean field (restart or DUMP worker) then pins those cached integrals
+    (_apply_hf_npy) so the host skips the expensive-for-large-systems veff /
+    Fock rebuild that the chkfile alone does not avoid.
     """
     calc = cfg["calculation"]
+    hf_opts = cfg.get("hf", {}) or {}
+    use_gpu = bool(hf_opts.get("gpu", False))
+    use_df = bool(hf_opts.get("density_fit", False))
     geo = read_geometry(calc["geometry_file"])
     mol = gto.Mole()
     mol.build(
@@ -550,34 +757,28 @@ def build_mol_and_mf(cfg, write_chk=True):
         symmetry=calc["symmetry"],
     )
     chkfile = _hf_chkfile_path(cfg)
+    npy_dir = _hf_npy_dir(cfg)
     restart = bool(calc.get("restart", False))
     # The driver reuses the cached HF only under restart; workers always
     # try to reuse the driver's just-written hf.chk (see docstring).  In
     # both cases workers keep their hands off the shared file.
     if restart or not write_chk:
-        cached = _try_load_hf(mol, chkfile, attach_chkfile=write_chk)
+        cached = _try_load_hf(mol, chkfile, attach_chkfile=write_chk,
+                              density_fit=use_df)
         if cached is not None:
+            used_npy = _apply_hf_npy(cached, npy_dir)
             reason = "Restart" if restart else "worker"
-            print(f"[HF] {reason}: reused converged RHF from {chkfile} "
+            extra = " + cached AO .npy integrals" if used_npy else ""
+            print(f"[HF] {reason}: reused converged RHF from {chkfile}{extra} "
                   f"(E_HF={cached.e_tot:.10f} Ha)")
             return mol, cached
 
-    mf = scf.RHF(mol)
-    # Attach chkfile so PySCF writes mol + MO coeffs + e_tot at the end
-    # of ``kernel()`` (and periodically during large SCFs).  ONLY the
-    # driver does this: concurrent DUMP workers (write_chk=False) never
-    # attach the shared chkfile, otherwise their parallel kernel() writes
-    # collide and corrupt it.  Making the workdir first so a killed driver
-    # does not leave PySCF with an unwritable path -- but any write failure
-    # is non-fatal, we just forfeit the chkfile speedup on the next restart.
+    # Fresh SCF.  Only the driver (write_chk=True) persists the chkfile + .npy
+    # cache; concurrent DUMP workers pass chkfile=None so their parallel writes
+    # never collide with the shared files.
+    mf = _run_fresh_hf(mol, chkfile if write_chk else None, use_gpu, use_df)
     if write_chk:
-        try:
-            os.makedirs(os.path.dirname(chkfile), exist_ok=True)
-            mf.chkfile = chkfile
-        except OSError as exc:  # pragma: no cover -- filesystem-specific
-            print(f"[HF] warning: cannot attach chkfile {chkfile}: {exc}; "
-                  f"HF result will not be cached this step.")
-    mf.kernel()
+        _dump_hf_npy(mf, npy_dir)
     return mol, mf
 
 
@@ -1122,28 +1323,71 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
     return sh_path
 
 
+# sbatch hardening: many concurrent submissions (a large solve wave, or SOLVE
+# jobs each spawning SBD sub-jobs) can overload slurmctld, making sbatch time
+# out or transiently fail.  Each attempt has a wall-clock timeout; TRANSIENT
+# failures are retried with exponential backoff + jitter.  A non-transient
+# failure (unknown flag, invalid partition) is surfaced immediately so real
+# config bugs are not masked by retries.
+_SBATCH_TIMEOUT_S = 120
+_SBATCH_MAX_RETRIES = 5
+_TRANSIENT_SBATCH_MARKERS = (
+    "socket timed out", "unable to contact slurm controller", "try again",
+    "resource temporarily unavailable", "temporarily unavailable",
+    "communication connection failure", "connection refused", "timed out",
+)
+
+
+def _sbatch_backoff_sleep(base):
+    """Sleep ``base`` seconds plus up to ``base`` of random jitter (so a fleet
+    of retrying submitters does not resynchronize into another storm)."""
+    time.sleep(base + random.uniform(0.0, base))
+
+
 def submit_slurm_job(sh_path):
     """`sbatch --parsable <sh_path>` -> str job id.
 
     On failure, surface sbatch's stderr to the user (the default
     ``CalledProcessError`` only shows the exit code, which makes it
-    impossible to diagnose e.g. an unknown ``--memory`` flag).
+    impossible to diagnose e.g. an unknown ``--memory`` flag).  Transient
+    controller-overload failures / timeouts are retried (see
+    ``_SBATCH_*`` above); persistent failures raise.
     """
-    proc = subprocess.run(
-        ["sbatch", "--parsable", sh_path],
-        capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
-        msg = (
+    delay = 5.0
+    for attempt in range(_SBATCH_MAX_RETRIES + 1):
+        try:
+            proc = subprocess.run(
+                ["sbatch", "--parsable", sh_path],
+                capture_output=True, text=True, check=False,
+                timeout=_SBATCH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            if attempt < _SBATCH_MAX_RETRIES:
+                print(f"[driver] sbatch timed out (> {_SBATCH_TIMEOUT_S}s) for "
+                      f"{sh_path}; retry {attempt + 1}/{_SBATCH_MAX_RETRIES}")
+                _sbatch_backoff_sleep(delay)
+                delay = min(delay * 2, 60.0)
+                continue
+            raise RuntimeError(
+                f"sbatch timed out (> {_SBATCH_TIMEOUT_S}s) on all "
+                f"{_SBATCH_MAX_RETRIES + 1} attempts for {sh_path}; the Slurm "
+                f"controller may be overloaded.")
+        if proc.returncode == 0:
+            return proc.stdout.strip().split(";")[0]
+        stderr = proc.stderr or ""
+        transient = any(m in stderr.lower() for m in _TRANSIENT_SBATCH_MARKERS)
+        if transient and attempt < _SBATCH_MAX_RETRIES:
+            print(f"[driver] sbatch transient error for {sh_path}; retry "
+                  f"{attempt + 1}/{_SBATCH_MAX_RETRIES}: {stderr.strip()[:200]}")
+            _sbatch_backoff_sleep(delay)
+            delay = min(delay * 2, 60.0)
+            continue
+        raise RuntimeError(
             f"sbatch failed (exit {proc.returncode}) for {sh_path}\n"
             f"--- sbatch stdout ---\n{proc.stdout}\n"
             f"--- sbatch stderr ---\n{proc.stderr}\n"
             f"Hint: check #SBATCH directives in {sh_path}; common causes "
             f"are unknown flags such as --memory (use --mem), or an "
-            f"unavailable partition."
-        )
-        raise RuntimeError(msg)
-    jid = proc.stdout.strip().split(";")[0]
-    return jid
+            f"unavailable partition.")
 
 
 def wait_for_slurm_jobs(status_files, poll_interval=15):
@@ -2141,7 +2385,7 @@ def discover_n_fragments(mf, threshold):
 
 
 def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
-                  skip_indices=None):
+                  skip_indices=None, max_concurrent=0, poll=15):
     """sbatch one job per fragment for ``stage`` and return the list of
     per-fragment status-file paths (in fragment-index order).
 
@@ -2151,41 +2395,73 @@ def _submit_stage(stage, nfrag, cfg, workdir, config_path, script_path,
     ``DONE`` by a previous run, or synthetically stamped here if the file
     is missing but the output artefact is present) is still returned in
     the list, so :func:`wait_for_slurm_jobs` treats them as terminal.
+
+    ``max_concurrent`` > 0 throttles submission so that at most that many jobs
+    are in flight (``SUBMITTED`` / ``RUNNING``) at once: the remaining fragments
+    are held back and released as running jobs reach a terminal state.  This
+    keeps a solve wave whose jobs spawn nested SBD sub-jobs (SCI_SBD / SQD) from
+    exhausting the per-user Slurm budget and starving its own children.  ``0``
+    (default) submits everything at once (historical behavior).  ``poll`` is the
+    seconds between capacity checks while throttling.  Restart is unaffected:
+    ``skip_indices`` fragments are stamped ``DONE`` up front and never occupy a
+    throttle slot.
     """
     skip_set = set(skip_indices or ())
-    status_files = []
     # Display label for the log: the solve wave's internal stage name is 'fci',
     # but the per-fragment solver actually used may be FCI, SCI, SCI_SBD, or SQD
     # (multi-solver / external eigensolvers).  Report the neutral 'CI' so the
     # message is correct regardless of which solver each fragment runs.
     stage_label = "CI" if stage == "fci" else stage
-    for i in range(nfrag):
-        status_path = status_file_path(workdir, i, stage, cfg)
-        if i in skip_set:
-            # Fragment already complete on disk from an earlier run.  Stamp a
-            # DONE status file so the wait loop skips it and the log stays
-            # consistent with the fresh-submission branch.
-            with open(status_path, "w") as fh:
-                fh.write("DONE\n")
-            print(f"[driver] Restart: reusing {stage_label} fragment {i:>3d} "
-                  f"(output already on disk)")
-            status_files.append(status_path)
-            continue
+    status_files = [status_file_path(workdir, i, stage, cfg)
+                    for i in range(nfrag)]
+
+    # Fragments already complete on disk from an earlier run: stamp a DONE
+    # status file so the wait loop skips them.  They never occupy a throttle
+    # slot and are not resubmitted.
+    for i in sorted(skip_set):
+        with open(status_files[i], "w") as fh:
+            fh.write("DONE\n")
+        print(f"[driver] Restart: reusing {stage_label} fragment {i:>3d} "
+              f"(output already on disk)")
+
+    def _submit_one(i):
         sh = write_slurm_script(
             stage, i, cfg, workdir, config_path, script_path)
         # Seed the status file BEFORE sbatch so we never see a missing
         # file during the brief gap between submission and job start-up.
-        with open(status_path, "w") as fh:
+        with open(status_files[i], "w") as fh:
             fh.write("SUBMITTED\n")
         jid = submit_slurm_job(sh)
-        # Append the job id for traceability; the trailing 'SUBMITTED'
-        # token keeps wait_for_slurm_jobs in 'queued' state until the
-        # job itself overwrites the file with RUNNING/DONE/FAILED.
-        with open(status_path, "w") as fh:
+        # The trailing 'SUBMITTED' token keeps wait_for_slurm_jobs in 'queued'
+        # state until the job itself overwrites the file with RUNNING/DONE/FAILED.
+        with open(status_files[i], "w") as fh:
             fh.write(f"SUBMITTED {jid}\n")
         print(f"[driver] Submitted {stage_label} fragment {i:>3d}  -> "
               f"Slurm job {jid}  ({sh})")
-        status_files.append(status_path)
+
+    pending = [i for i in range(nfrag) if i not in skip_set]
+
+    if max_concurrent and max_concurrent > 0:
+        submitted = []
+        p = 0
+        while p < len(pending):
+            in_flight = sum(
+                1 for j in submitted
+                if not _is_terminal_status(read_status(status_files[j])))
+            while p < len(pending) and in_flight < max_concurrent:
+                _submit_one(pending[p])
+                submitted.append(pending[p])
+                p += 1
+                in_flight += 1
+            if p < len(pending):
+                # Window full -- wait for a running solve job to finish (and
+                # free a slot for its and the next fragment's SBD children)
+                # before submitting more.
+                time.sleep(poll)
+    else:
+        for i in pending:
+            _submit_one(i)
+
     return status_files
 
 
@@ -2300,12 +2576,16 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
         skip_solve = ([i for i in range(nfrag) if _is_valid_h5(rdm_files[i])]
                       if restart else [])
         n_solve_new = nfrag - len(skip_solve)
+        max_conc = int(cfg["slurm"].get("max_concurrent_solve", 0) or 0)
+        throttle_note = (f", <= {max_conc} in flight" if max_conc > 0
+                         else "")
         print(f"[{tag}] === Wave 2/2 : submitting {n_solve_new} solve "
               f"(FCI/SCI) job(s)"
-              f"{f' (skipping {len(skip_solve)} already complete)' if skip_solve else ''} ===")
+              f"{f' (skipping {len(skip_solve)} already complete)' if skip_solve else ''}"
+              f"{throttle_note} ===")
         fci_status_files = _submit_stage(
             "fci", nfrag, cfg, workdir, config_path, script_path,
-            skip_indices=skip_solve)
+            skip_indices=skip_solve, max_concurrent=max_conc, poll=poll)
         wait_for_slurm_jobs(fci_status_files, poll_interval=poll)
 
     missing = wait_for_files_visible(rdm_files, label="RDM")

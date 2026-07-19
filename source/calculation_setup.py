@@ -251,7 +251,7 @@ def _emit_sbd_exec_options(a, advanced, gpu, is_v100, sqd):
 
 def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
                  gpu_type=None, optimizer="sella", advanced_sbd=False,
-                 run_task="geomopt"):
+                 run_task="geomopt", hf_gpu=False, hf_density_fit=False):
     """Assemble the focused config.yaml text for the chosen options.
 
     ``run_task`` selects what the driver produces at the input geometry:
@@ -274,6 +274,10 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
 
     ``optimizer`` ('geometric' / 'berny' / 'sella') selects the geometry-
     optimisation backend; only that backend's options block is emitted.
+
+    ``hf_gpu`` / ``hf_density_fit`` populate the ``hf:`` block: run the initial
+    SCF on GPU (gpu4pyscf) and/or density-fit it.  A density-fitted mean field
+    propagates into Vayesta's MP2 bath automatically.
     """
     circuits = (run_task == "circuits")
     is_ewf = (run_mode == "ewf")
@@ -312,6 +316,8 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a(f"#   HPC type           : {hpc}")
     a(f"#   run_task           : {run_task}")
     a(f"#   run_mode           : {run_mode}")
+    a(f"#   HF acceleration    : gpu={'yes' if hf_gpu else 'no'}, "
+      f"density_fit={'yes' if hf_density_fit else 'no'}")
     if is_ewf:
         a(f"#   multi-solver       : {'yes' if multi else 'no'}")
     if circuits:
@@ -337,8 +343,12 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# single-solver value"
           f" (ignored when multi_solver.enabled is true)")
-        a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff"
-          " (ignored by SQD, which draws its subspace from quantum samples)")
+        # Only meaningful for a SCI / SCI_SBD solver; SQD draws its subspace
+        # from quantum samples, so omit the line entirely for SQD runs (in
+        # multi-solver mode the high-accuracy solver is FCI, which also ignores
+        # it, so no fragment uses the cutoff when the approximate solver is SQD).
+        if not sqd:
+            a("  sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff")
         if multi:
             a("  multi_solver:")
             a("    enabled: true")
@@ -350,7 +360,9 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     else:
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / SQD")
-        a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI / SQD)")
+        # Omit for SQD (uses quantum samples, not a determinant cutoff).
+        if not sqd:
+            a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI)")
     a("")
 
     # --- calculation block --------------------------------------------------
@@ -378,6 +390,19 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a("  restart: false                 # true | false  (or use --restart on CLI)")
     a("")
 
+    # --- hf block (Hartree-Fock acceleration) -------------------------------
+    a("# Hartree-Fock acceleration (both optional; both default off = classic")
+    a("# CPU, 4-index-ERI SCF).  gpu: run the initial SCF on GPU via gpu4pyscf")
+    a("# (needs gpu4pyscf on the compute node).  density_fit: build")
+    a("# RHF(mol).density_fit(); the density-fitted mean field propagates into")
+    a("# Vayesta's MP2 bath automatically (CDERI-based BNO bath).  Independent")
+    a("# of these, every driver SCF also caches the converged AO integrals as")
+    a("# .npy next to hf.chk (hf_npy/) to accelerate restart on large systems.")
+    a("hf:")
+    a(f"  gpu: {str(hf_gpu).lower():<20}# run the initial SCF on GPU (gpu4pyscf)")
+    a(f"  density_fit: {str(hf_density_fit).lower():<12}# RHF(mol).density_fit(); DF flows into the Vayesta MP2 bath")
+    a("")
+
     # --- slurm block (EWF only: DUMP + per-solver solve waves) --------------
     if is_ewf:
         a("# Slurm resources for the fragmented DUMP + solve waves.")
@@ -388,6 +413,13 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         else:
             a("  python_executable: python")
         a("  poll_interval: 15")
+        a("  # Throttle for the SOLVE wave: max per-fragment solve jobs kept in")
+        a("  # flight at once.  0 = unlimited (submit all -- historical default).")
+        a("  # For large systems (many fragments) whose solve jobs spawn nested")
+        a("  # SBD sub-jobs (SCI_SBD / SQD), set a finite cap (e.g. 16-32) so the")
+        a("  # parent jobs do not exhaust the per-user Slurm job / GPU budget and")
+        a("  # starve their own SBD children (which otherwise sit queued forever).")
+        a("  max_concurrent_solve: 0")
         if hpc == "MSU":
             # Per-sub-job env: the parent job's conda env does not propagate to
             # the DUMP/solve sub-jobs on MSU compute nodes, so put the env's bin
@@ -684,6 +716,12 @@ def main():
 
     hpc = ask_choice("2) HPC type?", ["CCF", "MSU"])
 
+    # Hartree-Fock acceleration.  Independent yes/no answers: "yes" to both
+    # runs the initial SCF on GPU (gpu4pyscf) AND density-fits it; the
+    # density-fitted mean field then propagates into Vayesta's MP2 bath.
+    hf_gpu = ask_yesno("3) Use GPU-accelerated HF?")
+    hf_density_fit = ask_yesno("4) Use density fitting?")
+
     if circuits:
         # Quantum-circuit size analysis: fragmented EWF, circuits built for the
         # SQD fragments.  No optimizer, no external-eigensolver / CPU-GPU / SBD
@@ -691,9 +729,9 @@ def main():
         # circuits are built for ALL fragments or just those above norb_threshold.
         run_mode = "ewf"
         optimizer = "geometric"        # emitted but unused (geomopt disabled)
-        geometry = ask_text("3) Geometry file name?", "geometry.txt")
+        geometry = ask_text("5) Geometry file name?", "geometry.txt")
         multi = ask_yesno(
-            "4) Utilize the per-fragment multi-solver?  (yes -> build circuits "
+            "6) Utilize the per-fragment multi-solver?  (yes -> build circuits "
             "only for fragments with norb >= norb_threshold; no -> build "
             "circuits for all fragments)")
         external = "SQD"               # circuits ARE the LUCJ ansatz for SQD
@@ -701,24 +739,31 @@ def main():
         gpu_type = None
         advanced_sbd = False
     else:
-        optimizer_label = ask_choice(
-            "3) Geometry optimizer?", ["Sella", "GeomeTRIC", "Berny"])
-        optimizer = OPTIMIZER_TOKENS[optimizer_label]  # config token
+        # The geometry optimizer only matters for run_task 'geomopt'; the
+        # gradient / energy tasks do a single point and never optimize, so we
+        # skip the question and leave the (unused) default -- build_config emits
+        # only 'geomopt: enabled: false' for them.
+        if run_task == "geomopt":
+            optimizer_label = ask_choice(
+                "5) Geometry optimizer?", ["Sella", "GeomeTRIC", "Berny"])
+            optimizer = OPTIMIZER_TOKENS[optimizer_label]  # config token
+        else:
+            optimizer = "sella"
 
         run_mode = ask_choice(
-            "4) Fragmentation type?",
+            "6) Fragmentation type?",
             ["EWF", "unfragmented_EWF_limit", "true_unfragmented"])
         run_mode = "ewf" if run_mode == "EWF" else run_mode  # config token
 
-        geometry = ask_text("5) Geometry file name?", "geometry.txt")
+        geometry = ask_text("7) Geometry file name?", "geometry.txt")
 
         multi = False
         if run_mode == "ewf":
-            multi = ask_yesno("6) Utilize the per-fragment multi-solver?")
+            multi = ask_yesno("8) Utilize the per-fragment multi-solver?")
 
         # 3-way external-eigensolver choice (SCI-SBD and SQD share the SBD binary).
         external_label = ask_choice(
-            "7) External eigensolver?", ["none", "SCI-SBD", "SQD"])
+            "9) External eigensolver?", ["none", "SCI-SBD", "SQD"])
         if external_label == "SCI-SBD":
             external = "SCI_SBD"
         elif external_label == "SQD":
@@ -731,25 +776,26 @@ def main():
         advanced_sbd = False
         if external in ("SCI_SBD", "SQD"):
             proc = ask_choice(
-                f"8) GPU or CPU-only {external_label} calculation?",
+                f"10) GPU or CPU-only {external_label} calculation?",
                 ["GPU", "CPU"])
             if hpc == "MSU" and proc == "GPU":
                 # MSU GPU model sets the default cpus_per_gpu + SBD-job mem
                 # (a100 -> 16 / 350G, v100 -> 8 / 170G).
-                gpu_type = ask_choice("9) MSU GPU type?", ["a100", "v100"])
+                gpu_type = ask_choice("11) MSU GPU type?", ["a100", "v100"])
             # Master switch for the experimental SBD RAM/VRAM guardrails.  "no"
             # keeps the stabler pre-guardrail defaults (commit 0000c598) that
             # work well for routine / smaller calculations; "yes" turns on the
             # tuned sbd_block, GPU det-cache VRAM caps, and the wavefunction-
             # partition / auto comm-size split that let large subspaces avoid OOM.
             advanced_sbd = ask_yesno(
-                '10) Use the advanced SBD memory management options?  [WARNING: '
+                '12) Use the advanced SBD memory management options?  [WARNING: '
                 'these are experimental options.  Answer "no" for more routine '
                 'runs.]')
 
     text = build_config(hpc, run_mode, multi, external, proc, geometry,
                         gpu_type=gpu_type, optimizer=optimizer,
-                        advanced_sbd=advanced_sbd, run_task=run_task)
+                        advanced_sbd=advanced_sbd, run_task=run_task,
+                        hf_gpu=hf_gpu, hf_density_fit=hf_density_fit)
 
     # Optional sanity check: the produced text must be valid YAML.
     try:

@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import shlex
 import shutil
 import subprocess
@@ -156,6 +157,19 @@ def _build_sbd_command(cfg: dict, fcidump_path: str, adet_path: str,
       so SBD diagonalises exactly the space the SQD batch selected without
       growing it on its own.
     """
+    # The generated Slurm script ``cd``s into the (absolute) batch workdir
+    # before launching this command, so every INPUT file passed to the SBD
+    # binary must be an ABSOLUTE path -- a relative ``workdir/AlphaDets.txt``
+    # would be resolved against the already-cd'd workdir and double its prefix,
+    # so SBD would fail to open its det/FCIDUMP files.  (The matrixformwf.txt
+    # OUTPUT stays a bare basename on purpose: it is written into the cwd, i.e.
+    # the workdir.)  abspath() here runs in the parent, whose cwd is the run
+    # directory where these files were actually written.
+    fcidump_path = os.path.abspath(fcidump_path)
+    adet_path = os.path.abspath(adet_path)
+    if bdet_path:
+        bdet_path = os.path.abspath(bdet_path)
+
     layout = sqd_parallel_layout(cfg)
     proc_type = cfg["proc_type"]
     exe = cfg["sbd_exe_path_gpu"] if proc_type == 1 else cfg["sbd_exe_path_cpu"]
@@ -262,6 +276,19 @@ def _write_sqd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
     diagnostic tool (:mod:`slurm_jobs_check`) can distinguish SQD batches
     from ext-SQD batches.
     """
+    # Every file path written into the generated script MUST be absolute.  The
+    # child SBD job's working directory is the sbatch submission dir, which is
+    # NOT guaranteed to be the directory that holds the (relative) workdir -- so
+    # a relative status/log/workdir path resolves against the wrong cwd and the
+    # job fails with "No such file or directory" (the status write happens even
+    # before the in-script `cd`, and the log redirect happens after it, so a
+    # relative workdir prefix gets doubled).  abspath() is evaluated here in the
+    # PARENT process, whose cwd IS the run directory (it just wrote the det
+    # inputs there), so it yields the correct absolute locations.
+    workdir = os.path.abspath(workdir)
+    status_path = os.path.abspath(status_path)
+    log_path = os.path.abspath(log_path)
+
     slurm = cfg.get("slurm", {}) or {}
     sbatch = dict(slurm.get("sbatch", {}) or {})
 
@@ -369,18 +396,52 @@ def _write_sqd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
     return sh_path
 
 
+# sbatch hardening: an SQD SOLVE job submits its own SBD sub-jobs, so when many
+# SOLVE jobs run at once the aggregate submission rate can overload slurmctld
+# and make sbatch time out or transiently fail.  Each attempt has a wall-clock
+# timeout; TRANSIENT failures are retried with exponential backoff + jitter.  A
+# non-transient failure (unknown flag, missing partition) is surfaced at once.
+_SBATCH_TIMEOUT_S = 120
+_SBATCH_MAX_RETRIES = 5
+_TRANSIENT_SBATCH_MARKERS = (
+    "socket timed out", "unable to contact slurm controller", "try again",
+    "resource temporarily unavailable", "temporarily unavailable",
+    "communication connection failure", "connection refused", "timed out",
+)
+
+
 def _submit_slurm_job(sh_path: str) -> str:
-    """``sbatch --parsable`` wrapper that surfaces sbatch stderr on failure."""
-    proc = subprocess.run(["sbatch", "--parsable", sh_path],
-                          capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
+    """``sbatch --parsable`` wrapper that surfaces sbatch stderr on failure and
+    retries transient controller-overload failures / timeouts."""
+    delay = 5.0
+    for attempt in range(_SBATCH_MAX_RETRIES + 1):
+        try:
+            proc = subprocess.run(["sbatch", "--parsable", sh_path],
+                                  capture_output=True, text=True, check=False,
+                                  timeout=_SBATCH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            if attempt < _SBATCH_MAX_RETRIES:
+                time.sleep(delay + random.uniform(0.0, delay))
+                delay = min(delay * 2, 60.0)
+                continue
+            raise RuntimeError(
+                f"sbatch timed out (> {_SBATCH_TIMEOUT_S}s) on all "
+                f"{_SBATCH_MAX_RETRIES + 1} attempts for {sh_path}; the Slurm "
+                f"controller may be overloaded.")
+        if proc.returncode == 0:
+            return proc.stdout.strip().split(";")[0]
+        stderr = proc.stderr or ""
+        transient = any(m in stderr.lower() for m in _TRANSIENT_SBATCH_MARKERS)
+        if transient and attempt < _SBATCH_MAX_RETRIES:
+            time.sleep(delay + random.uniform(0.0, delay))
+            delay = min(delay * 2, 60.0)
+            continue
         raise RuntimeError(
             f"sbatch failed (exit {proc.returncode}) for {sh_path}\n"
             f"--- sbatch stdout ---\n{proc.stdout}\n"
             f"--- sbatch stderr ---\n{proc.stderr}\n"
             f"Hint: check #SBATCH directives generated from the 'sqd.slurm' "
             f"block of config.yaml (unknown flags, missing partition).")
-    return proc.stdout.strip().split(";")[0]
 
 
 def _read_status(path):
