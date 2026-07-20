@@ -148,6 +148,7 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
         max_alpha_beta_connections=int(
             sqd_cfg.get("maximum_alpha_beta_connections", 4)),
         verbose=verbose,
+        circuit_out_dir=workdir,
     )
     # Match the existing convention (`python str(dict)` form) so the
     # post-processing's ``count_dict.txt`` parser keeps working.
@@ -181,7 +182,8 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
                         default_shots: int, n_reps: int,
                         thresh_two_q: float = 1.0, thresh_meas: float = 0.10,
                         verbose=None, submit: bool = True,
-                        max_alpha_beta_connections: int = 4):
+                        max_alpha_beta_connections: int = 4,
+                        circuit_out_dir: Optional[str] = None):
     """Construct the LUCJ ansatz from the FCIDUMP and sample on an IBM backend.
 
     Lifted from the original ``produce_quantum_sample.py``.  ffsim,
@@ -208,6 +210,13 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     coupling qubits (fewer entangling resources / shallower circuit).  ``0``
     removes them entirely; a value larger than the available orbitals is a
     no-op (config ``sqd.maximum_alpha_beta_connections``, default 4).
+
+    ``circuit_out_dir``, when given, is a directory into which the two circuits
+    are written as QPY (best-effort, in both the submit and no-submit paths, so
+    every SQD run keeps them next to ``circuit_metadata.json``):
+    ``logical_circuit.qpy`` (the logical LUCJ ansatz) and ``isa_circuit.qpy``
+    (the transpiled, backend-native circuit that actually runs).  Their
+    basenames are recorded in the returned metadata.
     """
     # Local imports keep optional dependencies optional.
     import numpy as np
@@ -222,7 +231,7 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
         ) from exc
 
     try:
-        from qiskit import QuantumCircuit, QuantumRegister
+        from qiskit import QuantumCircuit, QuantumRegister, qpy
         from qiskit.transpiler import PassManager
         from qiskit.transpiler.passes import RemoveIdentityEquivalent
         from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
@@ -351,6 +360,30 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
         circuit_metadata = {"backend": backend_name,
                             "metrics_error": repr(exc)}
 
+    # Persist the circuits themselves as QPY (best-effort), next to the metadata:
+    # the logical LUCJ ansatz and the transpiled ISA circuit that actually runs
+    # on the backend.  Done for BOTH the submit path (a real sample) and the
+    # no-submit path (the run_task: circuits analysis), so every SQD fragment
+    # keeps its circuit alongside circuit_metadata.json.  A QPY failure must
+    # never sink an otherwise-valid sampling job.
+    if circuit_out_dir:
+        try:
+            os.makedirs(circuit_out_dir, exist_ok=True)
+            logical_qpy = os.path.join(circuit_out_dir, "logical_circuit.qpy")
+            isa_qpy = os.path.join(circuit_out_dir, "isa_circuit.qpy")
+            with open(logical_qpy, "wb") as fd:
+                qpy.dump(circuit, fd)
+            with open(isa_qpy, "wb") as fd:
+                qpy.dump(isa_circuit, fd)
+            circuit_metadata["logical_circuit_qpy"] = os.path.basename(logical_qpy)
+            circuit_metadata["isa_circuit_qpy"] = os.path.basename(isa_qpy)
+            if verbose:
+                verbose.info("  SQD: saved circuit QPY -> %s , %s",
+                             logical_qpy, isa_qpy)
+        except Exception as exc:  # best-effort; QPY is a convenience artifact
+            if verbose:
+                verbose.info("  SQD: could not save circuit QPY: %s", exc)
+
     if not submit:
         # Circuit-size analysis only: no job submitted, no counts.
         circuit_metadata["submitted"] = False
@@ -397,7 +430,9 @@ def analyze_quantum_circuit(cluster_h5_path: str, workdir: str,
     submitting an IBM Runtime job.  Backs the ``run_task: circuits`` analysis:
     it records the same fields as a real sample's sidecar (qubit counts, ISA
     gate histogram, circuit / two-qubit depth) so a later script can collect
-    circuit depth, qubit count, and CNOT/CZ counts per fragment.
+    circuit depth, qubit count, and CNOT/CZ counts per fragment.  The logical
+    LUCJ ansatz and the transpiled ISA circuit are also saved next to the
+    metadata as ``logical_circuit.qpy`` / ``isa_circuit.qpy``.
 
     Returns the metadata JSON path.
     """
@@ -417,6 +452,7 @@ def analyze_quantum_circuit(cluster_h5_path: str, workdir: str,
         max_alpha_beta_connections=int(
             sqd_cfg.get("maximum_alpha_beta_connections", 4)),
         verbose=verbose, submit=False,
+        circuit_out_dir=workdir,
     )
     meta_path = os.path.join(workdir, "circuit_metadata.json")
     circuit_meta = dict(circuit_meta or {})
