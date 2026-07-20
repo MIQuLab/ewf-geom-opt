@@ -761,12 +761,123 @@ def _hf_address(norb: int, nelec_spin: int) -> Optional[int]:
     return int(bitstring, 2)
 
 
-def _iter_all_batches_done(iter_dir, n_batches):
-    """True iff every ``batch_0 .. batch_(n_batches-1)`` under ``iter_dir``
-    has a DONE ``sbd_job.status`` file *and* a ``matrixformwf.txt`` output
-    (so a re-parse call is guaranteed to succeed).  Used by the workflow-
-    level restart to identify fully-complete SQD iterations from disk.
+# ---------------------------------------------------------------------------
+# Scratch pruning (disk-storage optimisation) + durable per-iteration summary
+# ---------------------------------------------------------------------------
+_ITER_SUMMARY = "iteration_summary.json"
+
+# Per-batch scratch our code never reads back once a batch is DONE -- safe to
+# delete under any pruning level (Tier 1).  slurm.out / slurm.err /
+# sbd_solver_logfile.log / sbd_job.status are intentionally NEVER pruned.
+_PRUNE_SAFE_FILES = (
+    "AlphaDets.txt", "BetaDets.txt",   # our regenerated det inputs
+    "sbd_job.sh",                      # regenerated on resubmit
+    "davidson_energy.txt", "occ_a.txt", "occ_b.txt",  # SBD outputs we never read
+    "carryover.bin",                   # SBD carryover (unused; we carry over in Python)
+)
+
+
+def _try_remove(path):
+    try:
+        os.remove(path)
+        return 1
+    except OSError:
+        return 0
+
+
+def _iteration_summary_path(iter_dir):
+    return os.path.join(iter_dir, _ITER_SUMMARY)
+
+
+def _read_iteration_summary(iter_dir):
+    """Parsed ``iteration_summary.json`` for ``iter_dir``, or ``None``."""
+    p = _iteration_summary_path(iter_dir)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def _write_iteration_summary(iter_dir, it, batch_outputs, best_in_iter,
+                             converged):
+    """Persist a small, durable per-iteration record: every batch's energy and
+    subspace dimension, which batch was lowest, and that batch's orbital
+    occupancies.
+
+    This is the restart-proof, analysis-friendly replacement for the
+    lowest-energy-batch info that otherwise lived only in the run log (which a
+    restart overwrites).  It also lets the restart re-parse rebuild loop state
+    after Tier-2 pruning has removed the non-best batches' wavefunctions.
     """
+    def _dim(o):
+        if "ci_strs_a_unique" in o:
+            return int(o["ci_strs_a_unique"].size * o["ci_strs_b_unique"].size)
+        return o.get("dim")
+
+    occ = best_in_iter.get("occupancies")
+    summary = {
+        "iteration": int(it),
+        "n_batches": len(batch_outputs),
+        "best_batch": int(best_in_iter["batch_idx"]),
+        "best_energy": float(best_in_iter["energy"]),
+        "energies": [float(o["energy"]) for o in batch_outputs],
+        "dims": [_dim(o) for o in batch_outputs],
+        "best_occupancies": (
+            [np.ravel(occ[0]).tolist(), np.ravel(occ[1]).tolist()]
+            if occ is not None else None),
+        "converged": bool(converged),
+    }
+    with open(_iteration_summary_path(iter_dir), "w") as fh:
+        json.dump(summary, fh, indent=2)
+
+
+def _prune_iteration_scratch(iter_dir, n_batches, best_batch_idx, level,
+                             verbose=None):
+    """Delete disk-heavy per-batch scratch once the iteration's durable summary
+    is written.
+
+    ``level``:
+      * ``'safe'``       -- Tier 1: delete regenerated inputs + SBD dead-weight
+                            outputs our code never reads; keep every
+                            ``matrixformwf.txt`` (restart / analysis untouched).
+      * ``'aggressive'`` -- Tier 1 PLUS the non-best batches' ``matrixformwf.txt``
+                            (the loop only ever needs the best batch's full
+                            wavefunction; the others' energy/dim survive in
+                            ``iteration_summary.json``).
+
+    ``slurm.out`` / ``slurm.err`` / ``sbd_solver_logfile.log`` / ``sbd_job.status``
+    are always kept.
+    """
+    if level not in ("safe", "aggressive"):
+        return
+    removed = 0
+    for j in range(n_batches):
+        w = os.path.join(iter_dir, f"batch_{j:03d}")
+        if not os.path.isdir(w):
+            continue
+        for fn in _PRUNE_SAFE_FILES:
+            removed += _try_remove(os.path.join(w, fn))
+        if level == "aggressive" and j != best_batch_idx:
+            removed += _try_remove(os.path.join(w, "matrixformwf.txt"))
+    if verbose and removed:
+        verbose.info("  SQD: pruned %d scratch file(s) in %s (prune_scratch=%s)",
+                     removed, os.path.basename(iter_dir), level)
+
+
+def _iter_all_batches_done(iter_dir, n_batches):
+    """True iff the iteration is complete on disk.
+
+    A durable ``iteration_summary.json`` (written only after every batch parsed
+    successfully) is authoritative and also survives Tier-2 pruning, which
+    removes the non-best ``matrixformwf.txt`` files.  Absent a summary (legacy /
+    unpruned runs) fall back to the original check: every batch has a DONE
+    ``sbd_job.status`` and a ``matrixformwf.txt`` output.
+    """
+    if _read_iteration_summary(iter_dir) is not None:
+        return True
     for j in range(n_batches):
         w = os.path.join(iter_dir, f"batch_{j:03d}")
         status_file = os.path.join(w, "sbd_job.status")
@@ -801,8 +912,33 @@ def _reparse_iteration_batches(sqd_workdir, it, n_batches, norb, nelec):
     the ``batch_outputs`` list in the shape produced by the fresh
     iteration loop.  Used by the restart path to reconstruct loop state
     without resubmitting the SBD jobs.
+
+    When a Tier-2 ``iteration_summary.json`` is present the non-best batches'
+    wavefunctions have been pruned, so their energy (and dimension) are taken
+    from the summary and only the best batch's full ``matrixformwf.txt`` is
+    re-parsed -- which is all the loop ever consumes from a non-best batch (only
+    the minimum-energy batch feeds the carryover / occupancies / global best).
     """
     iter_dir = os.path.join(sqd_workdir, f"iter_{it:03d}")
+    summary = _read_iteration_summary(iter_dir)
+    if summary is not None and summary.get("energies") is not None:
+        best_j = int(summary["best_batch"])
+        energies = summary["energies"]
+        dims = summary.get("dims") or [None] * n_batches
+        batch_outputs = []
+        for j in range(n_batches):
+            if j == best_j:
+                out = _parse_sbd_batch_outputs(
+                    os.path.join(iter_dir, f"batch_{j:03d}"),
+                    norb, nelec, with_rdm=False)
+            else:
+                out = {"energy": float(energies[j]),
+                       "dim": dims[j] if j < len(dims) else None,
+                       "pruned": True}
+            out["batch_idx"] = j
+            batch_outputs.append(out)
+        return batch_outputs
+    # Legacy / unpruned iteration: re-read every batch fully.
     batch_outputs = []
     for j in range(n_batches):
         w = os.path.join(iter_dir, f"batch_{j:03d}")
@@ -835,10 +971,14 @@ def _apply_iteration_outputs(batch_outputs, it, sqd_workdir,
     best_in_iter = min(batch_outputs, key=lambda o: o["energy"])
     if verbose:
         for out in batch_outputs:
-            verbose.info("  SQD iter %d batch %d: E=%.10f Ha, dim=%d",
-                         it, out["batch_idx"], out["energy"],
-                         out["ci_strs_a_unique"].size *
-                         out["ci_strs_b_unique"].size)
+            # A restart-reparsed non-best batch (Tier-2 pruned) carries only its
+            # energy + dim from the summary, not the full CI strings.
+            if "ci_strs_a_unique" in out:
+                dim = out["ci_strs_a_unique"].size * out["ci_strs_b_unique"].size
+            else:
+                dim = out.get("dim")
+            verbose.info("  SQD iter %d batch %d: E=%.10f Ha, dim=%s",
+                         it, out["batch_idx"], out["energy"], dim)
 
     if best_energy is None or best_in_iter["energy"] < best_energy:
         best_energy = best_in_iter["energy"]
@@ -957,6 +1097,15 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
     n_batches = int(sqd_cfg.get("n_batches", 2))
     samples_per_batch = int(sqd_cfg.get("samples_per_batch", 200))
     energy_tol = float(sqd_cfg.get("energy_tol", 1.0e-8))
+    # Scratch-pruning level (disk-storage optimisation).  'none' keeps every
+    # file (historical default); 'safe' deletes regenerated inputs + SBD
+    # dead-weight our code never reads; 'aggressive' additionally keeps only the
+    # best batch's wavefunction per iteration.  The durable iteration_summary.json
+    # is written at EVERY level (it is the restart-proof lowest-energy-batch
+    # record) so restart + per-iteration analysis survive pruning.
+    prune_level = str(sqd_cfg.get("prune_scratch", "none")).lower()
+    if prune_level not in ("none", "safe", "aggressive"):
+        prune_level = "none"
     occupancies_tol = float(sqd_cfg.get("occupancies_tol", 1.0e-5))
     carryover_threshold = float(sqd_cfg.get("carryover_threshold", 1.0e-4))
     symmetrize_spin = bool(sqd_cfg.get("symmetrize_spin", True))
@@ -1122,6 +1271,16 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
             "best_energy": state["best_in_iter"]["energy"],
             "energies": [o["energy"] for o in batch_outputs],
         })
+
+        # Durable per-iteration record (restart-proof lowest-energy-batch info),
+        # then optional scratch pruning.  The summary is ALWAYS written first so
+        # the record exists on disk before any file is deleted; pruning only
+        # touches files the summary + best-batch wavefunction make redundant.
+        _write_iteration_summary(iter_dir, it, batch_outputs,
+                                 state["best_in_iter"], converged)
+        _prune_iteration_scratch(iter_dir, n_batches,
+                                 state["best_in_iter"]["batch_idx"],
+                                 prune_level, verbose=verbose)
 
     if best_outputs is None:
         raise RuntimeError("SQD produced no batch outputs (iterations <= 0?)")
