@@ -161,8 +161,7 @@ $$
 
 from a fixed, small number of adjoint linear solves — independent of 3N. Here `Λ_x` are the per-cluster amplitude multipliers and `H_x` is the effective cluster Hamiltonian, whose explicit `x`-derivative is the only nuclear derivative on the right-hand side. This is what `embedding_lagrangian.py` deploys: `rdm_t_lambda` builds the amplitude (Λ-relaxed) response into the assembled density by solving the Λ equations on a global effective wavefunction (see its Stage-1 docstring).
 
-**Why it helps.** Because projection breaks cluster-level Hellmann–Feynman, ignoring the density response leaves a genuine piece of `dE/dx` uncomputed, which surfaces as spurious energy/gradient fluctuations along an optimization. Including the amplitude Λ-response (`rdm_t_lambda`) restores that piece — the first and largest correction to the fragmented gradient — sharpening the gradient and reducing those fluctuations relative to the plain `rdm_t` (`l = t`) density. The remaining geometry couplings (bath, projector, HF orbitals) stay approximated by the frozen-bath treatment, so a small gradient floor persists (≈1e-3 Eh/Bohr on the propylene test); tightening it further is the natural next stage of the methodology.
-
+**Why it helps.** Because projection breaks cluster-level Hellmann–Feynman, ignoring the density response leaves a genuine piece of `dE/dx` uncomputed, which surfaces as spurious energy/gradient fluctuations along an optimization. Including the amplitude Λ-response (`rdm_t_lambda`) restores that piece — the first and largest correction to the fragmented gradient — sharpening the gradient and reducing those fluctuations relative to the plain `rdm_t` (`l = t`) density.
 ---
 
 ## Density-assembly routes
