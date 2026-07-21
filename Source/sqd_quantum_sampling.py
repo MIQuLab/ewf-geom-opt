@@ -1,8 +1,6 @@
 """Qiskit-driven quantum sampling for the SQD solver.
 
-Adapted from
-``Code_for_SQD_incorporation/Quantum_Sampling/produce_quantum_sample.py``
-and refactored into a callable function so the SQD solver
+Callable function so the SQD solver
 (:mod:`sqd_solver`) can request a quantum sample for one EWF cluster as
 part of its workflow.
 

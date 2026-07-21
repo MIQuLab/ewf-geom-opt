@@ -1,7 +1,6 @@
 """Zigzag physical layout for the LUCJ ansatz on IBM heavy-hex devices.
 
-Imported from ``Code_for_SQD_incorporation/Quantum_Sampling/zigzag_layout.py``
-and bundled here so the SQD solver (:mod:`sqd_solver`) can drive the
+Bundled here so the SQD solver (:mod:`sqd_solver`) can drive the
 quantum-sampling step via :mod:`sqd_quantum_sampling` without an external
 package.  The zigzag pattern uses two parallel alpha/beta linear chains and
 connecting qubits between them; the implementation below scores all

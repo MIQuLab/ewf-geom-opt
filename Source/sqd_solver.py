@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """SQD (Sample-based Quantum Diagonalization) solver for the EWF workflow.
 
-This module integrates the SQD post-processing pipeline from
-``Code_for_SQD_incorporation/SQD_Post_Process`` into the geometry-
+This module integrates the SQD post-processing pipeline into the geometry-
 optimization driver.  Each cluster solved with ``SQD`` goes through three
 stages, each laid out so the file-handling and Slurm orchestration match
 the ``SCI_SBD`` solver (:mod:`external_sci`) for consistency:
@@ -12,8 +11,7 @@ the ``SCI_SBD`` solver (:mod:`external_sci`) for consistency:
        pre-collected ``count_dict.txt`` or runs the LUCJ ansatz on an IBM
        Runtime backend to sample the cluster wavefunction.
 
-    2) **SQD configuration recovery**.  Reproduces
-       ``Code_for_SQD_incorporation/SQD_Post_Process/run-sqd.py``: a
+    2) **SQD configuration recovery**.
        ``max_iterations``-long loop that, on each iteration, subsamples
        ``num_batches`` of CI strings from the count dictionary and submits
        **one Slurm job per batch** to diagonalise the projected Hamiltonian
@@ -1335,8 +1333,7 @@ def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
     except ImportError as exc:
         raise ImportError(
             "ext-SQD requires the `PyCI` package (single-excitation expansion "
-            "of the dominant configurations).  Install / build it from "
-            "Code_for_SQD_incorporation/PyCI."
+            "of the dominant configurations)."
         ) from exc
 
     dprime_cutoff = float(sqd_cfg.get("ext_sqd_dprime_cutoff", 1.0e-5))

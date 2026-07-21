@@ -978,7 +978,7 @@ def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
     Sample-based Diagonalization driven through the SBD binary.
 
     Uses :mod:`sqd_solver`, which orchestrates the three stages of the
-    SQD workflow (mirroring ``Code_for_SQD_incorporation/SQD_Post_Process``):
+    SQD workflow:
 
     1. **Quantum sampling**.  Either copies a pre-collected ``count_dict.txt``
        (``sqd.count_dict_path`` / ``sqd.per_fragment_samples``) or runs the
