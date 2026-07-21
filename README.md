@@ -146,7 +146,7 @@ $$
 \frac{\partial E_{\mathrm{global}}}{\partial T_x} \neq 0 \qquad \text{(for at least one cluster } x\text{)},
 $$
 
-so the density-response term contributes a real piece of `dE/dx` that must not be dropped.
+so the density-response term contributes a real piece of `dE/dx` inclusion of which helps the stability of the gradient.
 
 **The Λ (Z-vector) response — what `rdm_t_lambda` adds.** Computing the amplitude response head-on would mean re-solving the cluster amplitude equations for each of the 3N nuclear coordinates. The Z-vector / Lagrangian method avoids that: it augments the energy with the amplitude equations times Lagrange multipliers (the Λ / Z-vectors), fixes the multipliers by making the augmented functional stationary in the amplitudes, and then evaluates the response as an explicit integral derivative contracted with those multipliers,
 
@@ -156,7 +156,7 @@ $$
 
 from a fixed, small number of adjoint linear solves — independent of 3N. Here `Λ_x` are the per-cluster amplitude multipliers and `H_x` is the effective cluster Hamiltonian, whose explicit `x`-derivative is the only nuclear derivative on the right-hand side. This is what `embedding_lagrangian.py` deploys: `rdm_t_lambda` builds the amplitude (Λ-relaxed) response into the assembled density by solving the Λ equations on a global effective wavefunction (see its Stage-1 docstring).
 
-**Why it helps.** Because projection breaks cluster-level Hellmann–Feynman, ignoring the density response leaves a genuine piece of `dE/dx` uncomputed, which surfaces as spurious energy/gradient fluctuations along an optimization. Including the amplitude Λ-response (`rdm_t_lambda`) restores that piece — the first and largest correction to the fragmented gradient — sharpening the gradient and reducing those fluctuations relative to the plain `rdm_t` (`l = t`) density.
+**Why it helps.** Because projection breaks cluster-level Hellmann–Feynman, ignoring the density response leaves out a piece of `dE/dx`, which surfaces contributes to energy and gradient fluctuations along an optimization. Including the amplitude Λ-response (`rdm_t_lambda`) incorporates this piece sharpening the gradient and reducing those fluctuations relative to the plain `rdm_t` (`l = t`) density.
 
 ---
 
@@ -205,7 +205,7 @@ is the new capability this project adds on top of Vayesta's assembly machinery. 
 
 ### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 
-`embedding_lagrangian.py` upgrades the second baked-in approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the Λ equations** for it:
+`embedding_lagrangian.py` upgrades the second approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the Λ equations** for it:
 
 | Function | Role |
 |---|---|
@@ -227,7 +227,7 @@ $$
 
 where $\Delta\gamma_1^{ov}$ is the occupied–virtual block of the correlated one-particle density and $\lambda_2^{oovv}$ is the occupied-occupied/virtual-virtual block of the two-particle cumulant. Because these RDMs carry the imprint of **every excitation class the cluster solver includes** — the higher determinants that `FCI` / `SCI` / `SQD` retain, not only singles and doubles — the effective doubles that enter the global density are dressed by that higher-order correlation. The assembled `rdm_t` density is therefore a closer approximation to the correlated (full-CI) density of the unfragmented system, recovering more of the correlation that a per-fragment treatment can otherwise dilute.
 
-On the assembly side the route is deliberately coupled-cluster-*structured*: the effective amplitudes are combined through the well-established CCSD RDM machinery, which yields a smooth, differentiable global density and — in `rdm_t_lambda` — a proper $\Lambda$ (Z-vector) amplitude-response density for consistent analytic gradients. The advantage is greatest where the cluster correlation is genuinely multi-determinantal (stretched bonds, near-degeneracies) and grows as the clusters enlarge and the `SCI` / `SQD` subspace approaches the full-CI limit; for small, weakly correlated clusters near equilibrium the effective amplitudes already sit close to their coupled-cluster counterparts.
+On the assembly side the route is deliberately coupled-cluster-*structured*: the effective amplitudes are combined through the well-established CCSD RDM machinery, which yields a smooth, differentiable global density and — in `rdm_t_lambda` — a $\Lambda$ (Z-vector) amplitude-response density for consistent analytic gradients. The advantage is greatest where the cluster correlation is genuinely multi-determinantal (stretched bonds, near-degeneracies) and grows as the clusters enlarge and the `SCI` / `SQD` subspace approaches the full-CI limit; for small, weakly correlated clusters near equilibrium the effective amplitudes already sit close to their coupled-cluster counterparts.
 
 ---
 
@@ -364,7 +364,7 @@ norb <  norb_threshold   →   high_accuracy_solver   (default FCI)
 norb >= norb_threshold   →   approximate_solver     (default SCI)
 ```
 
-With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, `SCI_SBD`, or `SQD` (see below), and SCI / SCI_SBD clusters continue to use `sci_select_cutoff` (the `SQD` solver ignores it and is configured through the dedicated `sqd:` block). The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
+With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, `SCI_SBD`, or `SQD` (see below), and SCI / SCI_SBD clusters continue to use `sci_select_cutoff` (the `SQD` solver ignores it and is configured through the dedicated `sqd:` block). The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log.
 
 Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the driver then falls back to single-solver mode and applies `ewf.solver` to every fragment, exactly as before. Existing configs without a `multi_solver` block default to this behavior, so they are unaffected.
 
