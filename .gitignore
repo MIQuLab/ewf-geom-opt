@@ -55,3 +55,8 @@ Example_Output_Files/
 Utilities/*.aux
 Utilities/*.bbl
 Utilities/acs-*.bib
+
+# Folder that hosts helper scripts. 
+# These scripts are not robust enough to be utilities, but useful
+# for storage management and "housekeeping" of this repository.
+Supporting_Scripts/

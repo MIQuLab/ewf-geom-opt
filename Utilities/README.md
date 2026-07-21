@@ -12,6 +12,7 @@ lists them and points here.
 | [`quantum_sampling_effect_analysis.py`](quantum_sampling_effect_analysis.py) | Same framework, SQD counterpart: compares **EWF SQD** optimized geometries against the **EWF SCI** reference; same table + overlay figure (EWF SCI CPK, EWF SQD magenta), with an `N SQD solver` column. |
 | [`circuit_data_analysis.py`](circuit_data_analysis.py) | Collects LUCJ circuit sizes (qubits / 2-qubit depth / CNOT count) for the smallest and largest SQD-treated EWF cluster per molecule, across one or more folders of molecule subfolders; emits a LaTeX table + PDF. |
 | [`bulk_calculations_setup.py`](bulk_calculations_setup.py) | Interactive **bulk** setup: builds one ready-to-run folder (code template + geometry + `config.yaml`) per geometry in an input folder, from a single set of answers. |
+| [`hpc_settings_setup.py`](hpc_settings_setup.py) | Interactive generator for a custom **HPC-site definition** (`<name>_HPC_settings.yaml`) plus its three `submit_slurm_<name>_*.sh` scripts; the setup tools discover these to target a particular cluster. |
 
 Contents:
 
@@ -19,6 +20,7 @@ Contents:
 - [SQD circuit-size analysis](#sqd-circuit-size-analysis) — `circuit_data_analysis.py`
 - [Slurm job diagnostics](#slurm-job-diagnostics) — `slurm_jobs_check.py`
 - [Bulk calculation setup](#bulk-calculation-setup) — `bulk_calculations_setup.py`
+- [Custom HPC settings](#custom-hpc-settings) — `hpc_settings_setup.py`
 
 ---
 
@@ -323,4 +325,32 @@ cd Utilities
 python bulk_calculations_setup.py
 ```
 
-Guardrails: geometry stems must be unique (two files mapping to the same folder name is a hard error); existing run folders are skipped or replaced after a single prompt; a failed geometry is reported and its partial folder removed without aborting the rest of the batch. Each generated `config.yaml` is a template — fill in `basis`/charge/spin, Slurm resources, and any executable paths per run folder before submitting.
+Guardrails: geometry stems must be unique (two files mapping to the same folder name is a hard error); existing run folders are skipped or replaced after a single prompt; a failed geometry is reported and its partial folder removed without aborting the rest of the batch. Each generated `config.yaml` is a template — fill in `basis`/charge/spin, Slurm resources, and any executable paths per run folder before submitting. Like `calculation_setup.py`, it targets an HPC by discovering the `*_HPC_settings.yaml` files in the working directory (see below).
+
+---
+
+# Custom HPC settings
+
+[`hpc_settings_setup.py`](hpc_settings_setup.py) captures one cluster's Slurm/environment specifics in a reusable `<name>_HPC_settings.yaml` file, so the setup tools no longer hardcode particular sites. Run it **once per cluster**; both `Source/calculation_setup.py` and `bulk_calculations_setup.py` then discover the `*_HPC_settings.yaml` files in the working directory and ask which one to target (falling back to the shipped `CCF`/`MSU` examples in `Source/` when the working directory has none; if none are found anywhere they ask you to generate one first).
+
+The interactive questions cover:
+
+1. **SBD executable(s) and MPI launcher(s)** — the CPU-build SBD binary and the `mpirun` launchers (CPU and GPU).
+2. **`--account`** — whether the scheduler requires it, and the account name.
+3. **`--time`** — whether time limits are required, and one per job type: main EWF driver, fragment DUMP, FCI/plain-SCI solves, parent SCI_SBD/SQD jobs, child SBD sub-jobs.
+4. **`--partition`** — whether partitions are used, and one for each of: fragment DUMP, FCI solves, parent SCI_SBD/SQD **and** CPU-based child SBD jobs, and GPU work (GPU HF and GPU SBD).
+5. **GPU model(s)** — one or more (e.g. `a100`, `v100`), each with its own SBD GPU build, `--gpus-per-node` type qualifier, and `cpus_per_gpu`. When a site defines more than one, `calculation_setup.py` asks which model to use for a GPU run.
+6. **CPU and GPU environment** — the `module load …` and `export PATH/LD_LIBRARY_PATH …` lines loaded inside each sub-job.
+
+Alongside the settings file it writes three submission scripts for the main driver job:
+
+- `submit_slurm_<name>_cpu.sh` — everything on CPU.
+- `submit_slurm_<name>_gpu.sh` — GPU SBD sub-jobs, CPU HF (the main job stays on the CPU partition but loads the GPU environment).
+- `submit_slurm_<name>_gpu_hf.sh` — GPU SBD **and** GPU-accelerated HF (the main job is placed on the GPU partition with `--gpus-per-node`).
+
+```bash
+cd Utilities
+python hpc_settings_setup.py
+```
+
+The schema and render helpers live in [`Source/hpc_settings.py`](../Source/hpc_settings.py); the generated YAML is human-editable, so you can also copy an example and edit it by hand.

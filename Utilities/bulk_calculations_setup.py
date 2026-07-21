@@ -36,9 +36,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _SOURCE = os.path.join(os.path.dirname(_HERE), "Source")
 sys.path.insert(0, _SOURCE)
 try:
+    import hpc_settings  # noqa: E402
     from calculation_setup import (  # noqa: E402
         ask_choice, ask_yesno, build_config, OPTIMIZER_TOKENS,
-        MSU_ACCOUNT_DEFAULT, MSU_TIME_DEFAULT,
+        select_hpc_settings, select_gpu_type,
     )
 except ImportError as exc:  # pragma: no cover - environment/layout guard
     sys.exit(
@@ -105,7 +106,7 @@ def collect_setup_answers():
     }[runtype_label]
     circuits = (run_task == "circuits")
 
-    hpc = ask_choice("5) HPC type?", ["CCF", "MSU"])
+    H = select_hpc_settings("5) Which HPC settings to use?")
 
     if circuits:
         # Quantum-circuit size analysis: fragmented EWF, circuits for the SQD
@@ -150,14 +151,14 @@ def collect_setup_answers():
             proc = ask_choice(
                 f"10) GPU or CPU-only {external_label} calculation?",
                 ["GPU", "CPU"])
-            if hpc == "MSU" and proc == "GPU":
-                gpu_type = ask_choice("11) MSU GPU type?", ["a100", "v100"])
+            if proc == "GPU":
+                gpu_type = select_gpu_type(H, "11) GPU model?")
             advanced_sbd = ask_yesno(
                 '12) Use the advanced SBD memory management options?  [WARNING: '
                 'these are experimental options.  Answer "no" for more routine '
                 'runs.]')
 
-    return dict(hpc=hpc, run_mode=run_mode, multi=multi, external=external,
+    return dict(hpc=H, run_mode=run_mode, multi=multi, external=external,
                 proc=proc, gpu_type=gpu_type, optimizer=optimizer,
                 advanced_sbd=advanced_sbd, run_task=run_task)
 
@@ -177,10 +178,12 @@ def _print_next_steps(ans):
     print("\nEach generated config.yaml is a TEMPLATE -- before submitting, in "
           "EVERY run folder update:")
     print("   * calculation.basis (and charge/spin)")
-    if ans["hpc"] == "MSU":
-        print(f"   * the Slurm 'account' (default {MSU_ACCOUNT_DEFAULT}) and "
-              f"'time' (default {MSU_TIME_DEFAULT}) in every sbatch block")
-    else:
+    H = ans["hpc"]
+    if hpc_settings.uses_account(H):
+        print("   * the Slurm 'account'"
+              + (" and 'time'" if hpc_settings.uses_time(H) else "")
+              + " in every sbatch block (from the HPC settings)")
+    elif hpc_settings.uses_partition(H):
         print("   * the Slurm 'partition' in every sbatch block")
     if ans["run_mode"] == "ewf":
         print("   * the per-solver / dump Slurm resources (ntasks, mem)")
