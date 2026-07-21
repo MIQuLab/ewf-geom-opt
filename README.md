@@ -137,36 +137,31 @@ $$
 \left\langle \frac{\partial E}{\partial \gamma},\ \frac{d\gamma}{dx}\right\rangle = \sum_{pq} F_{pq}\ \frac{d(\gamma_1)_{pq}}{dx} + \frac{1}{2}\sum_{pqrs}(pq|rs)\ \frac{d(\lambda_2)_{pqrs}}{dx}.
 $$
 
-And `dγ/dx` collects every way the assembled density moves with the nuclei:
+**The density-response `dγ/dx`.** As the nuclei move, the embedding is rebuilt and the assembled density follows. The contribution this project computes is the **cluster-amplitude response** — as the geometry changes each cluster's amplitudes re-solve, and the assembled density moves with them:
 
 $$
-\begin{aligned}
-\frac{d\gamma}{dx} &= \sum_x \frac{\partial\mathcal{A}}{\partial T_x}\frac{dT_x}{dx} \qquad \text{(i) cluster amplitudes re-solve} \\
-&+ \sum_x \frac{\partial\mathcal{A}}{\partial C_x}\frac{dC_x}{dx} \qquad \text{(ii) bath / cluster orbitals redefine} \\
-&+ \sum_x \frac{\partial\mathcal{A}}{\partial P_x}\frac{dP_x}{dx} \qquad \text{(iii) fragment projectors shift} \\
-&+ \frac{\partial\mathcal{A}}{\partial C}\frac{dC}{dx} \qquad \text{(iv) HF orbitals relax}
-\end{aligned}
+\frac{d\gamma}{dx}\ \supset\ \sum_x \frac{\partial\mathcal{A}}{\partial T_x}\frac{dT_x}{dx} \qquad \text{(cluster amplitudes re-solve)}.
 $$
 
-`dT_x/dx`, `dC_x/dx`, `dP_x/dx`, `dC/dx` are the total geometry derivatives of the same per-cluster quantities introduced under the assembly map above; each is coupled to the geometry through its own defining equation (the cluster amplitude equations, the DMET bath construction, the fragment projector definition, the HF/SCF stationarity condition), so `dγ/dx` in full generality requires four coupled response solves.
+The bath/cluster orbitals, the fragment projectors, and the HF orbitals also move with geometry and add further contributions to `dγ/dx`; in the current implementation those are left inside the frozen-density piece (a) under a frozen-bath approximation.
 
-**Why term (b) is nonzero for EWF but zero for a variational method:** for a variational wavefunction (FCI, optimized CASSCF, HF) the density extremizes `E` for the given integrals, so the response `dγ/dx` lies along directions in which `E` is flat and the pairing $\langle \partial E/\partial\gamma,\ d\gamma/dx\rangle$ vanishes identically — this is the Hellmann–Feynman theorem. EWF breaks this: the assembled `γ` is built by projection of independent cluster solutions and is *not* the density that extremizes `E[γ]` for the global integrals. Even when each cluster solver returns an exact eigenstate (each *cluster* energy stationary), the projected *global* energy is not stationary with respect to the cluster amplitudes:
-
-$$
-\frac{\partial E_{\mathrm{global}}}{\partial T_x} \neq 0 \qquad \text{(projection breaks cluster-level Hellmann–Feynman)}
-$$
-
-so the density-response term contributes a real piece of `dE/dx` (here `E_global` is the assembled `E[γ1, λ2]` from the very first equation of this section, and the inequality reads *for at least one cluster `x`*).
-
-**The Lagrangian trick:** computing `dγ/dx` head-on would require solving the four response equations above for each of the 3N nuclear coordinates — 3N embedding re-solves. The Z-vector / Lagrangian method instead augments `E` with each defining equation times a multiplier, chooses the multipliers to make the augmented functional stationary in all internal variables, and then
+**Why term (b) is nonzero for EWF (projection breaks Hellmann–Feynman).** For a variational wavefunction (FCI, optimized CASSCF, HF) the density extremizes `E` for the given integrals, so `dγ/dx` lies along flat directions and the pairing $\langle \partial E/\partial\gamma,\ d\gamma/dx\rangle$ vanishes — the Hellmann–Feynman theorem. EWF breaks this: the assembled `γ` is built by projection of independent cluster solutions and is *not* the density that extremizes `E[γ]` for the global integrals. Even when each cluster solver returns an exact eigenstate, the projected *global* energy is not stationary with respect to the cluster amplitudes,
 
 $$
-\left\langle \frac{\partial E}{\partial \gamma},\ \frac{d\gamma}{dx}\right\rangle \equiv \sum_x \Lambda_x \left.\frac{\partial H_x}{\partial x}\right|_{\mathrm{explicit}} + (\text{projector overlap terms}) + (\text{Z-vector terms})
+\frac{\partial E_{\mathrm{global}}}{\partial T_x} \neq 0 \qquad \text{(for at least one cluster } x\text{)},
 $$
 
-Here `Λ_x` is the per-cluster set of Lagrange multipliers (Z-vectors) — one adjoint solve per defining equation (amplitude Λ for the amplitude equations, orbital Z for the bath/HF orbital rotations, projector multipliers for the fragment projectors) — and `H_x` is the effective cluster Hamiltonian on fragment `x` (its explicit `x`-derivative is the only *nuclear* derivative that appears on the right-hand side). The right-hand side contains **no** derivative of any internal variable — only explicit integral derivatives contracted with multipliers obtained from a fixed, small number of adjoint linear solves, independent of 3N. This is the machinery `embedding_lagrangian.py` deploys (see below).
+so the density-response term contributes a real piece of `dE/dx` that must not be dropped.
 
-**Scope of this project — one line of `dγ/dx` at a time.** In principle the full density-response term (b) requires closing **all four** lines of the `dγ/dx` expansion above — cluster amplitudes (i), bath/cluster orbitals (ii), fragment projectors (iii), and HF orbitals (iv). This project addresses **only line (i)** as an initial effort: `rdm_t_lambda` builds the amplitude response `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density by solving the Λ equations on a global effective wavefunction (`embedding_lagrangian.py` — see its Stage-1 docstring). Lines (ii)–(iv) — the geometry response of the DMET bath, of the occupied-fragment projectors, and of the HF/SCF orbitals — are **not yet closed**; they remain folded into the frozen-density (a) piece under the "frozen-bath" approximation (with the HF CPHF response of the *integrals* included there, but not the response of `γ` itself to the HF-orbital rotations). Closing lines (ii)–(iv) is the natural next stage of the methodology development: it requires adjoint solves for each of the remaining coupling equations (DMET bath overlap, fragment projector, HF stationarity) and is what would eventually let geometry optimization reach tight convergence in the fragmented EWF regime. The current gradient floor observed in propylene (~1e-3 Eh/Bohr) is a direct signature of these three missing response lines.
+**The Λ (Z-vector) response — what `rdm_t_lambda` adds.** Computing the amplitude response head-on would mean re-solving the cluster amplitude equations for each of the 3N nuclear coordinates. The Z-vector / Lagrangian method avoids that: it augments the energy with the amplitude equations times Lagrange multipliers (the Λ / Z-vectors), fixes the multipliers by making the augmented functional stationary in the amplitudes, and then evaluates the response as an explicit integral derivative contracted with those multipliers,
+
+$$
+\left\langle \frac{\partial E}{\partial \gamma},\ \frac{d\gamma}{dx}\right\rangle_{\text{amplitude}} \equiv \sum_x \Lambda_x \left.\frac{\partial H_x}{\partial x}\right|_{\mathrm{explicit}},
+$$
+
+from a fixed, small number of adjoint linear solves — independent of 3N. Here `Λ_x` are the per-cluster amplitude multipliers and `H_x` is the effective cluster Hamiltonian, whose explicit `x`-derivative is the only nuclear derivative on the right-hand side. This is what `embedding_lagrangian.py` deploys: `rdm_t_lambda` builds the amplitude (Λ-relaxed) response into the assembled density by solving the Λ equations on a global effective wavefunction (see its Stage-1 docstring).
+
+**Why it helps.** Because projection breaks cluster-level Hellmann–Feynman, ignoring the density response leaves a genuine piece of `dE/dx` uncomputed, which surfaces as spurious energy/gradient fluctuations along an optimization. Including the amplitude Λ-response (`rdm_t_lambda`) restores that piece — the first and largest correction to the fragmented gradient — sharpening the gradient and reducing those fluctuations relative to the plain `rdm_t` (`l = t`) density. The remaining geometry couplings (bath, projector, HF orbitals) stay approximated by the frozen-bath treatment, so a small gradient floor persists (≈1e-3 Eh/Bohr on the propylene test); tightening it further is the natural next stage of the methodology.
 
 ---
 
@@ -223,7 +218,7 @@ is the new feature introduced in this project; it was not previously available i
 | `make_relaxed_global_rdms` | Builds `pyscf.cc.CCSD(mf)`, injects `(T1, T2)`, solves Λ (`solve_lambda`), returns the relaxed `(γ1, λ2)` — amplitudes are **not** re-optimized |
 | `assemble_global_rdms_rdm_t_lambda` | Driver-facing assembler, same signature as the other `assemble_global_rdms_*` |
 
-Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds line **(i)** of the density-response expansion above — `Σ_x (∂𝒜/∂T_x)(dT_x/dx)`, the cluster-amplitude line — into the assembled density itself. The remaining lines **(ii)–(iv)** (bath / cluster orbitals, fragment projectors, HF orbitals) are still left approximated by the frozen-bath treatment in `build_ewf_grad`, so `rdm_t_lambda` closes one of the four density-response contributions and is the starting point — not the endpoint — of the Lagrangian programme.
+Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds the **cluster-amplitude response** `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density itself.
 
 ### Recovering the unfragmented correlation in the `rdm_t` / `rdm_t_lambda` routes
 
