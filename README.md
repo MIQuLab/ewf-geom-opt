@@ -26,11 +26,6 @@ The central contribution of this project is a pair of density-assembly routes �
 | `sqd_quantum_sampling.py` | Quantum-sampling source for `SQD`: either reuses a pre-collected `count_dict.txt` or runs an LUCJ ansatz on an IBM Quantum backend via Qiskit IBM Runtime + ffsim |
 | `zigzag_layout.py` | Heavy-hex zigzag physical-qubit layout selector used by the LUCJ ansatz when `SQD` samples on the fly |
 | `calculation_setup.py` | Interactive generator for a focused `config.yaml` (see *Usage → Generating a config*) |
-| `hpc_settings.py` | HPC-site definition engine: loads/validates `*_HPC_settings.yaml` and renders its Slurm/env into `config.yaml` (see *Usage → HPC settings*) |
-| `config.yaml` | Calculation, embedding, Slurm, and optimizer settings |
-| `CCF_HPC_settings.yaml`, `MSU_HPC_settings.yaml` | Example HPC-site definitions (used out of the box, or as templates for your own cluster) |
-| `propylene.txt` | Propylene test geometry |
-| `submit_slurm_*.sh` | Example Slurm submission scripts |
 
 ---
 
