@@ -11,7 +11,7 @@ The central contribution of this project is a pair of density-assembly routes �
 | Path | Contents |
 |---|---|
 | [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, config, test geometry, Slurm script |
-| [`Examples/`](Examples/) | Example outputs for the propylene test case |
+| [`Examples/`](Examples/) | Example outputs and config files |
 | [`Utilities/`](Utilities/) | Standalone analysis tools — Slurm job diagnostics, geometry comparison, fragmentation-effect analysis (each documented in [`Utilities/README.md`](Utilities/README.md)) |
 
 ### Source files
@@ -504,7 +504,7 @@ Typical use cases:
 
 ## Examples
 
-**[`Examples/`](Examples/)** — example outputs for the propylene test case (driver logs, per-step energies/gradients, optimized geometries).
+**[`Examples/`](Examples/)** — example outputs driver logs, per-step energies/gradients, optimized geometries as well as configuration files.
 
 ---
 
