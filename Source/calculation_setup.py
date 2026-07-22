@@ -345,8 +345,19 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             a("    norb_threshold: 13        # clusters with norb < this -> high_accuracy_solver")
             a(f"    high_accuracy_solver: {high_solver}")
             a(f"    approximate_solver: {approx_solver}")
-        a("  assembly: rdm_t_lambda      # density-assembly route"
-          " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
+        if run_task == "energy":
+            a("  # ENERGY-ONLY fast path: sums the per-fragment energy directly")
+            a("  # (cluster cumulant x cluster ERIs) instead of assembling the")
+            a("  # global density, so the nmo^4 tensors are never formed.  Same")
+            a("  # energy as 'democratic', but O(nfrag*norb^4) instead of")
+            a("  # O(nmo^4) -- the only practical route for large (100+")
+            a("  # fragment) single points.  It yields no density, so it cannot")
+            a("  # be used for gradient / geomopt runs.")
+            a("  assembly: cluster_energy    # energy-only"
+              " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
+        else:
+            a("  assembly: rdm_t_lambda      # density-assembly route"
+              " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
     else:
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / SQD")

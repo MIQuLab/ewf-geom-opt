@@ -241,14 +241,27 @@ def load_config(path):
     #                   cluster vs one global wavefunction).  Provided as an
     #                   energy/accuracy comparison point — NOT a gradient fix
     #                   (see Projected-lambda_README.md).
+    #   "cluster_energy": ENERGY-ONLY fast path.  Sums the per-fragment energy
+    #                   contributions directly (cluster cumulant contracted
+    #                   with the cluster ERIs) instead of assembling the global
+    #                   density, so the (nmo**4) cumulant and MO-ERI tensors are
+    #                   never formed.  Gives the SAME energy as 'democratic' but
+    #                   costs O(nfrag*norb**4) instead of O(nmo**4) -- the only
+    #                   practical route for large (hundreds of fragments)
+    #                   single points.  Produces no density, hence no gradient.
+    #
+    # Whether the user pinned the route explicitly decides the run_task-aware
+    # default applied later in resolve_assembly_for_task().
+    ewf["_assembly_explicit"] = ("assembly" in ewf
+                                 and ewf.get("assembly") is not None)
     ewf.setdefault("assembly", "rdm_t")
     asm = str(ewf["assembly"]).lower()
     if asm not in ("ci", "democratic", "rdm_t", "rdm_t_lambda",
-                   "projected_lambda"):
+                   "projected_lambda", "cluster_energy"):
         raise ValueError(
             f"Unsupported ewf.assembly={ewf['assembly']!r}; expected "
             f"'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'ci', "
-            f"or 'democratic'.")
+            f"'democratic', or 'cluster_energy'.")
     ewf["assembly"] = asm
     solver = str(ewf["solver"]).upper()
     if solver not in _VALID_SOLVERS:
@@ -1925,9 +1938,10 @@ def assemble_global_rdms_from_files(rdm_files, mo_coeff, ovlp, nocc_global):
         s_cf = c_cluster.T @ ovlp @ c_frag                 # (norb, nfrag)
         px = s_cf @ s_cf.T                                 # (norb, norb)
 
-        dm1_global += np.einsum("xi,ij,px,qj->pq", px, dm1x_corr, rx, rx)
+        dm1_global += np.einsum("xi,ij,px,qj->pq", px, dm1x_corr, rx, rx, optimize=True)
         dm2cum_global += np.einsum(
-            "xi,ijkl,px,qj,rk,sl->pqrs", px, dm2x_cum, rx, rx, rx, rx)
+            "xi,ijkl,px,qj,rk,sl->pqrs", px, dm2x_cum, rx, rx, rx, rx,
+            optimize=True)
 
     dm1_global[np.diag_indices(nocc_global)] += 2.0
     dm1_global = 0.5 * (dm1_global + dm1_global.T)
@@ -2074,8 +2088,9 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
         ro = mo_coeff_occ.T @ ovlp @ c_oo_x
         rv = mo_coeff_vir.T @ ovlp @ c_vv_x
 
-        c1_global += np.einsum("Ii,Aa,ia->IA",            ro, rv, c1_p)
-        c2_global += np.einsum("Ii,Jj,Aa,Bb,ijab->IJAB",  ro, ro, rv, rv, c2_p)
+        c1_global += np.einsum("Ii,Aa,ia->IA",            ro, rv, c1_p, optimize=True)
+        c2_global += np.einsum("Ii,Jj,Aa,Bb,ijab->IJAB",  ro, ro, rv, rv, c2_p,
+                                 optimize=True)
 
     # Final C2 symmetrisation (restores (i,j,a,b)<->(j,i,b,a) after sum).
     c2_global = 0.5 * (c2_global + c2_global.transpose(1, 0, 3, 2))
@@ -2221,8 +2236,9 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
         ro = mo_coeff_occ.T @ ovlp @ c_oo_x
         rv = mo_coeff_vir.T @ ovlp @ c_vv_x
 
-        t1_global += np.einsum("Ii,Aa,ia->IA",            ro, rv, t1x_p)
-        t2_global += np.einsum("Ii,Jj,Aa,Bb,ijab->IJAB",  ro, ro, rv, rv, t2x_p)
+        t1_global += np.einsum("Ii,Aa,ia->IA",            ro, rv, t1x_p, optimize=True)
+        t2_global += np.einsum("Ii,Jj,Aa,Bb,ijab->IJAB",  ro, ro, rv, rv, t2x_p,
+                                 optimize=True)
 
     t2_global = 0.5 * (t2_global + t2_global.transpose(1, 0, 3, 2))
 
@@ -2367,6 +2383,128 @@ def ewf_energy_from_rdms(mol, mf, dm1_mo, dm2cum_mo):
         [nmo] * 4)
     e2 = 0.5 * np.einsum("pqrs,pqrs->", eris_mo, dm2cum_mo)
     return mf.e_tot + e1 + e2
+
+
+def resolve_assembly_for_task(cfg, run_task):
+    """Apply the run_task-aware assembly default and enforce that the
+    energy-only ``cluster_energy`` route is never used where a gradient is
+    needed.  Called once ``run_task`` is finally resolved.
+
+    * ``run_task: energy`` and no explicit ``ewf.assembly`` -> ``cluster_energy``
+      (the scalable route; the global-density routes allocate an ``nmo**4``
+      tensor and are impractical beyond ~100 fragments).
+    * ``cluster_energy`` requested for ``geomopt`` / ``gradient`` -> hard error.
+    """
+    ewf = cfg.setdefault("ewf", {})
+    explicit = bool(ewf.pop("_assembly_explicit", False))
+    asm = str(ewf.get("assembly", "rdm_t")).lower()
+    run_mode = str(cfg.get("calculation", {}).get("run_mode", "ewf"))
+
+    if asm == "cluster_energy" and run_task in ("geomopt", "gradient"):
+        raise ValueError(
+            "ewf.assembly='cluster_energy' is an ENERGY-ONLY route: it sums the "
+            "per-fragment energy contributions and never assembles the global "
+            "density matrices, so no nuclear gradient can be formed.\n"
+            f"  It cannot be used with calculation.run_task: {run_task}.\n"
+            "  Either set calculation.run_task: energy, or choose a "
+            "density-assembling route (e.g. ewf.assembly: rdm_t_lambda / "
+            "rdm_t) for gradient and geometry-optimisation runs.")
+
+    if asm == "cluster_energy" and run_mode != "ewf":
+        raise ValueError(
+            "ewf.assembly='cluster_energy' sums per-FRAGMENT contributions and "
+            f"only applies to calculation.run_mode: ewf (got {run_mode!r}).")
+
+    if not explicit and run_task == "energy" and run_mode == "ewf":
+        asm = "cluster_energy"
+        print("[driver] run_task=energy: defaulting to ewf.assembly="
+              "'cluster_energy' -- it sums the per-fragment energy directly "
+              "and never builds the global nmo^4 density, which is the only "
+              "practical route for large (100+ fragment) single points.  "
+              "It returns the same energy as 'democratic'.  Set ewf.assembly "
+              "explicitly to override.")
+
+    ewf["assembly"] = asm
+    return asm
+
+
+def assemble_cluster_energy(rdm_files, cluster_files, mol, mf, ovlp):
+    """ENERGY-ONLY EWF assembly: sum per-cluster contributions WITHOUT ever
+    forming the global ``(nmo**4)`` two-particle cumulant.
+
+    Mathematically identical to the ``democratic`` route's energy.  The energy
+    is *linear* in the cumulant and the cluster->global rotation is orthogonal,
+    so contracting the projected cluster cumulant with the CLUSTER ERIs equals
+    contracting the rotated global cumulant with the global MO ERIs::
+
+        1/2 Σ_pqrs (pq|rs) [R λ2^x R^T]_pqrs  ==  1/2 Σ_ijkl (ij|kl)_x (λ2^x)_ijkl
+
+    (``(ij|kl)_x`` is exactly the ``eris`` dataset the DUMP stage already wrote
+    into ``cluster_<i>.h5``.)  Both ``(nmo**4)`` tensors -- the assembled
+    cumulant AND ``ao2mo``'s global MO ERIs -- therefore never need to exist.
+    The one-particle term still accumulates a global Δγ1, but that is only
+    ``(nmo, nmo)``.
+
+    Cost is O(nfrag * norb**4) instead of O(nmo**4).  For a 300-fragment,
+    nmo~380 system that is minutes and a few MB, versus hundreds of GB and
+    many hours (or, with the un-optimised einsum path, effectively never).
+
+    Produces NO global density matrices, so it cannot feed ``build_ewf_grad``
+    -- this route is valid for energy-only runs only (enforced in
+    :func:`resolve_assembly_for_task`).
+
+    Returns ``(e_ewf, cluster_energies, cluster_names)``.
+    """
+    mo = mf.mo_coeff
+    nmo = mo.shape[1]
+    fock_mo = mo.T @ mf.get_fock() @ mo
+
+    dm1_global = np.zeros((nmo, nmo))
+    e2 = 0.0
+    energies, names = [], []
+
+    for rdm_path, cluster_path in zip(rdm_files, cluster_files):
+        with h5py.File(rdm_path, "r") as h5:
+            dm1x = np.array(h5["dm1"])
+            dm2x = np.array(h5["dm2"])
+            c_cluster = np.array(h5["c_cluster"])
+            c_frag = np.array(h5["c_frag"])
+            nocc_x = int(h5.attrs["nocc"])
+            energies.append(float(h5.attrs["e_cluster"]))
+            names.append(str(h5.attrs["name"]))
+        with h5py.File(cluster_path, "r") as h5:
+            grp = h5[list(h5.keys())[0]]
+            eris = np.array(grp["eris"])
+
+        # Exact cluster cumulant -- the SAME convention the democratic route
+        # uses, so the two energies agree to machine precision.
+        dm2x_cum = (
+            dm2x
+            - np.einsum("ij,kl->ijkl", dm1x, dm1x, optimize=True)
+            + np.einsum("ij,kl->iklj", dm1x, dm1x, optimize=True) / 2.0
+        )
+
+        # Fragment projector, applied to the first index (no double counting).
+        s_cf = c_cluster.T @ ovlp @ c_frag
+        px = s_cf @ s_cf.T
+
+        # --- two-body: contracted entirely in the CLUSTER basis ------------
+        dm2x_proj = np.einsum("xi,ijkl->xjkl", px, dm2x_cum, optimize=True)
+        # Mirror the symmetrisation the democratic route applies to the global
+        # sum (linear, so per-cluster == on the sum).
+        dm2x_proj = 0.5 * (dm2x_proj + dm2x_proj.transpose(1, 0, 3, 2))
+        e2 += 0.5 * float(
+            np.einsum("pqrs,pqrs->", eris, dm2x_proj, optimize=True))
+
+        # --- one-body: accumulate Δγ1 in the global MO basis (nmo x nmo) ---
+        dm1x_corr = dm1x.copy()
+        dm1x_corr[np.diag_indices(nocc_x)] -= 2.0
+        rx = mo.T @ ovlp @ c_cluster
+        dm1_global += rx @ (px @ dm1x_corr) @ rx.T
+
+    dm1_global = 0.5 * (dm1_global + dm1_global.T)
+    e1 = float(np.einsum("pq,pq->", fock_mo, dm1_global, optimize=True))
+    return float(mf.e_tot + e1 + e2), energies, names
 
 
 # ---------------------------------------------------------------------------
@@ -2602,6 +2740,35 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     nocc_global = mol.nelectron // 2
 
     assembly = str(cfg["ewf"].get("assembly", "rdm_t")).lower()
+    if assembly == "cluster_energy":
+        # Energy-only fast path: never allocates the global (nmo**4) cumulant
+        # or the global MO ERIs, so it scales to hundreds of fragments.
+        if compute_gradient or return_rdms:
+            raise ValueError(
+                "ewf.assembly='cluster_energy' produces only a scalar energy "
+                "(no global density matrices), so it cannot supply a nuclear "
+                "gradient.  Use it only with calculation.run_task: energy; for "
+                "'gradient' or 'geomopt' pick e.g. 'rdm_t' or 'rdm_t_lambda'.")
+        print(f"[{tag}] Assembly route: cluster_energy (per-fragment energy "
+              f"sum; no global {mf.mo_coeff.shape[1]}^4 cumulant is ever "
+              f"formed -- energy only)")
+        e_ewf, cluster_energies, cluster_names = assemble_cluster_energy(
+            rdm_files, cluster_files, mol, mf, ovlp)
+        if cfg["ewf"].get("multi_solver", {}).get("enabled", False):
+            per_frag = {}
+            for i, path in enumerate(rdm_files):
+                with h5py.File(path, "r") as h5:
+                    per_frag[i] = (str(h5.attrs["solver"]),
+                                   int(h5.attrs["norb"]))
+            print(f"[{tag}] Per-cluster energies (heff + eris):")
+            for i, (name, e) in enumerate(zip(cluster_names, cluster_energies)):
+                sv, norb = per_frag.get(i, ("?", 0))
+                print(f"   {name:>20s}  E_cluster = {e:.10f} Ha  "
+                      f"[{sv}, norb={norb}]")
+        print(f"[{tag}] {method_label_for_cfg(cfg)} energy: {e_ewf:.10f} Ha")
+        print(f"[{tag}] energy-only task: skipping nuclear-gradient assembly")
+        return mol, mf, float(e_ewf), None
+
     if assembly == "rdm_t_lambda":
         print(f"[{tag}] Assembly route: Stage-1 Lagrangian (rdm_t amplitudes "
               f"+ Λ/Z-vector relaxed density; amplitude response, "
@@ -3555,6 +3722,10 @@ def main(argv=None):
         run_task = "gradient"
     if args.task:
         run_task = args.task
+
+    # run_task is final here: pick the task-aware assembly default and reject
+    # the energy-only 'cluster_energy' route for gradient-bearing tasks.
+    resolve_assembly_for_task(cfg, run_task)
 
     cfgp = os.path.abspath(args.config)
     if run_task == "geomopt":

@@ -171,6 +171,7 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default 2-RDM route |
 | **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global RDM | **this project** |
 | **`rdm_t_lambda`** | `rdm_t` amplitudes + **Λ solve** → relaxed global RDMs | **this project** |
+| **`cluster_energy`** | Per-fragment energy sum — **no global density built** (energy-only) | **this project** |
 
 ### `ci`: the CI-coefficient assembly (baseline, revised ordering)
 
@@ -202,6 +203,22 @@ T2_eff = λ2_cumulant[occ, occ, vir, vir]
 ```
 
 is the new capability this project adds on top of Vayesta's assembly machinery. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This extends the `ci` route: `as_cisd` provides the singles-and-doubles content, while `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions also survives into the global density.
+
+### `cluster_energy`: the scalable energy-only route (default for `run_task: energy`)
+
+Every other route assembles a **global** two-particle cumulant, an `nmo⁴` tensor — and `ewf_energy_from_rdms` then builds the `nmo⁴` MO ERIs to contract against it. For a few hundred fragments that is fatal: at `nmo ≈ 380` each of those tensors is ~170 GB, so a single point needs ~340 GB of RAM before any arithmetic.
+
+`cluster_energy` avoids both. Because the energy is **linear** in the cumulant and the cluster→global rotation is orthogonal,
+
+$$
+\tfrac{1}{2}\sum_{pqrs}(pq|rs)\,\big[R\lambda_2^{x}R^{\top}\big]_{pqrs}
+\;=\;
+\tfrac{1}{2}\sum_{ijkl}(ij|kl)_{x}\,(\lambda_2^{x})_{ijkl},
+$$
+
+and `(ij|kl)_x` is exactly the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`. So the two-body energy can be accumulated as a **scalar, one fragment at a time, entirely in the cluster basis**; only the one-particle term needs a global object, and that is just `(nmo, nmo)`. The result is **numerically identical to the `democratic` route** (verified to 0 Ha on a test system), at `O(nfrag·norb⁴)` instead of `O(nmo⁴)` — minutes and a few MB rather than hours and hundreds of GB.
+
+Because it never forms a density, it **cannot produce a nuclear gradient**. It is therefore selected automatically for `run_task: energy` (unless you pin `ewf.assembly` yourself), and requesting it for `gradient` or `geomopt` raises a clear error. It applies to `run_mode: ewf` only. Since it reads the existing `rdm_<i>.h5` and `cluster_<i>.h5`, it can be used with `restart: true` to get the energy of a run whose solves already finished but whose global assembly was too expensive.
 
 ### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 

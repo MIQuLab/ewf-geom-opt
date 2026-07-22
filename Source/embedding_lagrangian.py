@@ -129,9 +129,9 @@ def assemble_global_amplitudes(rdm_files, mf, ovlp, nocc_global,
         ro = mo_coeff_occ.T @ ovlp @ c_oo_x
         rv = mo_coeff_vir.T @ ovlp @ c_vv_x
 
-        t1_global += np.einsum("Ii,Aa,ia->IA", ro, rv, t1x_p)
+        t1_global += np.einsum("Ii,Aa,ia->IA", ro, rv, t1x_p, optimize=True)
         t2_global += np.einsum(
-            "Ii,Jj,Aa,Bb,ijab->IJAB", ro, ro, rv, rv, t2x_p)
+            "Ii,Jj,Aa,Bb,ijab->IJAB", ro, ro, rv, rv, t2x_p, optimize=True)
 
     t2_global = 0.5 * (t2_global + t2_global.transpose(1, 0, 3, 2))
     return t1_global, t2_global, energies, names
