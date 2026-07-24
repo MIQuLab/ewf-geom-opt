@@ -1,0 +1,19 @@
+No module named 'dyson'
+Dyson required for self-energy calculations
+[driver] Restart mode: ON -- reusing existing artefacts in 'jobs_EWF' where possible (step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).
+[solve frag=54] Loaded Cluster(fragment_54, name=C, norb=27, nocc=14)
+[solve frag=54] Multi-solver: cluster norb=27 >= norb_threshold=15 -> SQD
+[solve frag=54] Solving cluster (norb=27) with SQD (quantum sampling + SBD configuration recovery + ext-SQD; iterations=5, n_batches=4; submits one Slurm job per SBD batch and a final ext-SQD job)
+Parsing /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/Trp-cage_energy_only/c0_neutral_folded/jobs_EWF/sqd_scratch_054/fci_dump.txt
+converged SCF energy = -148.939424906199
+E(CCSD) = -149.2509746783358  E_corr = -0.3115497721367816
+  >> removing node: 114 | Readout err: 0.3359
+  >> removing node: 134 | Readout err: 0.1218
+num edges after node removal: 172
+num edges before: 172
+num edges after: 172
+The best layout has a total error of: 0.45358216965501785
+  SQD: submitted IBM Runtime job d9e6b6sinv1c73apsesg on ibm_cleveland
+[solve frag=54] E_cluster (SQD) = -149.2506265413 Ha
+[solve frag=54] Assembly route 'rdm_t' uses the cluster RDMs directly -- skipping the CISD extraction.
+[solve frag=54] Wrote RDM file jobs_EWF/rdm_054.h5
