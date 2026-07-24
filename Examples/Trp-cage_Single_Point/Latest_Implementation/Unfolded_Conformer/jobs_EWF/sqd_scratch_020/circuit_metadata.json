@@ -1,0 +1,32 @@
+{
+  "backend": "ibm_cleveland",
+  "count_dict": "count_dict.txt",
+  "default_shots": 100000,
+  "depth": 1235,
+  "frag_idx": 20,
+  "gate_counts": {
+    "barrier": 1,
+    "cz": 2534,
+    "measure": 50,
+    "rz": 29472,
+    "sx": 12268,
+    "x": 26
+  },
+  "isa_circuit_qpy": "isa_circuit.qpy",
+  "job_id": "d9fhg4cjeosc73fjvcr0",
+  "logical_circuit_qpy": "logical_circuit.qpy",
+  "n_alpha_beta_connections": 4,
+  "n_reps": 1,
+  "n_unique_bitstrings": 100000,
+  "nelec": [
+    13,
+    13
+  ],
+  "norb": 25,
+  "num_active_qubits": 54,
+  "num_qubits": 156,
+  "num_qubits_logical": 50,
+  "submitted": true,
+  "two_qubit_depth": 116,
+  "two_qubit_gate_count": 2534
+}

@@ -1,0 +1,974 @@
+          |                                    ___       ___
+          |  _______________________________  /   \ . . /   \
+          |                                   \___/     \___/
+          |              VAYESTA                  .  V  .   .
+          |     Quantum Embedding Package          .___.  A  .___
+          |  _______________________________       /   \ . . /   \
+          |                    version 1.0.1       \___/     \___/ 
+          |
+No module named 'dyson'
+Dyson required for self-energy calculations
+[driver] Restart mode: ON -- reusing existing artefacts in 'jobs_EWF' where possible (step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).
+[driver] Building mol + RHF
+[HF] Restart: reused converged RHF from jobs_EWF/hf.chk + cached AO .npy integrals (E_HF=-7344.3558316212 Ha)
+[driver] HF energy: -7344.3558316212
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=   -7344.35583162 Ha
+          |      Calculated E(HF)=        -7344.35583162 Ha
+          |      Difference dE=              -0.00000000 Ha ( 0.0%)
+          |      n(AO)=  919  n(MO)=  919  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.3 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE HIT: loaded C_iao from iao_cache.h5 (shape=(919, 919))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[driver] Discovered 303 fragment(s) at threshold=1e-05
+[driver] Restart: DUMP already complete for 303/303 fragment(s): [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302]
+[driver] Restart: SOLVE already complete for 303/303 fragment(s): [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302]
+[driver] === Wave 1/2 : submitting 0 DUMP job(s) (skipping 303 already complete) ===
+[driver] Restart: reusing dump fragment   0 (output already on disk)
+[driver] Restart: reusing dump fragment   1 (output already on disk)
+[driver] Restart: reusing dump fragment   2 (output already on disk)
+[driver] Restart: reusing dump fragment   3 (output already on disk)
+[driver] Restart: reusing dump fragment   4 (output already on disk)
+[driver] Restart: reusing dump fragment   5 (output already on disk)
+[driver] Restart: reusing dump fragment   6 (output already on disk)
+[driver] Restart: reusing dump fragment   7 (output already on disk)
+[driver] Restart: reusing dump fragment   8 (output already on disk)
+[driver] Restart: reusing dump fragment   9 (output already on disk)
+[driver] Restart: reusing dump fragment  10 (output already on disk)
+[driver] Restart: reusing dump fragment  11 (output already on disk)
+[driver] Restart: reusing dump fragment  12 (output already on disk)
+[driver] Restart: reusing dump fragment  13 (output already on disk)
+[driver] Restart: reusing dump fragment  14 (output already on disk)
+[driver] Restart: reusing dump fragment  15 (output already on disk)
+[driver] Restart: reusing dump fragment  16 (output already on disk)
+[driver] Restart: reusing dump fragment  17 (output already on disk)
+[driver] Restart: reusing dump fragment  18 (output already on disk)
+[driver] Restart: reusing dump fragment  19 (output already on disk)
+[driver] Restart: reusing dump fragment  20 (output already on disk)
+[driver] Restart: reusing dump fragment  21 (output already on disk)
+[driver] Restart: reusing dump fragment  22 (output already on disk)
+[driver] Restart: reusing dump fragment  23 (output already on disk)
+[driver] Restart: reusing dump fragment  24 (output already on disk)
+[driver] Restart: reusing dump fragment  25 (output already on disk)
+[driver] Restart: reusing dump fragment  26 (output already on disk)
+[driver] Restart: reusing dump fragment  27 (output already on disk)
+[driver] Restart: reusing dump fragment  28 (output already on disk)
+[driver] Restart: reusing dump fragment  29 (output already on disk)
+[driver] Restart: reusing dump fragment  30 (output already on disk)
+[driver] Restart: reusing dump fragment  31 (output already on disk)
+[driver] Restart: reusing dump fragment  32 (output already on disk)
+[driver] Restart: reusing dump fragment  33 (output already on disk)
+[driver] Restart: reusing dump fragment  34 (output already on disk)
+[driver] Restart: reusing dump fragment  35 (output already on disk)
+[driver] Restart: reusing dump fragment  36 (output already on disk)
+[driver] Restart: reusing dump fragment  37 (output already on disk)
+[driver] Restart: reusing dump fragment  38 (output already on disk)
+[driver] Restart: reusing dump fragment  39 (output already on disk)
+[driver] Restart: reusing dump fragment  40 (output already on disk)
+[driver] Restart: reusing dump fragment  41 (output already on disk)
+[driver] Restart: reusing dump fragment  42 (output already on disk)
+[driver] Restart: reusing dump fragment  43 (output already on disk)
+[driver] Restart: reusing dump fragment  44 (output already on disk)
+[driver] Restart: reusing dump fragment  45 (output already on disk)
+[driver] Restart: reusing dump fragment  46 (output already on disk)
+[driver] Restart: reusing dump fragment  47 (output already on disk)
+[driver] Restart: reusing dump fragment  48 (output already on disk)
+[driver] Restart: reusing dump fragment  49 (output already on disk)
+[driver] Restart: reusing dump fragment  50 (output already on disk)
+[driver] Restart: reusing dump fragment  51 (output already on disk)
+[driver] Restart: reusing dump fragment  52 (output already on disk)
+[driver] Restart: reusing dump fragment  53 (output already on disk)
+[driver] Restart: reusing dump fragment  54 (output already on disk)
+[driver] Restart: reusing dump fragment  55 (output already on disk)
+[driver] Restart: reusing dump fragment  56 (output already on disk)
+[driver] Restart: reusing dump fragment  57 (output already on disk)
+[driver] Restart: reusing dump fragment  58 (output already on disk)
+[driver] Restart: reusing dump fragment  59 (output already on disk)
+[driver] Restart: reusing dump fragment  60 (output already on disk)
+[driver] Restart: reusing dump fragment  61 (output already on disk)
+[driver] Restart: reusing dump fragment  62 (output already on disk)
+[driver] Restart: reusing dump fragment  63 (output already on disk)
+[driver] Restart: reusing dump fragment  64 (output already on disk)
+[driver] Restart: reusing dump fragment  65 (output already on disk)
+[driver] Restart: reusing dump fragment  66 (output already on disk)
+[driver] Restart: reusing dump fragment  67 (output already on disk)
+[driver] Restart: reusing dump fragment  68 (output already on disk)
+[driver] Restart: reusing dump fragment  69 (output already on disk)
+[driver] Restart: reusing dump fragment  70 (output already on disk)
+[driver] Restart: reusing dump fragment  71 (output already on disk)
+[driver] Restart: reusing dump fragment  72 (output already on disk)
+[driver] Restart: reusing dump fragment  73 (output already on disk)
+[driver] Restart: reusing dump fragment  74 (output already on disk)
+[driver] Restart: reusing dump fragment  75 (output already on disk)
+[driver] Restart: reusing dump fragment  76 (output already on disk)
+[driver] Restart: reusing dump fragment  77 (output already on disk)
+[driver] Restart: reusing dump fragment  78 (output already on disk)
+[driver] Restart: reusing dump fragment  79 (output already on disk)
+[driver] Restart: reusing dump fragment  80 (output already on disk)
+[driver] Restart: reusing dump fragment  81 (output already on disk)
+[driver] Restart: reusing dump fragment  82 (output already on disk)
+[driver] Restart: reusing dump fragment  83 (output already on disk)
+[driver] Restart: reusing dump fragment  84 (output already on disk)
+[driver] Restart: reusing dump fragment  85 (output already on disk)
+[driver] Restart: reusing dump fragment  86 (output already on disk)
+[driver] Restart: reusing dump fragment  87 (output already on disk)
+[driver] Restart: reusing dump fragment  88 (output already on disk)
+[driver] Restart: reusing dump fragment  89 (output already on disk)
+[driver] Restart: reusing dump fragment  90 (output already on disk)
+[driver] Restart: reusing dump fragment  91 (output already on disk)
+[driver] Restart: reusing dump fragment  92 (output already on disk)
+[driver] Restart: reusing dump fragment  93 (output already on disk)
+[driver] Restart: reusing dump fragment  94 (output already on disk)
+[driver] Restart: reusing dump fragment  95 (output already on disk)
+[driver] Restart: reusing dump fragment  96 (output already on disk)
+[driver] Restart: reusing dump fragment  97 (output already on disk)
+[driver] Restart: reusing dump fragment  98 (output already on disk)
+[driver] Restart: reusing dump fragment  99 (output already on disk)
+[driver] Restart: reusing dump fragment 100 (output already on disk)
+[driver] Restart: reusing dump fragment 101 (output already on disk)
+[driver] Restart: reusing dump fragment 102 (output already on disk)
+[driver] Restart: reusing dump fragment 103 (output already on disk)
+[driver] Restart: reusing dump fragment 104 (output already on disk)
+[driver] Restart: reusing dump fragment 105 (output already on disk)
+[driver] Restart: reusing dump fragment 106 (output already on disk)
+[driver] Restart: reusing dump fragment 107 (output already on disk)
+[driver] Restart: reusing dump fragment 108 (output already on disk)
+[driver] Restart: reusing dump fragment 109 (output already on disk)
+[driver] Restart: reusing dump fragment 110 (output already on disk)
+[driver] Restart: reusing dump fragment 111 (output already on disk)
+[driver] Restart: reusing dump fragment 112 (output already on disk)
+[driver] Restart: reusing dump fragment 113 (output already on disk)
+[driver] Restart: reusing dump fragment 114 (output already on disk)
+[driver] Restart: reusing dump fragment 115 (output already on disk)
+[driver] Restart: reusing dump fragment 116 (output already on disk)
+[driver] Restart: reusing dump fragment 117 (output already on disk)
+[driver] Restart: reusing dump fragment 118 (output already on disk)
+[driver] Restart: reusing dump fragment 119 (output already on disk)
+[driver] Restart: reusing dump fragment 120 (output already on disk)
+[driver] Restart: reusing dump fragment 121 (output already on disk)
+[driver] Restart: reusing dump fragment 122 (output already on disk)
+[driver] Restart: reusing dump fragment 123 (output already on disk)
+[driver] Restart: reusing dump fragment 124 (output already on disk)
+[driver] Restart: reusing dump fragment 125 (output already on disk)
+[driver] Restart: reusing dump fragment 126 (output already on disk)
+[driver] Restart: reusing dump fragment 127 (output already on disk)
+[driver] Restart: reusing dump fragment 128 (output already on disk)
+[driver] Restart: reusing dump fragment 129 (output already on disk)
+[driver] Restart: reusing dump fragment 130 (output already on disk)
+[driver] Restart: reusing dump fragment 131 (output already on disk)
+[driver] Restart: reusing dump fragment 132 (output already on disk)
+[driver] Restart: reusing dump fragment 133 (output already on disk)
+[driver] Restart: reusing dump fragment 134 (output already on disk)
+[driver] Restart: reusing dump fragment 135 (output already on disk)
+[driver] Restart: reusing dump fragment 136 (output already on disk)
+[driver] Restart: reusing dump fragment 137 (output already on disk)
+[driver] Restart: reusing dump fragment 138 (output already on disk)
+[driver] Restart: reusing dump fragment 139 (output already on disk)
+[driver] Restart: reusing dump fragment 140 (output already on disk)
+[driver] Restart: reusing dump fragment 141 (output already on disk)
+[driver] Restart: reusing dump fragment 142 (output already on disk)
+[driver] Restart: reusing dump fragment 143 (output already on disk)
+[driver] Restart: reusing dump fragment 144 (output already on disk)
+[driver] Restart: reusing dump fragment 145 (output already on disk)
+[driver] Restart: reusing dump fragment 146 (output already on disk)
+[driver] Restart: reusing dump fragment 147 (output already on disk)
+[driver] Restart: reusing dump fragment 148 (output already on disk)
+[driver] Restart: reusing dump fragment 149 (output already on disk)
+[driver] Restart: reusing dump fragment 150 (output already on disk)
+[driver] Restart: reusing dump fragment 151 (output already on disk)
+[driver] Restart: reusing dump fragment 152 (output already on disk)
+[driver] Restart: reusing dump fragment 153 (output already on disk)
+[driver] Restart: reusing dump fragment 154 (output already on disk)
+[driver] Restart: reusing dump fragment 155 (output already on disk)
+[driver] Restart: reusing dump fragment 156 (output already on disk)
+[driver] Restart: reusing dump fragment 157 (output already on disk)
+[driver] Restart: reusing dump fragment 158 (output already on disk)
+[driver] Restart: reusing dump fragment 159 (output already on disk)
+[driver] Restart: reusing dump fragment 160 (output already on disk)
+[driver] Restart: reusing dump fragment 161 (output already on disk)
+[driver] Restart: reusing dump fragment 162 (output already on disk)
+[driver] Restart: reusing dump fragment 163 (output already on disk)
+[driver] Restart: reusing dump fragment 164 (output already on disk)
+[driver] Restart: reusing dump fragment 165 (output already on disk)
+[driver] Restart: reusing dump fragment 166 (output already on disk)
+[driver] Restart: reusing dump fragment 167 (output already on disk)
+[driver] Restart: reusing dump fragment 168 (output already on disk)
+[driver] Restart: reusing dump fragment 169 (output already on disk)
+[driver] Restart: reusing dump fragment 170 (output already on disk)
+[driver] Restart: reusing dump fragment 171 (output already on disk)
+[driver] Restart: reusing dump fragment 172 (output already on disk)
+[driver] Restart: reusing dump fragment 173 (output already on disk)
+[driver] Restart: reusing dump fragment 174 (output already on disk)
+[driver] Restart: reusing dump fragment 175 (output already on disk)
+[driver] Restart: reusing dump fragment 176 (output already on disk)
+[driver] Restart: reusing dump fragment 177 (output already on disk)
+[driver] Restart: reusing dump fragment 178 (output already on disk)
+[driver] Restart: reusing dump fragment 179 (output already on disk)
+[driver] Restart: reusing dump fragment 180 (output already on disk)
+[driver] Restart: reusing dump fragment 181 (output already on disk)
+[driver] Restart: reusing dump fragment 182 (output already on disk)
+[driver] Restart: reusing dump fragment 183 (output already on disk)
+[driver] Restart: reusing dump fragment 184 (output already on disk)
+[driver] Restart: reusing dump fragment 185 (output already on disk)
+[driver] Restart: reusing dump fragment 186 (output already on disk)
+[driver] Restart: reusing dump fragment 187 (output already on disk)
+[driver] Restart: reusing dump fragment 188 (output already on disk)
+[driver] Restart: reusing dump fragment 189 (output already on disk)
+[driver] Restart: reusing dump fragment 190 (output already on disk)
+[driver] Restart: reusing dump fragment 191 (output already on disk)
+[driver] Restart: reusing dump fragment 192 (output already on disk)
+[driver] Restart: reusing dump fragment 193 (output already on disk)
+[driver] Restart: reusing dump fragment 194 (output already on disk)
+[driver] Restart: reusing dump fragment 195 (output already on disk)
+[driver] Restart: reusing dump fragment 196 (output already on disk)
+[driver] Restart: reusing dump fragment 197 (output already on disk)
+[driver] Restart: reusing dump fragment 198 (output already on disk)
+[driver] Restart: reusing dump fragment 199 (output already on disk)
+[driver] Restart: reusing dump fragment 200 (output already on disk)
+[driver] Restart: reusing dump fragment 201 (output already on disk)
+[driver] Restart: reusing dump fragment 202 (output already on disk)
+[driver] Restart: reusing dump fragment 203 (output already on disk)
+[driver] Restart: reusing dump fragment 204 (output already on disk)
+[driver] Restart: reusing dump fragment 205 (output already on disk)
+[driver] Restart: reusing dump fragment 206 (output already on disk)
+[driver] Restart: reusing dump fragment 207 (output already on disk)
+[driver] Restart: reusing dump fragment 208 (output already on disk)
+[driver] Restart: reusing dump fragment 209 (output already on disk)
+[driver] Restart: reusing dump fragment 210 (output already on disk)
+[driver] Restart: reusing dump fragment 211 (output already on disk)
+[driver] Restart: reusing dump fragment 212 (output already on disk)
+[driver] Restart: reusing dump fragment 213 (output already on disk)
+[driver] Restart: reusing dump fragment 214 (output already on disk)
+[driver] Restart: reusing dump fragment 215 (output already on disk)
+[driver] Restart: reusing dump fragment 216 (output already on disk)
+[driver] Restart: reusing dump fragment 217 (output already on disk)
+[driver] Restart: reusing dump fragment 218 (output already on disk)
+[driver] Restart: reusing dump fragment 219 (output already on disk)
+[driver] Restart: reusing dump fragment 220 (output already on disk)
+[driver] Restart: reusing dump fragment 221 (output already on disk)
+[driver] Restart: reusing dump fragment 222 (output already on disk)
+[driver] Restart: reusing dump fragment 223 (output already on disk)
+[driver] Restart: reusing dump fragment 224 (output already on disk)
+[driver] Restart: reusing dump fragment 225 (output already on disk)
+[driver] Restart: reusing dump fragment 226 (output already on disk)
+[driver] Restart: reusing dump fragment 227 (output already on disk)
+[driver] Restart: reusing dump fragment 228 (output already on disk)
+[driver] Restart: reusing dump fragment 229 (output already on disk)
+[driver] Restart: reusing dump fragment 230 (output already on disk)
+[driver] Restart: reusing dump fragment 231 (output already on disk)
+[driver] Restart: reusing dump fragment 232 (output already on disk)
+[driver] Restart: reusing dump fragment 233 (output already on disk)
+[driver] Restart: reusing dump fragment 234 (output already on disk)
+[driver] Restart: reusing dump fragment 235 (output already on disk)
+[driver] Restart: reusing dump fragment 236 (output already on disk)
+[driver] Restart: reusing dump fragment 237 (output already on disk)
+[driver] Restart: reusing dump fragment 238 (output already on disk)
+[driver] Restart: reusing dump fragment 239 (output already on disk)
+[driver] Restart: reusing dump fragment 240 (output already on disk)
+[driver] Restart: reusing dump fragment 241 (output already on disk)
+[driver] Restart: reusing dump fragment 242 (output already on disk)
+[driver] Restart: reusing dump fragment 243 (output already on disk)
+[driver] Restart: reusing dump fragment 244 (output already on disk)
+[driver] Restart: reusing dump fragment 245 (output already on disk)
+[driver] Restart: reusing dump fragment 246 (output already on disk)
+[driver] Restart: reusing dump fragment 247 (output already on disk)
+[driver] Restart: reusing dump fragment 248 (output already on disk)
+[driver] Restart: reusing dump fragment 249 (output already on disk)
+[driver] Restart: reusing dump fragment 250 (output already on disk)
+[driver] Restart: reusing dump fragment 251 (output already on disk)
+[driver] Restart: reusing dump fragment 252 (output already on disk)
+[driver] Restart: reusing dump fragment 253 (output already on disk)
+[driver] Restart: reusing dump fragment 254 (output already on disk)
+[driver] Restart: reusing dump fragment 255 (output already on disk)
+[driver] Restart: reusing dump fragment 256 (output already on disk)
+[driver] Restart: reusing dump fragment 257 (output already on disk)
+[driver] Restart: reusing dump fragment 258 (output already on disk)
+[driver] Restart: reusing dump fragment 259 (output already on disk)
+[driver] Restart: reusing dump fragment 260 (output already on disk)
+[driver] Restart: reusing dump fragment 261 (output already on disk)
+[driver] Restart: reusing dump fragment 262 (output already on disk)
+[driver] Restart: reusing dump fragment 263 (output already on disk)
+[driver] Restart: reusing dump fragment 264 (output already on disk)
+[driver] Restart: reusing dump fragment 265 (output already on disk)
+[driver] Restart: reusing dump fragment 266 (output already on disk)
+[driver] Restart: reusing dump fragment 267 (output already on disk)
+[driver] Restart: reusing dump fragment 268 (output already on disk)
+[driver] Restart: reusing dump fragment 269 (output already on disk)
+[driver] Restart: reusing dump fragment 270 (output already on disk)
+[driver] Restart: reusing dump fragment 271 (output already on disk)
+[driver] Restart: reusing dump fragment 272 (output already on disk)
+[driver] Restart: reusing dump fragment 273 (output already on disk)
+[driver] Restart: reusing dump fragment 274 (output already on disk)
+[driver] Restart: reusing dump fragment 275 (output already on disk)
+[driver] Restart: reusing dump fragment 276 (output already on disk)
+[driver] Restart: reusing dump fragment 277 (output already on disk)
+[driver] Restart: reusing dump fragment 278 (output already on disk)
+[driver] Restart: reusing dump fragment 279 (output already on disk)
+[driver] Restart: reusing dump fragment 280 (output already on disk)
+[driver] Restart: reusing dump fragment 281 (output already on disk)
+[driver] Restart: reusing dump fragment 282 (output already on disk)
+[driver] Restart: reusing dump fragment 283 (output already on disk)
+[driver] Restart: reusing dump fragment 284 (output already on disk)
+[driver] Restart: reusing dump fragment 285 (output already on disk)
+[driver] Restart: reusing dump fragment 286 (output already on disk)
+[driver] Restart: reusing dump fragment 287 (output already on disk)
+[driver] Restart: reusing dump fragment 288 (output already on disk)
+[driver] Restart: reusing dump fragment 289 (output already on disk)
+[driver] Restart: reusing dump fragment 290 (output already on disk)
+[driver] Restart: reusing dump fragment 291 (output already on disk)
+[driver] Restart: reusing dump fragment 292 (output already on disk)
+[driver] Restart: reusing dump fragment 293 (output already on disk)
+[driver] Restart: reusing dump fragment 294 (output already on disk)
+[driver] Restart: reusing dump fragment 295 (output already on disk)
+[driver] Restart: reusing dump fragment 296 (output already on disk)
+[driver] Restart: reusing dump fragment 297 (output already on disk)
+[driver] Restart: reusing dump fragment 298 (output already on disk)
+[driver] Restart: reusing dump fragment 299 (output already on disk)
+[driver] Restart: reusing dump fragment 300 (output already on disk)
+[driver] Restart: reusing dump fragment 301 (output already on disk)
+[driver] Restart: reusing dump fragment 302 (output already on disk)
+[driver] Waiting on 303 fragment status file(s) in 'jobs_EWF/jobs_fragments_production'
+[driver] All fragment jobs reported DONE.
+[driver] === Wave 2/2 : submitting 0 solve (FCI/SCI) job(s) (skipping 303 already complete), <= 22 in flight ===
+[driver] Restart: reusing CI fragment   0 (output already on disk)
+[driver] Restart: reusing CI fragment   1 (output already on disk)
+[driver] Restart: reusing CI fragment   2 (output already on disk)
+[driver] Restart: reusing CI fragment   3 (output already on disk)
+[driver] Restart: reusing CI fragment   4 (output already on disk)
+[driver] Restart: reusing CI fragment   5 (output already on disk)
+[driver] Restart: reusing CI fragment   6 (output already on disk)
+[driver] Restart: reusing CI fragment   7 (output already on disk)
+[driver] Restart: reusing CI fragment   8 (output already on disk)
+[driver] Restart: reusing CI fragment   9 (output already on disk)
+[driver] Restart: reusing CI fragment  10 (output already on disk)
+[driver] Restart: reusing CI fragment  11 (output already on disk)
+[driver] Restart: reusing CI fragment  12 (output already on disk)
+[driver] Restart: reusing CI fragment  13 (output already on disk)
+[driver] Restart: reusing CI fragment  14 (output already on disk)
+[driver] Restart: reusing CI fragment  15 (output already on disk)
+[driver] Restart: reusing CI fragment  16 (output already on disk)
+[driver] Restart: reusing CI fragment  17 (output already on disk)
+[driver] Restart: reusing CI fragment  18 (output already on disk)
+[driver] Restart: reusing CI fragment  19 (output already on disk)
+[driver] Restart: reusing CI fragment  20 (output already on disk)
+[driver] Restart: reusing CI fragment  21 (output already on disk)
+[driver] Restart: reusing CI fragment  22 (output already on disk)
+[driver] Restart: reusing CI fragment  23 (output already on disk)
+[driver] Restart: reusing CI fragment  24 (output already on disk)
+[driver] Restart: reusing CI fragment  25 (output already on disk)
+[driver] Restart: reusing CI fragment  26 (output already on disk)
+[driver] Restart: reusing CI fragment  27 (output already on disk)
+[driver] Restart: reusing CI fragment  28 (output already on disk)
+[driver] Restart: reusing CI fragment  29 (output already on disk)
+[driver] Restart: reusing CI fragment  30 (output already on disk)
+[driver] Restart: reusing CI fragment  31 (output already on disk)
+[driver] Restart: reusing CI fragment  32 (output already on disk)
+[driver] Restart: reusing CI fragment  33 (output already on disk)
+[driver] Restart: reusing CI fragment  34 (output already on disk)
+[driver] Restart: reusing CI fragment  35 (output already on disk)
+[driver] Restart: reusing CI fragment  36 (output already on disk)
+[driver] Restart: reusing CI fragment  37 (output already on disk)
+[driver] Restart: reusing CI fragment  38 (output already on disk)
+[driver] Restart: reusing CI fragment  39 (output already on disk)
+[driver] Restart: reusing CI fragment  40 (output already on disk)
+[driver] Restart: reusing CI fragment  41 (output already on disk)
+[driver] Restart: reusing CI fragment  42 (output already on disk)
+[driver] Restart: reusing CI fragment  43 (output already on disk)
+[driver] Restart: reusing CI fragment  44 (output already on disk)
+[driver] Restart: reusing CI fragment  45 (output already on disk)
+[driver] Restart: reusing CI fragment  46 (output already on disk)
+[driver] Restart: reusing CI fragment  47 (output already on disk)
+[driver] Restart: reusing CI fragment  48 (output already on disk)
+[driver] Restart: reusing CI fragment  49 (output already on disk)
+[driver] Restart: reusing CI fragment  50 (output already on disk)
+[driver] Restart: reusing CI fragment  51 (output already on disk)
+[driver] Restart: reusing CI fragment  52 (output already on disk)
+[driver] Restart: reusing CI fragment  53 (output already on disk)
+[driver] Restart: reusing CI fragment  54 (output already on disk)
+[driver] Restart: reusing CI fragment  55 (output already on disk)
+[driver] Restart: reusing CI fragment  56 (output already on disk)
+[driver] Restart: reusing CI fragment  57 (output already on disk)
+[driver] Restart: reusing CI fragment  58 (output already on disk)
+[driver] Restart: reusing CI fragment  59 (output already on disk)
+[driver] Restart: reusing CI fragment  60 (output already on disk)
+[driver] Restart: reusing CI fragment  61 (output already on disk)
+[driver] Restart: reusing CI fragment  62 (output already on disk)
+[driver] Restart: reusing CI fragment  63 (output already on disk)
+[driver] Restart: reusing CI fragment  64 (output already on disk)
+[driver] Restart: reusing CI fragment  65 (output already on disk)
+[driver] Restart: reusing CI fragment  66 (output already on disk)
+[driver] Restart: reusing CI fragment  67 (output already on disk)
+[driver] Restart: reusing CI fragment  68 (output already on disk)
+[driver] Restart: reusing CI fragment  69 (output already on disk)
+[driver] Restart: reusing CI fragment  70 (output already on disk)
+[driver] Restart: reusing CI fragment  71 (output already on disk)
+[driver] Restart: reusing CI fragment  72 (output already on disk)
+[driver] Restart: reusing CI fragment  73 (output already on disk)
+[driver] Restart: reusing CI fragment  74 (output already on disk)
+[driver] Restart: reusing CI fragment  75 (output already on disk)
+[driver] Restart: reusing CI fragment  76 (output already on disk)
+[driver] Restart: reusing CI fragment  77 (output already on disk)
+[driver] Restart: reusing CI fragment  78 (output already on disk)
+[driver] Restart: reusing CI fragment  79 (output already on disk)
+[driver] Restart: reusing CI fragment  80 (output already on disk)
+[driver] Restart: reusing CI fragment  81 (output already on disk)
+[driver] Restart: reusing CI fragment  82 (output already on disk)
+[driver] Restart: reusing CI fragment  83 (output already on disk)
+[driver] Restart: reusing CI fragment  84 (output already on disk)
+[driver] Restart: reusing CI fragment  85 (output already on disk)
+[driver] Restart: reusing CI fragment  86 (output already on disk)
+[driver] Restart: reusing CI fragment  87 (output already on disk)
+[driver] Restart: reusing CI fragment  88 (output already on disk)
+[driver] Restart: reusing CI fragment  89 (output already on disk)
+[driver] Restart: reusing CI fragment  90 (output already on disk)
+[driver] Restart: reusing CI fragment  91 (output already on disk)
+[driver] Restart: reusing CI fragment  92 (output already on disk)
+[driver] Restart: reusing CI fragment  93 (output already on disk)
+[driver] Restart: reusing CI fragment  94 (output already on disk)
+[driver] Restart: reusing CI fragment  95 (output already on disk)
+[driver] Restart: reusing CI fragment  96 (output already on disk)
+[driver] Restart: reusing CI fragment  97 (output already on disk)
+[driver] Restart: reusing CI fragment  98 (output already on disk)
+[driver] Restart: reusing CI fragment  99 (output already on disk)
+[driver] Restart: reusing CI fragment 100 (output already on disk)
+[driver] Restart: reusing CI fragment 101 (output already on disk)
+[driver] Restart: reusing CI fragment 102 (output already on disk)
+[driver] Restart: reusing CI fragment 103 (output already on disk)
+[driver] Restart: reusing CI fragment 104 (output already on disk)
+[driver] Restart: reusing CI fragment 105 (output already on disk)
+[driver] Restart: reusing CI fragment 106 (output already on disk)
+[driver] Restart: reusing CI fragment 107 (output already on disk)
+[driver] Restart: reusing CI fragment 108 (output already on disk)
+[driver] Restart: reusing CI fragment 109 (output already on disk)
+[driver] Restart: reusing CI fragment 110 (output already on disk)
+[driver] Restart: reusing CI fragment 111 (output already on disk)
+[driver] Restart: reusing CI fragment 112 (output already on disk)
+[driver] Restart: reusing CI fragment 113 (output already on disk)
+[driver] Restart: reusing CI fragment 114 (output already on disk)
+[driver] Restart: reusing CI fragment 115 (output already on disk)
+[driver] Restart: reusing CI fragment 116 (output already on disk)
+[driver] Restart: reusing CI fragment 117 (output already on disk)
+[driver] Restart: reusing CI fragment 118 (output already on disk)
+[driver] Restart: reusing CI fragment 119 (output already on disk)
+[driver] Restart: reusing CI fragment 120 (output already on disk)
+[driver] Restart: reusing CI fragment 121 (output already on disk)
+[driver] Restart: reusing CI fragment 122 (output already on disk)
+[driver] Restart: reusing CI fragment 123 (output already on disk)
+[driver] Restart: reusing CI fragment 124 (output already on disk)
+[driver] Restart: reusing CI fragment 125 (output already on disk)
+[driver] Restart: reusing CI fragment 126 (output already on disk)
+[driver] Restart: reusing CI fragment 127 (output already on disk)
+[driver] Restart: reusing CI fragment 128 (output already on disk)
+[driver] Restart: reusing CI fragment 129 (output already on disk)
+[driver] Restart: reusing CI fragment 130 (output already on disk)
+[driver] Restart: reusing CI fragment 131 (output already on disk)
+[driver] Restart: reusing CI fragment 132 (output already on disk)
+[driver] Restart: reusing CI fragment 133 (output already on disk)
+[driver] Restart: reusing CI fragment 134 (output already on disk)
+[driver] Restart: reusing CI fragment 135 (output already on disk)
+[driver] Restart: reusing CI fragment 136 (output already on disk)
+[driver] Restart: reusing CI fragment 137 (output already on disk)
+[driver] Restart: reusing CI fragment 138 (output already on disk)
+[driver] Restart: reusing CI fragment 139 (output already on disk)
+[driver] Restart: reusing CI fragment 140 (output already on disk)
+[driver] Restart: reusing CI fragment 141 (output already on disk)
+[driver] Restart: reusing CI fragment 142 (output already on disk)
+[driver] Restart: reusing CI fragment 143 (output already on disk)
+[driver] Restart: reusing CI fragment 144 (output already on disk)
+[driver] Restart: reusing CI fragment 145 (output already on disk)
+[driver] Restart: reusing CI fragment 146 (output already on disk)
+[driver] Restart: reusing CI fragment 147 (output already on disk)
+[driver] Restart: reusing CI fragment 148 (output already on disk)
+[driver] Restart: reusing CI fragment 149 (output already on disk)
+[driver] Restart: reusing CI fragment 150 (output already on disk)
+[driver] Restart: reusing CI fragment 151 (output already on disk)
+[driver] Restart: reusing CI fragment 152 (output already on disk)
+[driver] Restart: reusing CI fragment 153 (output already on disk)
+[driver] Restart: reusing CI fragment 154 (output already on disk)
+[driver] Restart: reusing CI fragment 155 (output already on disk)
+[driver] Restart: reusing CI fragment 156 (output already on disk)
+[driver] Restart: reusing CI fragment 157 (output already on disk)
+[driver] Restart: reusing CI fragment 158 (output already on disk)
+[driver] Restart: reusing CI fragment 159 (output already on disk)
+[driver] Restart: reusing CI fragment 160 (output already on disk)
+[driver] Restart: reusing CI fragment 161 (output already on disk)
+[driver] Restart: reusing CI fragment 162 (output already on disk)
+[driver] Restart: reusing CI fragment 163 (output already on disk)
+[driver] Restart: reusing CI fragment 164 (output already on disk)
+[driver] Restart: reusing CI fragment 165 (output already on disk)
+[driver] Restart: reusing CI fragment 166 (output already on disk)
+[driver] Restart: reusing CI fragment 167 (output already on disk)
+[driver] Restart: reusing CI fragment 168 (output already on disk)
+[driver] Restart: reusing CI fragment 169 (output already on disk)
+[driver] Restart: reusing CI fragment 170 (output already on disk)
+[driver] Restart: reusing CI fragment 171 (output already on disk)
+[driver] Restart: reusing CI fragment 172 (output already on disk)
+[driver] Restart: reusing CI fragment 173 (output already on disk)
+[driver] Restart: reusing CI fragment 174 (output already on disk)
+[driver] Restart: reusing CI fragment 175 (output already on disk)
+[driver] Restart: reusing CI fragment 176 (output already on disk)
+[driver] Restart: reusing CI fragment 177 (output already on disk)
+[driver] Restart: reusing CI fragment 178 (output already on disk)
+[driver] Restart: reusing CI fragment 179 (output already on disk)
+[driver] Restart: reusing CI fragment 180 (output already on disk)
+[driver] Restart: reusing CI fragment 181 (output already on disk)
+[driver] Restart: reusing CI fragment 182 (output already on disk)
+[driver] Restart: reusing CI fragment 183 (output already on disk)
+[driver] Restart: reusing CI fragment 184 (output already on disk)
+[driver] Restart: reusing CI fragment 185 (output already on disk)
+[driver] Restart: reusing CI fragment 186 (output already on disk)
+[driver] Restart: reusing CI fragment 187 (output already on disk)
+[driver] Restart: reusing CI fragment 188 (output already on disk)
+[driver] Restart: reusing CI fragment 189 (output already on disk)
+[driver] Restart: reusing CI fragment 190 (output already on disk)
+[driver] Restart: reusing CI fragment 191 (output already on disk)
+[driver] Restart: reusing CI fragment 192 (output already on disk)
+[driver] Restart: reusing CI fragment 193 (output already on disk)
+[driver] Restart: reusing CI fragment 194 (output already on disk)
+[driver] Restart: reusing CI fragment 195 (output already on disk)
+[driver] Restart: reusing CI fragment 196 (output already on disk)
+[driver] Restart: reusing CI fragment 197 (output already on disk)
+[driver] Restart: reusing CI fragment 198 (output already on disk)
+[driver] Restart: reusing CI fragment 199 (output already on disk)
+[driver] Restart: reusing CI fragment 200 (output already on disk)
+[driver] Restart: reusing CI fragment 201 (output already on disk)
+[driver] Restart: reusing CI fragment 202 (output already on disk)
+[driver] Restart: reusing CI fragment 203 (output already on disk)
+[driver] Restart: reusing CI fragment 204 (output already on disk)
+[driver] Restart: reusing CI fragment 205 (output already on disk)
+[driver] Restart: reusing CI fragment 206 (output already on disk)
+[driver] Restart: reusing CI fragment 207 (output already on disk)
+[driver] Restart: reusing CI fragment 208 (output already on disk)
+[driver] Restart: reusing CI fragment 209 (output already on disk)
+[driver] Restart: reusing CI fragment 210 (output already on disk)
+[driver] Restart: reusing CI fragment 211 (output already on disk)
+[driver] Restart: reusing CI fragment 212 (output already on disk)
+[driver] Restart: reusing CI fragment 213 (output already on disk)
+[driver] Restart: reusing CI fragment 214 (output already on disk)
+[driver] Restart: reusing CI fragment 215 (output already on disk)
+[driver] Restart: reusing CI fragment 216 (output already on disk)
+[driver] Restart: reusing CI fragment 217 (output already on disk)
+[driver] Restart: reusing CI fragment 218 (output already on disk)
+[driver] Restart: reusing CI fragment 219 (output already on disk)
+[driver] Restart: reusing CI fragment 220 (output already on disk)
+[driver] Restart: reusing CI fragment 221 (output already on disk)
+[driver] Restart: reusing CI fragment 222 (output already on disk)
+[driver] Restart: reusing CI fragment 223 (output already on disk)
+[driver] Restart: reusing CI fragment 224 (output already on disk)
+[driver] Restart: reusing CI fragment 225 (output already on disk)
+[driver] Restart: reusing CI fragment 226 (output already on disk)
+[driver] Restart: reusing CI fragment 227 (output already on disk)
+[driver] Restart: reusing CI fragment 228 (output already on disk)
+[driver] Restart: reusing CI fragment 229 (output already on disk)
+[driver] Restart: reusing CI fragment 230 (output already on disk)
+[driver] Restart: reusing CI fragment 231 (output already on disk)
+[driver] Restart: reusing CI fragment 232 (output already on disk)
+[driver] Restart: reusing CI fragment 233 (output already on disk)
+[driver] Restart: reusing CI fragment 234 (output already on disk)
+[driver] Restart: reusing CI fragment 235 (output already on disk)
+[driver] Restart: reusing CI fragment 236 (output already on disk)
+[driver] Restart: reusing CI fragment 237 (output already on disk)
+[driver] Restart: reusing CI fragment 238 (output already on disk)
+[driver] Restart: reusing CI fragment 239 (output already on disk)
+[driver] Restart: reusing CI fragment 240 (output already on disk)
+[driver] Restart: reusing CI fragment 241 (output already on disk)
+[driver] Restart: reusing CI fragment 242 (output already on disk)
+[driver] Restart: reusing CI fragment 243 (output already on disk)
+[driver] Restart: reusing CI fragment 244 (output already on disk)
+[driver] Restart: reusing CI fragment 245 (output already on disk)
+[driver] Restart: reusing CI fragment 246 (output already on disk)
+[driver] Restart: reusing CI fragment 247 (output already on disk)
+[driver] Restart: reusing CI fragment 248 (output already on disk)
+[driver] Restart: reusing CI fragment 249 (output already on disk)
+[driver] Restart: reusing CI fragment 250 (output already on disk)
+[driver] Restart: reusing CI fragment 251 (output already on disk)
+[driver] Restart: reusing CI fragment 252 (output already on disk)
+[driver] Restart: reusing CI fragment 253 (output already on disk)
+[driver] Restart: reusing CI fragment 254 (output already on disk)
+[driver] Restart: reusing CI fragment 255 (output already on disk)
+[driver] Restart: reusing CI fragment 256 (output already on disk)
+[driver] Restart: reusing CI fragment 257 (output already on disk)
+[driver] Restart: reusing CI fragment 258 (output already on disk)
+[driver] Restart: reusing CI fragment 259 (output already on disk)
+[driver] Restart: reusing CI fragment 260 (output already on disk)
+[driver] Restart: reusing CI fragment 261 (output already on disk)
+[driver] Restart: reusing CI fragment 262 (output already on disk)
+[driver] Restart: reusing CI fragment 263 (output already on disk)
+[driver] Restart: reusing CI fragment 264 (output already on disk)
+[driver] Restart: reusing CI fragment 265 (output already on disk)
+[driver] Restart: reusing CI fragment 266 (output already on disk)
+[driver] Restart: reusing CI fragment 267 (output already on disk)
+[driver] Restart: reusing CI fragment 268 (output already on disk)
+[driver] Restart: reusing CI fragment 269 (output already on disk)
+[driver] Restart: reusing CI fragment 270 (output already on disk)
+[driver] Restart: reusing CI fragment 271 (output already on disk)
+[driver] Restart: reusing CI fragment 272 (output already on disk)
+[driver] Restart: reusing CI fragment 273 (output already on disk)
+[driver] Restart: reusing CI fragment 274 (output already on disk)
+[driver] Restart: reusing CI fragment 275 (output already on disk)
+[driver] Restart: reusing CI fragment 276 (output already on disk)
+[driver] Restart: reusing CI fragment 277 (output already on disk)
+[driver] Restart: reusing CI fragment 278 (output already on disk)
+[driver] Restart: reusing CI fragment 279 (output already on disk)
+[driver] Restart: reusing CI fragment 280 (output already on disk)
+[driver] Restart: reusing CI fragment 281 (output already on disk)
+[driver] Restart: reusing CI fragment 282 (output already on disk)
+[driver] Restart: reusing CI fragment 283 (output already on disk)
+[driver] Restart: reusing CI fragment 284 (output already on disk)
+[driver] Restart: reusing CI fragment 285 (output already on disk)
+[driver] Restart: reusing CI fragment 286 (output already on disk)
+[driver] Restart: reusing CI fragment 287 (output already on disk)
+[driver] Restart: reusing CI fragment 288 (output already on disk)
+[driver] Restart: reusing CI fragment 289 (output already on disk)
+[driver] Restart: reusing CI fragment 290 (output already on disk)
+[driver] Restart: reusing CI fragment 291 (output already on disk)
+[driver] Restart: reusing CI fragment 292 (output already on disk)
+[driver] Restart: reusing CI fragment 293 (output already on disk)
+[driver] Restart: reusing CI fragment 294 (output already on disk)
+[driver] Restart: reusing CI fragment 295 (output already on disk)
+[driver] Restart: reusing CI fragment 296 (output already on disk)
+[driver] Restart: reusing CI fragment 297 (output already on disk)
+[driver] Restart: reusing CI fragment 298 (output already on disk)
+[driver] Restart: reusing CI fragment 299 (output already on disk)
+[driver] Restart: reusing CI fragment 300 (output already on disk)
+[driver] Restart: reusing CI fragment 301 (output already on disk)
+[driver] Restart: reusing CI fragment 302 (output already on disk)
+[driver] Waiting on 303 fragment status file(s) in 'jobs_EWF/jobs_ci_calculations'
+[driver] All fragment jobs reported DONE.
+[driver] Assembly route: cluster_energy (per-fragment energy sum; no global 919^4 cumulant is ever formed -- energy only)
+[driver] Per-cluster energies (heff + eris):
+                      N  E_cluster = -102.7320894185 Ha  [SQD, norb=16]
+                      C  E_cluster = -171.8747150065 Ha  [SQD, norb=28]
+                      C  E_cluster = -138.2423399074 Ha  [SQD, norb=24]
+                      C  E_cluster = -154.5464399262 Ha  [SQD, norb=23]
+                      O  E_cluster = -150.4683728062 Ha  [SQD, norb=17]
+                      N  E_cluster = -109.7910208615 Ha  [SQD, norb=15]
+                      C  E_cluster = -164.7034904449 Ha  [SQD, norb=25]
+                      O  E_cluster = -150.0837415859 Ha  [SQD, norb=17]
+                      N  E_cluster = -155.5540708936 Ha  [SQD, norb=23]
+                      C  E_cluster = -172.5475641332 Ha  [SQD, norb=28]
+                      C  E_cluster = -134.2299695735 Ha  [SQD, norb=25]
+                      C  E_cluster = -153.1437604905 Ha  [SQD, norb=28]
+                      C  E_cluster = -89.1068499606 Ha  [SQD, norb=17]
+                      C  E_cluster = -88.7363204445 Ha  [SQD, norb=17]
+                      C  E_cluster = -164.9829168483 Ha  [SQD, norb=25]
+                      O  E_cluster = -149.2180431102 Ha  [SQD, norb=17]
+                      N  E_cluster = -153.9902112179 Ha  [SQD, norb=22]
+                      C  E_cluster = -183.3358376589 Ha  [SQD, norb=30]
+                      C  E_cluster = -121.5530329716 Ha  [SQD, norb=24]
+                      C  E_cluster = -189.6706746461 Ha  [SQD, norb=33]
+                      C  E_cluster = -136.6706194330 Ha  [SQD, norb=25]
+                      C  E_cluster = -180.9761085972 Ha  [SQD, norb=28]
+                      C  E_cluster = -189.3193553136 Ha  [SQD, norb=29]
+                      O  E_cluster = -121.1854900886 Ha  [SQD, norb=15]
+                      C  E_cluster = -168.7488733827 Ha  [SQD, norb=27]
+                      C  E_cluster = -137.4484160918 Ha  [SQD, norb=26]
+                      C  E_cluster = -166.0438324677 Ha  [SQD, norb=24]
+                      O  E_cluster = -150.2307241650 Ha  [SQD, norb=16]
+                      N  E_cluster = -155.3671545307 Ha  [SQD, norb=24]
+                      C  E_cluster = -183.8236542377 Ha  [SQD, norb=31]
+                      C  E_cluster = -164.2528655316 Ha  [SQD, norb=30]
+                      C  E_cluster = -88.3647852221 Ha  [SQD, norb=18]
+                      C  E_cluster = -114.2048734922 Ha  [SQD, norb=22]
+                      C  E_cluster = -81.1914146492 Ha  [SQD, norb=16]
+                      C  E_cluster = -164.8487559447 Ha  [SQD, norb=25]
+                      O  E_cluster = -147.1042089752 Ha  [SQD, norb=17]
+                      N  E_cluster = -154.8942381024 Ha  [SQD, norb=22]
+                      C  E_cluster = -185.6808509376 Ha  [SQD, norb=30]
+                      C  E_cluster = -123.6385240462 Ha  [SQD, norb=24]
+                      C  E_cluster = -127.8934074208 Ha  [SQD, norb=24]
+                      C  E_cluster = -155.6418347834 Ha  [SQD, norb=23]
+                      O  E_cluster = -152.2343087601 Ha  [SQD, norb=17]
+                      N  E_cluster = -110.7450070811 Ha  [SQD, norb=15]
+                      C  E_cluster = -166.6385582758 Ha  [SQD, norb=25]
+                      O  E_cluster = -154.0133781427 Ha  [SQD, norb=17]
+                      N  E_cluster = -155.4868281284 Ha  [SQD, norb=24]
+                      C  E_cluster = -196.1370001589 Ha  [SQD, norb=32]
+                      C  E_cluster = -122.0630615167 Ha  [SQD, norb=23]
+                      C  E_cluster = -168.6844235775 Ha  [SQD, norb=31]
+                      C  E_cluster = -141.8940174024 Ha  [SQD, norb=25]
+                      N  E_cluster = -168.0513736827 Ha  [SQD, norb=23]
+                      C  E_cluster = -200.7070634006 Ha  [SQD, norb=32]
+                      C  E_cluster = -150.8428650453 Ha  [SQD, norb=26]
+                      C  E_cluster = -148.0217153831 Ha  [SQD, norb=27]
+                      C  E_cluster = -148.8282892078 Ha  [SQD, norb=26]
+                      C  E_cluster = -148.4447253014 Ha  [SQD, norb=27]
+                      C  E_cluster = -197.3652518165 Ha  [SQD, norb=33]
+                      C  E_cluster = -164.3648786966 Ha  [SQD, norb=24]
+                      O  E_cluster = -148.4877535017 Ha  [SQD, norb=17]
+                      N  E_cluster = -154.5485630227 Ha  [SQD, norb=23]
+                      C  E_cluster = -183.9288689692 Ha  [SQD, norb=30]
+                      C  E_cluster = -134.4709873453 Ha  [SQD, norb=25]
+                      C  E_cluster = -153.8344137459 Ha  [SQD, norb=28]
+                      C  E_cluster = -88.9372375561 Ha  [SQD, norb=17]
+                      C  E_cluster = -89.5418035823 Ha  [SQD, norb=17]
+                      C  E_cluster = -164.6331789627 Ha  [SQD, norb=25]
+                      O  E_cluster = -148.3211548556 Ha  [SQD, norb=17]
+                      N  E_cluster = -154.8497475999 Ha  [SQD, norb=22]
+                      C  E_cluster = -185.3395821496 Ha  [SQD, norb=29]
+                      C  E_cluster = -123.9156060620 Ha  [SQD, norb=24]
+                      C  E_cluster = -123.6365872349 Ha  [SQD, norb=24]
+                      C  E_cluster = -125.1132490319 Ha  [SQD, norb=23]
+                      C  E_cluster = -117.3830663881 Ha  [SQD, norb=21]
+                      N  E_cluster = -103.5057145655 Ha  [SQD, norb=16]
+                      C  E_cluster = -165.7601261933 Ha  [SQD, norb=25]
+                      O  E_cluster = -151.2275283400 Ha  [SQD, norb=16]
+                      N  E_cluster = -144.7413197419 Ha  [SQD, norb=22]
+                      C  E_cluster = -187.0883197555 Ha  [SQD, norb=30]
+                      C  E_cluster = -156.0903265919 Ha  [SQD, norb=25]
+                      C  E_cluster = -172.4571488529 Ha  [SQD, norb=23]
+                      O  E_cluster = -128.1774129457 Ha  [FCI, norb=14]
+                      O  E_cluster = -155.1472035253 Ha  [SQD, norb=18]
+                      C  E_cluster = -166.2749960640 Ha  [SQD, norb=25]
+                      O  E_cluster = -150.8178532365 Ha  [SQD, norb=17]
+                      N  E_cluster = -155.2409772414 Ha  [SQD, norb=22]
+                      C  E_cluster = -141.9825177579 Ha  [SQD, norb=24]
+                      C  E_cluster = -166.4861050679 Ha  [SQD, norb=24]
+                      O  E_cluster = -151.8406033802 Ha  [SQD, norb=16]
+                      N  E_cluster = -145.5052859296 Ha  [SQD, norb=21]
+                      C  E_cluster = -141.6846356346 Ha  [SQD, norb=24]
+                      C  E_cluster = -164.1848334546 Ha  [SQD, norb=25]
+                      O  E_cluster = -148.2102383674 Ha  [SQD, norb=17]
+                      N  E_cluster = -199.7700060210 Ha  [SQD, norb=28]
+                      C  E_cluster = -140.7628345741 Ha  [SQD, norb=25]
+                      C  E_cluster = -127.1000194061 Ha  [SQD, norb=24]
+                      C  E_cluster = -125.6502554843 Ha  [SQD, norb=24]
+                      C  E_cluster = -185.9524483322 Ha  [SQD, norb=30]
+                      C  E_cluster = -165.2741177506 Ha  [SQD, norb=25]
+                      O  E_cluster = -150.0493306888 Ha  [SQD, norb=16]
+                      N  E_cluster = -156.4204645341 Ha  [SQD, norb=23]
+                      C  E_cluster = -189.0905915671 Ha  [SQD, norb=29]
+                      C  E_cluster = -134.6296509290 Ha  [SQD, norb=21]
+                      O  E_cluster = -112.6135673203 Ha  [SQD, norb=15]
+                      C  E_cluster = -165.9245012556 Ha  [SQD, norb=25]
+                      O  E_cluster = -150.5480341072 Ha  [SQD, norb=18]
+                      N  E_cluster = -144.7547067954 Ha  [SQD, norb=22]
+                      C  E_cluster = -200.1226206733 Ha  [SQD, norb=30]
+                      C  E_cluster = -132.8374251955 Ha  [SQD, norb=21]
+                      O  E_cluster = -112.6570572743 Ha  [FCI, norb=13]
+                      C  E_cluster = -166.3031744017 Ha  [SQD, norb=25]
+                      O  E_cluster = -150.5065279403 Ha  [SQD, norb=16]
+                      N  E_cluster = -155.5122666124 Ha  [SQD, norb=23]
+                      C  E_cluster = -144.2098914254 Ha  [SQD, norb=24]
+                      C  E_cluster = -167.6324210371 Ha  [SQD, norb=24]
+                      O  E_cluster = -150.0892639692 Ha  [SQD, norb=17]
+                      N  E_cluster = -156.4979748453 Ha  [SQD, norb=23]
+                      C  E_cluster = -184.3534064746 Ha  [SQD, norb=30]
+                      C  E_cluster = -124.2416596125 Ha  [SQD, norb=24]
+                      C  E_cluster = -113.4424693284 Ha  [SQD, norb=23]
+                      C  E_cluster = -127.9005633215 Ha  [SQD, norb=24]
+                      N  E_cluster = -143.6368224123 Ha  [SQD, norb=21]
+                      C  E_cluster = -156.8000409063 Ha  [SQD, norb=23]
+                      N  E_cluster = -109.3082741984 Ha  [SQD, norb=16]
+                      N  E_cluster = -133.2814328408 Ha  [SQD, norb=19]
+                      C  E_cluster = -163.2863017472 Ha  [SQD, norb=25]
+                      O  E_cluster = -147.7535858458 Ha  [SQD, norb=18]
+                      N  E_cluster = -200.7694542872 Ha  [SQD, norb=28]
+                      C  E_cluster = -130.9865086812 Ha  [SQD, norb=23]
+                      C  E_cluster = -127.9229239410 Ha  [SQD, norb=24]
+                      C  E_cluster = -125.4195221495 Ha  [SQD, norb=24]
+                      C  E_cluster = -187.4947182096 Ha  [SQD, norb=29]
+                      C  E_cluster = -178.4229891462 Ha  [SQD, norb=26]
+                      O  E_cluster = -148.4415175231 Ha  [SQD, norb=18]
+                      N  E_cluster = -201.1369358840 Ha  [SQD, norb=28]
+                      C  E_cluster = -141.4483874380 Ha  [SQD, norb=24]
+                      C  E_cluster = -127.0897349042 Ha  [SQD, norb=23]
+                      C  E_cluster = -125.7225347557 Ha  [SQD, norb=24]
+                      C  E_cluster = -200.3863005822 Ha  [SQD, norb=31]
+                      C  E_cluster = -165.0607487270 Ha  [SQD, norb=25]
+                      O  E_cluster = -149.3737534683 Ha  [SQD, norb=18]
+                      N  E_cluster = -201.6261857103 Ha  [SQD, norb=29]
+                      C  E_cluster = -139.8427762130 Ha  [SQD, norb=24]
+                      C  E_cluster = -126.3323448708 Ha  [SQD, norb=23]
+                      C  E_cluster = -125.2427039714 Ha  [SQD, norb=24]
+                      C  E_cluster = -187.7607568498 Ha  [SQD, norb=29]
+                      C  E_cluster = -167.5667790926 Ha  [SQD, norb=25]
+                      O  E_cluster = -149.2329678973 Ha  [SQD, norb=18]
+                      N  E_cluster = -155.6778166024 Ha  [SQD, norb=23]
+                      C  E_cluster = -200.8747464181 Ha  [SQD, norb=30]
+                      C  E_cluster = -133.7588374919 Ha  [SQD, norb=21]
+                      O  E_cluster = -112.3498640393 Ha  [FCI, norb=14]
+                      C  E_cluster = -171.3195855533 Ha  [SQD, norb=23]
+                      O  E_cluster = -155.5891682295 Ha  [SQD, norb=18]
+                      O  E_cluster = -127.1496938601 Ha  [FCI, norb=14]
+                      H  E_cluster = -19.7446867000 Ha  [FCI, norb=7]
+                      H  E_cluster = -19.7619043559 Ha  [FCI, norb=7]
+                      H  E_cluster = -23.0794270181 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.4086228297 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3707020157 Ha  [FCI, norb=8]
+                      H  E_cluster = -20.8126171769 Ha  [FCI, norb=7]
+                      H  E_cluster = -20.7207619787 Ha  [FCI, norb=7]
+                      H  E_cluster = -20.1740444424 Ha  [FCI, norb=7]
+                      H  E_cluster = -17.4477425673 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4391916086 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4308566096 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.0678300509 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6444765161 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6492827485 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6547010944 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5147765917 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5264517324 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5258210281 Ha  [FCI, norb=8]
+                      H  E_cluster = -26.5480591977 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.1899976344 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5761657694 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5544583493 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.1114928464 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3730463586 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.3769060129 Ha  [FCI, norb=7]
+                      H  E_cluster = -17.2112059347 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3208166177 Ha  [FCI, norb=8]
+                      H  E_cluster = -26.2746220520 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.2532366526 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.0901396641 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5264786064 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4970807991 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4797923176 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4731373043 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5910523126 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7915209508 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.8077986085 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7224265913 Ha  [FCI, norb=8]
+                      H  E_cluster = -26.7263659930 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.3368660457 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5581992591 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5346992536 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4637539093 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5567283375 Ha  [FCI, norb=8]
+                      H  E_cluster = -20.8486242938 Ha  [FCI, norb=7]
+                      H  E_cluster = -20.7635612207 Ha  [FCI, norb=7]
+                      H  E_cluster = -20.1400178642 Ha  [FCI, norb=7]
+                      H  E_cluster = -22.6885814977 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.5149362920 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5157293927 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7332528276 Ha  [FCI, norb=8]
+                      H  E_cluster = -20.4100196478 Ha  [FCI, norb=7]
+                      H  E_cluster = -17.4079985517 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.1418055108 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2323273140 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2036469933 Ha  [FCI, norb=8]
+                      H  E_cluster = -26.2847860505 Ha  [FCI, norb=9]
+                      H  E_cluster = -22.6652620501 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.4405039255 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4232375692 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2543806257 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5898768666 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5947851651 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5989170834 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7055808719 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7212945297 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6599073910 Ha  [FCI, norb=8]
+                      H  E_cluster = -20.2825062621 Ha  [FCI, norb=7]
+                      H  E_cluster = -17.3437868626 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5902137153 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5778692877 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5480897199 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4705476981 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5446751994 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5534517439 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5493000767 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5365305565 Ha  [FCI, norb=8]
+                      H  E_cluster = -19.8686589328 Ha  [FCI, norb=7]
+                      H  E_cluster = -19.8617342268 Ha  [FCI, norb=7]
+                      H  E_cluster = -26.1877983757 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.1571072511 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.7643500697 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7366200253 Ha  [FCI, norb=8]
+                      H  E_cluster = -31.4734556466 Ha  [FCI, norb=8]
+                      H  E_cluster = -25.5317013052 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.6732840887 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5417954500 Ha  [FCI, norb=8]
+                      H  E_cluster = -26.5547193698 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.1794099771 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.8125173460 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5909129626 Ha  [FCI, norb=8]
+                      H  E_cluster = -24.4634286573 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.6111349098 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6220296588 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6734283314 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6422113847 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.4945147204 Ha  [FCI, norb=9]
+                      H  E_cluster = -26.0723677958 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7995873165 Ha  [FCI, norb=8]
+                      H  E_cluster = -25.4337609987 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.8705630028 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.3299349411 Ha  [FCI, norb=7]
+                      H  E_cluster = -25.9790581781 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.0688462880 Ha  [FCI, norb=8]
+                      H  E_cluster = -25.4776368053 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.7263450802 Ha  [FCI, norb=8]
+                      H  E_cluster = -29.2487899621 Ha  [FCI, norb=8]
+                      H  E_cluster = -25.2557073077 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.8545962927 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.9847781702 Ha  [FCI, norb=8]
+                      H  E_cluster = -26.7585552899 Ha  [FCI, norb=9]
+                      H  E_cluster = -22.6564726366 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.4421601843 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4582217825 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5783656455 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5383682334 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7100395087 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7249211723 Ha  [FCI, norb=8]
+                      H  E_cluster = -20.4514694293 Ha  [FCI, norb=7]
+                      H  E_cluster = -20.8842980314 Ha  [FCI, norb=7]
+                      H  E_cluster = -20.7539918318 Ha  [FCI, norb=7]
+                      H  E_cluster = -19.4566105028 Ha  [FCI, norb=8]
+                      H  E_cluster = -24.7086242870 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.9215463933 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7024283130 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7232019014 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4299755782 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4828691400 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.1103638396 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.7092575937 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6337914245 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7058993260 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7046035925 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6585511324 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6719820663 Ha  [FCI, norb=8]
+                      H  E_cluster = -22.9952464463 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.6369714803 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5447751486 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5351856653 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5337835287 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5906881431 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5476133529 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7460987763 Ha  [FCI, norb=8]
+                      H  E_cluster = -25.8382853739 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6916974631 Ha  [FCI, norb=8]
+                      H  E_cluster = -25.4010105026 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.7408599318 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.1807546994 Ha  [FCI, norb=7]
+                      H  E_cluster = -30.5882825072 Ha  [FCI, norb=8]
+[driver] EWF-FCI/SQD energy: -7354.3347621548 Ha
+[driver] energy-only task: skipping nuclear-gradient assembly
+
+EWF-FCI/SQD energy (energy-only task): -7354.3347621548 Ha
