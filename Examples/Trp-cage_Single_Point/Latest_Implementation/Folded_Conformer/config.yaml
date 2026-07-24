@@ -72,7 +72,7 @@ slurm:
   # and starve their own SBD children (which otherwise sit queued forever).
   max_concurrent_solve: 22
   dump:                        # integral / cluster dump wave
-    partition: merzk-a100
+    partition: bigmem
     ntasks: 8
     mem: 500G
   # Per-solver solve-wave blocks (one job per fragment uses the block named
