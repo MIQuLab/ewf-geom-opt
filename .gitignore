@@ -60,3 +60,6 @@ Utilities/acs-*.bib
 # These scripts are not robust enough to be utilities, but useful
 # for storage management and "housekeeping" of this repository.
 Supporting_Scripts/
+
+# The folder to process Trp-cage data from new and legacy code
+Trp-Cage_Comparison/
