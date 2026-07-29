@@ -1,0 +1,26 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 2
+Rules claiming more threads will be scaled down.
+Job stats:
+job                count
+---------------  -------
+all                    1
+process_batches        2
+total                  3
+
+Select jobs to execute...
+[Tue May 27 09:53:21 2025]
+Error in rule process_batches:
+    jobid: 2
+    input: /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_snakemake_dice/two_batch_2cpus_per_batch_one_iter/Workflow/solver.py, /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_snakemake_dice/two_batch_2cpus_per_batch_one_iter/Workflow/batch-1.dat
+    output: /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_snakemake_dice/two_batch_2cpus_per_batch_one_iter/Workflow/output-1.txt
+    shell:
+        python /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_snakemake_dice/two_batch_2cpus_per_batch_one_iter/Workflow/solver.py /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_snakemake_dice/two_batch_2cpus_per_batch_one_iter/Workflow/batch-1.dat > /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_snakemake_dice/two_batch_2cpus_per_batch_one_iter/Workflow/output-1.txt
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Removing output files of failed job process_batches since they might be corrupted:
+/mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_snakemake_dice/two_batch_2cpus_per_batch_one_iter/Workflow/output-1.txt
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2025-05-27T095252.874320.snakemake.log

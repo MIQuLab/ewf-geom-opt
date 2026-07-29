@@ -1,0 +1,3 @@
+NameError in file /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_tests/snakemake-two-batch-and-two-step_auto_path/Workflow/Snakefile, line 9:
+name 'workflow_path' is not defined
+  File "/mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/slurm_tests/snakemake-two-batch-and-two-step_auto_path/Workflow/Snakefile", line 9, in <module>

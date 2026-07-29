@@ -1,0 +1,17 @@
+carryover_threshold: 0.0001
+cpus_per_batch: 48
+dprime_cutoff: 1.0e-05
+energy_tol: 1.0e-08
+iterations: 5
+memory_mb: 200000
+monitor_delay: 60
+n_batches: 10
+nela: 9
+norb: 18
+occupancies_tol: 1.0e-05
+partition: merzk
+samples_per_batch: 3000
+sbd_exe_path: /mnt/home/shajanak/Documents/Softwares/sbd/samples/selected_basis_diagonalization/diag
+submission_delay: 1
+time_ext: '20:00:00'
+time_sqd: 03:50:00
