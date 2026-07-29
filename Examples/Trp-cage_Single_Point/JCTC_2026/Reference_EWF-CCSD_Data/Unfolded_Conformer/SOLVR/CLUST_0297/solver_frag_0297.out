@@ -1,0 +1,9 @@
+Overwritten attributes  get_hcore get_ovlp  of <class 'pyscf.scf.hf_symm.SymAdaptedRHF'>
+/home/shajana/isilon/Akhil/miniforge3/envs/vayesta-new/lib/python3.11/site-packages/pyscf/gto/mole.py:1293: UserWarning: Function mol.dumps drops attribute energy_nuc because it is not JSON-serializable
+  warnings.warn(msg)
+/home/shajana/isilon/Akhil/miniforge3/envs/vayesta-new/lib/python3.11/site-packages/pyscf/gto/mole.py:1293: UserWarning: Function mol.dumps drops attribute intor_symmetric because it is not JSON-serializable
+  warnings.warn(msg)
+Parsing /mnt/beegfs/merzk/shajana/EWF-Vayesta/Trp-Cage/c0-DF_sto3g_MPI/STO-3G/c19_zwitter/MP2e5/2_CCSD_SOLVR/SOLVR/CLUST_0297/fci_dump.txt
+converged SCF energy = -16.2580198246098
+E(CCSD) = -16.32986001449311  E_corr = -0.07184018988332432
+Cluster 0297 complete. Energies saved to cluster_0297.json
