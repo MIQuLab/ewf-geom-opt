@@ -1,9 +1,0 @@
-No module named 'dyson'
-Dyson required for self-energy calculations
-[driver] Restart mode: ON -- reusing existing artefacts in 'jobs_EWF' where possible (step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).
-[solve frag=103] Loaded Cluster(fragment_103, name=C, norb=25, nocc=14)
-[solve frag=103] Multi-solver: cluster norb=25 >= norb_threshold=15 -> SQD
-[solve frag=103] Solving cluster (norb=25) with SQD (quantum sampling + SBD configuration recovery + ext-SQD; iterations=5, n_batches=4; submits one Slurm job per SBD batch and a final ext-SQD job)
-[solve frag=103] E_cluster (SQD) = -164.3908251733 Ha
-[solve frag=103] Assembly route 'rdm_t' uses the cluster RDMs directly -- skipping the CISD extraction.
-[solve frag=103] Wrote RDM file jobs_EWF/rdm_103.h5

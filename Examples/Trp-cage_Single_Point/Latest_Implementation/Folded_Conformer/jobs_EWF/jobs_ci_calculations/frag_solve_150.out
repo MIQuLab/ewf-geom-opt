@@ -1,9 +1,0 @@
-No module named 'dyson'
-Dyson required for self-energy calculations
-[driver] Restart mode: ON -- reusing existing artefacts in 'jobs_EWF' where possible (step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).
-[solve frag=150] Loaded Cluster(fragment_150, name=O, norb=14, nocc=8)
-[solve frag=150] Multi-solver: cluster norb=14 < norb_threshold=15 -> FCI
-[solve frag=150] Solving cluster (norb=14) with FCI (conv_tol=1e-12)
-[solve frag=150] E_cluster (FCI) = -112.3116085172 Ha
-[solve frag=150] Assembly route 'rdm_t' uses the cluster RDMs directly -- skipping the CISD extraction.
-[solve frag=150] Wrote RDM file jobs_EWF/rdm_150.h5
