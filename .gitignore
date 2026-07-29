@@ -63,3 +63,6 @@ Supporting_Scripts/
 
 # The folder to process Trp-cage data from new and legacy code
 Trp-Cage_Comparison/
+
+# Unused artifacts in old version of code
+.snakemake/
