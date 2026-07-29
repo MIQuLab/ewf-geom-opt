@@ -1,0 +1,3 @@
+FileNotFoundError in file /mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/srun-snakemake-dice/one_batch_2cpus_per_batch_one_iter/Workflow/Snakefile, line 9:
+[Errno 2] No such file or directory: '/mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/srun-snakemake-dice/one_batch_2cpus_per_batch_one_iter/Workflow/Workflow/config.yaml'
+  File "/mnt/beegfs/merzk/kaliakd/Deploy_Snakemake/srun-snakemake-dice/one_batch_2cpus_per_batch_one_iter/Workflow/Snakefile", line 9, in <module>

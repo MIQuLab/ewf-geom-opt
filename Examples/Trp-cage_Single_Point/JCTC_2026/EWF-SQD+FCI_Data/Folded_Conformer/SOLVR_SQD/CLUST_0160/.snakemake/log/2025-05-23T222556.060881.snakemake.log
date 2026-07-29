@@ -1,0 +1,8 @@
+Building DAG of jobs...
+MissingInputException in rule process_batches in file /home/kaliakd/beegfs/kaliakd/Deploy_Snakemake/interactive_tests/snakemake-single-batch-and-step/Workflow/Snakefile, line 24:
+Missing input files for rule process_batches:
+    output: /home/kaliakd/beegfs/kaliakd/Deploy_Snakemake/interactive_tests/snakemake-single-batch-and-step/Workflowoutput-0.txt
+    wildcards: index=0
+    affected files:
+        /home/kaliakd/beegfs/kaliakd/Deploy_Snakemake/interactive_tests/snakemake-single-batch-and-step/Workflowsolver.py
+        /home/kaliakd/beegfs/kaliakd/Deploy_Snakemake/interactive_tests/snakemake-single-batch-and-step/Workflowbatch-0.dat
