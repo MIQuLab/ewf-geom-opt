@@ -1,0 +1,18 @@
+          |                                    ___       ___
+          |  _______________________________  /   \ . . /   \
+          |                                   \___/     \___/
+          |              VAYESTA                  .  V  .   .
+          |     Quantum Embedding Package          .___.  A  .___
+          |  _______________________________       /   \ . . /   \
+          |                    version 1.0.1       \___/     \___/ 
+          |
+Overwritten attributes  get_hcore get_ovlp  of <class 'pyscf.scf.hf_symm.SymAdaptedRHF'>
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/pyscf/gto/mole.py:1293: UserWarning: Function mol.dumps drops attribute energy_nuc because it is not JSON-serializable
+  warnings.warn(msg)
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/pyscf/gto/mole.py:1293: UserWarning: Function mol.dumps drops attribute intor_symmetric because it is not JSON-serializable
+  warnings.warn(msg)
+DEPRECATED:2026-07-28 22:24:59,182:jax._src.xla_bridge:794: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/numpy/_core/getlimits.py:558: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  setattr(self, word, getattr(machar, word).flat[0])
+/home/kaliakd/isilon/Danil/Software/Executables/miniforge3/envs/ewf/lib/python3.10/site-packages/numpy/_core/getlimits.py:90: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  return self._float_to_str(self.smallest_subnormal)

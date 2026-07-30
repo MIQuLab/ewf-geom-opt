@@ -1,0 +1,1652 @@
+          |                                    ___       ___
+          |  _______________________________  /   \ . . /   \
+          |                                   \___/     \___/
+          |              VAYESTA                  .  V  .   .
+          |     Quantum Embedding Package          .___.  A  .___
+          |  _______________________________       /   \ . . /   \
+          |                    version 1.0.1       \___/     \___/ 
+          |
+No module named 'dyson'
+Dyson required for self-energy calculations
+[driver] Restart mode: ON -- reusing existing artefacts in 'jobs_EWF' where possible (step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).
+[driver] Building mol + RHF
+[HF] Restart: reused converged RHF from jobs_EWF/hf.chk + cached AO .npy integrals (E_HF=-7344.0400151714 Ha)
+[driver] HF energy: -7344.0400151714
+          |
+          |  INITIALIZING EWF
+          |  ================
+          |      Initial E(mean-field)=   -7344.04001517 Ha
+          |      Calculated E(HF)=        -7344.04001517 Ha
+          |      Difference dE=              +0.00000000 Ha ( -0.0%)
+          |      n(AO)=  919  n(MO)=  919  n(linear dep.)=    0
+          |      Parameters of EWF:
+          |      Options(store_eris=True, global_frag_chempot=None, dm_with_frozen=False, bath_options={'bathtype':
+          |          'mp2', 'canonicalize': True, 'occupation_tolerance': 1e-06, 'dmet_threshold': 1e-08, 'rcut': None,
+          |          'unit': 'Ang', 'local_aux_enable': False, 'local_aux_radius': 5.0, 'local_aux_unit': 'Ang',
+          |          'local_aux_atom_weight_thresh': 0.0001, 'local_aux_print': False, 'order': None, 'max_order': 20,
+          |          'threshold': 1e-05, 'truncation': 'occupation', 'project_dmet_order': 2, 'project_dmet_mode':
+          |          'squared-entropy', 'addbuffer': False, 'bathtype_occ': None, 'bathtype_vir': None, 'rcut_occ': None,
+          |          'rcut_vir': None, 'unit_occ': None, 'unit_vir': None, 'order_occ': None, 'order_vir': None,
+          |          'max_order_occ': None, 'max_order_vir': None, 'threshold_occ': None, 'threshold_vir': None,
+          |          'truncation_occ': None, 'truncation_vir': None, 'project_dmet_order_occ': None,
+          |          'project_dmet_order_vir': None, 'project_dmet_mode_occ': None, 'project_dmet_mode_vir': None,
+          |          'addbuffer_occ': None, 'addbuffer_dmet_vir': None, 'canonicalize_occ': None, 'canonicalize_vir':
+          |          None}, bosonic_bath_options={'bathtype': None, 'target_orbitals': 'full', 'local_projection':
+          |          'fragment', 'threshold': 1e-06, 'truncation': 'occupation'}, solver_options={'conv_tol': None,
+          |          'n_moments': None, 'solve_lambda': True, 'conv_tol_normt': None, 'level_shift': None, 'diis_space':
+          |          None, 'diis_start_cycle': None, 'iterative_damping': None, 'threads': 1, 'max_cycle': 300,
+          |          'fix_spin': None, 'lindep': None, 'davidson_only': True, 'init_guess': 'default', 'max_boson_occ':
+          |          2, 'ansatz': None, 'store_as_ccsd': None, 'dumpfile': '/dev/null', 'callback': None,
+          |          'compress_cderi': False}, symmetry_tol=1e-06, symmetry_mf_tol=1e-05, screening=None,
+          |          ext_rpa_correction=None, match_cluster_fock=False, iao_minao='auto', project_eris=False,
+          |          project_init_guess=True, energy_functional='wf', calc_e_wf_corr=True, calc_e_dm_corr=False,
+          |          calc_e_ccsd_t_corr=False, t_as_lambda=None, store_wf_type=None, bsse_correction=True, bsse_rmax=5.0,
+          |          nelectron_target=None, sc_mode=0, coupled_iterations=False, _debug_wf=None)
+          |      Time for EWF setup: 0.3 s
+          |  IAO Fragmentation
+          |  -----------------
+          |  IAO:  computational basis= sto-3g  minimal reference basis= sto-3g (automatically chosen)
+          |      IAO CACHE HIT: loaded C_iao from iao_cache.h5 (shape=(919, 919))
+          |      Fragmentation: orthogonal= True, occupied-complete= True, virtual-complete= True
+[driver] Discovered 303 fragment(s) at threshold=1e-05
+[driver] Restart: DUMP already complete for 303/303 fragment(s): [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302]
+[driver] Restart: SOLVE already complete for 286/303 fragment(s): [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 80, 81, 83, 84, 88, 89, 93, 95, 97, 98, 101, 103, 106, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302]
+[driver] === Wave 1/2 : submitting 0 DUMP job(s) (skipping 303 already complete) ===
+[driver] Restart: reusing dump fragment   0 (output already on disk)
+[driver] Restart: reusing dump fragment   1 (output already on disk)
+[driver] Restart: reusing dump fragment   2 (output already on disk)
+[driver] Restart: reusing dump fragment   3 (output already on disk)
+[driver] Restart: reusing dump fragment   4 (output already on disk)
+[driver] Restart: reusing dump fragment   5 (output already on disk)
+[driver] Restart: reusing dump fragment   6 (output already on disk)
+[driver] Restart: reusing dump fragment   7 (output already on disk)
+[driver] Restart: reusing dump fragment   8 (output already on disk)
+[driver] Restart: reusing dump fragment   9 (output already on disk)
+[driver] Restart: reusing dump fragment  10 (output already on disk)
+[driver] Restart: reusing dump fragment  11 (output already on disk)
+[driver] Restart: reusing dump fragment  12 (output already on disk)
+[driver] Restart: reusing dump fragment  13 (output already on disk)
+[driver] Restart: reusing dump fragment  14 (output already on disk)
+[driver] Restart: reusing dump fragment  15 (output already on disk)
+[driver] Restart: reusing dump fragment  16 (output already on disk)
+[driver] Restart: reusing dump fragment  17 (output already on disk)
+[driver] Restart: reusing dump fragment  18 (output already on disk)
+[driver] Restart: reusing dump fragment  19 (output already on disk)
+[driver] Restart: reusing dump fragment  20 (output already on disk)
+[driver] Restart: reusing dump fragment  21 (output already on disk)
+[driver] Restart: reusing dump fragment  22 (output already on disk)
+[driver] Restart: reusing dump fragment  23 (output already on disk)
+[driver] Restart: reusing dump fragment  24 (output already on disk)
+[driver] Restart: reusing dump fragment  25 (output already on disk)
+[driver] Restart: reusing dump fragment  26 (output already on disk)
+[driver] Restart: reusing dump fragment  27 (output already on disk)
+[driver] Restart: reusing dump fragment  28 (output already on disk)
+[driver] Restart: reusing dump fragment  29 (output already on disk)
+[driver] Restart: reusing dump fragment  30 (output already on disk)
+[driver] Restart: reusing dump fragment  31 (output already on disk)
+[driver] Restart: reusing dump fragment  32 (output already on disk)
+[driver] Restart: reusing dump fragment  33 (output already on disk)
+[driver] Restart: reusing dump fragment  34 (output already on disk)
+[driver] Restart: reusing dump fragment  35 (output already on disk)
+[driver] Restart: reusing dump fragment  36 (output already on disk)
+[driver] Restart: reusing dump fragment  37 (output already on disk)
+[driver] Restart: reusing dump fragment  38 (output already on disk)
+[driver] Restart: reusing dump fragment  39 (output already on disk)
+[driver] Restart: reusing dump fragment  40 (output already on disk)
+[driver] Restart: reusing dump fragment  41 (output already on disk)
+[driver] Restart: reusing dump fragment  42 (output already on disk)
+[driver] Restart: reusing dump fragment  43 (output already on disk)
+[driver] Restart: reusing dump fragment  44 (output already on disk)
+[driver] Restart: reusing dump fragment  45 (output already on disk)
+[driver] Restart: reusing dump fragment  46 (output already on disk)
+[driver] Restart: reusing dump fragment  47 (output already on disk)
+[driver] Restart: reusing dump fragment  48 (output already on disk)
+[driver] Restart: reusing dump fragment  49 (output already on disk)
+[driver] Restart: reusing dump fragment  50 (output already on disk)
+[driver] Restart: reusing dump fragment  51 (output already on disk)
+[driver] Restart: reusing dump fragment  52 (output already on disk)
+[driver] Restart: reusing dump fragment  53 (output already on disk)
+[driver] Restart: reusing dump fragment  54 (output already on disk)
+[driver] Restart: reusing dump fragment  55 (output already on disk)
+[driver] Restart: reusing dump fragment  56 (output already on disk)
+[driver] Restart: reusing dump fragment  57 (output already on disk)
+[driver] Restart: reusing dump fragment  58 (output already on disk)
+[driver] Restart: reusing dump fragment  59 (output already on disk)
+[driver] Restart: reusing dump fragment  60 (output already on disk)
+[driver] Restart: reusing dump fragment  61 (output already on disk)
+[driver] Restart: reusing dump fragment  62 (output already on disk)
+[driver] Restart: reusing dump fragment  63 (output already on disk)
+[driver] Restart: reusing dump fragment  64 (output already on disk)
+[driver] Restart: reusing dump fragment  65 (output already on disk)
+[driver] Restart: reusing dump fragment  66 (output already on disk)
+[driver] Restart: reusing dump fragment  67 (output already on disk)
+[driver] Restart: reusing dump fragment  68 (output already on disk)
+[driver] Restart: reusing dump fragment  69 (output already on disk)
+[driver] Restart: reusing dump fragment  70 (output already on disk)
+[driver] Restart: reusing dump fragment  71 (output already on disk)
+[driver] Restart: reusing dump fragment  72 (output already on disk)
+[driver] Restart: reusing dump fragment  73 (output already on disk)
+[driver] Restart: reusing dump fragment  74 (output already on disk)
+[driver] Restart: reusing dump fragment  75 (output already on disk)
+[driver] Restart: reusing dump fragment  76 (output already on disk)
+[driver] Restart: reusing dump fragment  77 (output already on disk)
+[driver] Restart: reusing dump fragment  78 (output already on disk)
+[driver] Restart: reusing dump fragment  79 (output already on disk)
+[driver] Restart: reusing dump fragment  80 (output already on disk)
+[driver] Restart: reusing dump fragment  81 (output already on disk)
+[driver] Restart: reusing dump fragment  82 (output already on disk)
+[driver] Restart: reusing dump fragment  83 (output already on disk)
+[driver] Restart: reusing dump fragment  84 (output already on disk)
+[driver] Restart: reusing dump fragment  85 (output already on disk)
+[driver] Restart: reusing dump fragment  86 (output already on disk)
+[driver] Restart: reusing dump fragment  87 (output already on disk)
+[driver] Restart: reusing dump fragment  88 (output already on disk)
+[driver] Restart: reusing dump fragment  89 (output already on disk)
+[driver] Restart: reusing dump fragment  90 (output already on disk)
+[driver] Restart: reusing dump fragment  91 (output already on disk)
+[driver] Restart: reusing dump fragment  92 (output already on disk)
+[driver] Restart: reusing dump fragment  93 (output already on disk)
+[driver] Restart: reusing dump fragment  94 (output already on disk)
+[driver] Restart: reusing dump fragment  95 (output already on disk)
+[driver] Restart: reusing dump fragment  96 (output already on disk)
+[driver] Restart: reusing dump fragment  97 (output already on disk)
+[driver] Restart: reusing dump fragment  98 (output already on disk)
+[driver] Restart: reusing dump fragment  99 (output already on disk)
+[driver] Restart: reusing dump fragment 100 (output already on disk)
+[driver] Restart: reusing dump fragment 101 (output already on disk)
+[driver] Restart: reusing dump fragment 102 (output already on disk)
+[driver] Restart: reusing dump fragment 103 (output already on disk)
+[driver] Restart: reusing dump fragment 104 (output already on disk)
+[driver] Restart: reusing dump fragment 105 (output already on disk)
+[driver] Restart: reusing dump fragment 106 (output already on disk)
+[driver] Restart: reusing dump fragment 107 (output already on disk)
+[driver] Restart: reusing dump fragment 108 (output already on disk)
+[driver] Restart: reusing dump fragment 109 (output already on disk)
+[driver] Restart: reusing dump fragment 110 (output already on disk)
+[driver] Restart: reusing dump fragment 111 (output already on disk)
+[driver] Restart: reusing dump fragment 112 (output already on disk)
+[driver] Restart: reusing dump fragment 113 (output already on disk)
+[driver] Restart: reusing dump fragment 114 (output already on disk)
+[driver] Restart: reusing dump fragment 115 (output already on disk)
+[driver] Restart: reusing dump fragment 116 (output already on disk)
+[driver] Restart: reusing dump fragment 117 (output already on disk)
+[driver] Restart: reusing dump fragment 118 (output already on disk)
+[driver] Restart: reusing dump fragment 119 (output already on disk)
+[driver] Restart: reusing dump fragment 120 (output already on disk)
+[driver] Restart: reusing dump fragment 121 (output already on disk)
+[driver] Restart: reusing dump fragment 122 (output already on disk)
+[driver] Restart: reusing dump fragment 123 (output already on disk)
+[driver] Restart: reusing dump fragment 124 (output already on disk)
+[driver] Restart: reusing dump fragment 125 (output already on disk)
+[driver] Restart: reusing dump fragment 126 (output already on disk)
+[driver] Restart: reusing dump fragment 127 (output already on disk)
+[driver] Restart: reusing dump fragment 128 (output already on disk)
+[driver] Restart: reusing dump fragment 129 (output already on disk)
+[driver] Restart: reusing dump fragment 130 (output already on disk)
+[driver] Restart: reusing dump fragment 131 (output already on disk)
+[driver] Restart: reusing dump fragment 132 (output already on disk)
+[driver] Restart: reusing dump fragment 133 (output already on disk)
+[driver] Restart: reusing dump fragment 134 (output already on disk)
+[driver] Restart: reusing dump fragment 135 (output already on disk)
+[driver] Restart: reusing dump fragment 136 (output already on disk)
+[driver] Restart: reusing dump fragment 137 (output already on disk)
+[driver] Restart: reusing dump fragment 138 (output already on disk)
+[driver] Restart: reusing dump fragment 139 (output already on disk)
+[driver] Restart: reusing dump fragment 140 (output already on disk)
+[driver] Restart: reusing dump fragment 141 (output already on disk)
+[driver] Restart: reusing dump fragment 142 (output already on disk)
+[driver] Restart: reusing dump fragment 143 (output already on disk)
+[driver] Restart: reusing dump fragment 144 (output already on disk)
+[driver] Restart: reusing dump fragment 145 (output already on disk)
+[driver] Restart: reusing dump fragment 146 (output already on disk)
+[driver] Restart: reusing dump fragment 147 (output already on disk)
+[driver] Restart: reusing dump fragment 148 (output already on disk)
+[driver] Restart: reusing dump fragment 149 (output already on disk)
+[driver] Restart: reusing dump fragment 150 (output already on disk)
+[driver] Restart: reusing dump fragment 151 (output already on disk)
+[driver] Restart: reusing dump fragment 152 (output already on disk)
+[driver] Restart: reusing dump fragment 153 (output already on disk)
+[driver] Restart: reusing dump fragment 154 (output already on disk)
+[driver] Restart: reusing dump fragment 155 (output already on disk)
+[driver] Restart: reusing dump fragment 156 (output already on disk)
+[driver] Restart: reusing dump fragment 157 (output already on disk)
+[driver] Restart: reusing dump fragment 158 (output already on disk)
+[driver] Restart: reusing dump fragment 159 (output already on disk)
+[driver] Restart: reusing dump fragment 160 (output already on disk)
+[driver] Restart: reusing dump fragment 161 (output already on disk)
+[driver] Restart: reusing dump fragment 162 (output already on disk)
+[driver] Restart: reusing dump fragment 163 (output already on disk)
+[driver] Restart: reusing dump fragment 164 (output already on disk)
+[driver] Restart: reusing dump fragment 165 (output already on disk)
+[driver] Restart: reusing dump fragment 166 (output already on disk)
+[driver] Restart: reusing dump fragment 167 (output already on disk)
+[driver] Restart: reusing dump fragment 168 (output already on disk)
+[driver] Restart: reusing dump fragment 169 (output already on disk)
+[driver] Restart: reusing dump fragment 170 (output already on disk)
+[driver] Restart: reusing dump fragment 171 (output already on disk)
+[driver] Restart: reusing dump fragment 172 (output already on disk)
+[driver] Restart: reusing dump fragment 173 (output already on disk)
+[driver] Restart: reusing dump fragment 174 (output already on disk)
+[driver] Restart: reusing dump fragment 175 (output already on disk)
+[driver] Restart: reusing dump fragment 176 (output already on disk)
+[driver] Restart: reusing dump fragment 177 (output already on disk)
+[driver] Restart: reusing dump fragment 178 (output already on disk)
+[driver] Restart: reusing dump fragment 179 (output already on disk)
+[driver] Restart: reusing dump fragment 180 (output already on disk)
+[driver] Restart: reusing dump fragment 181 (output already on disk)
+[driver] Restart: reusing dump fragment 182 (output already on disk)
+[driver] Restart: reusing dump fragment 183 (output already on disk)
+[driver] Restart: reusing dump fragment 184 (output already on disk)
+[driver] Restart: reusing dump fragment 185 (output already on disk)
+[driver] Restart: reusing dump fragment 186 (output already on disk)
+[driver] Restart: reusing dump fragment 187 (output already on disk)
+[driver] Restart: reusing dump fragment 188 (output already on disk)
+[driver] Restart: reusing dump fragment 189 (output already on disk)
+[driver] Restart: reusing dump fragment 190 (output already on disk)
+[driver] Restart: reusing dump fragment 191 (output already on disk)
+[driver] Restart: reusing dump fragment 192 (output already on disk)
+[driver] Restart: reusing dump fragment 193 (output already on disk)
+[driver] Restart: reusing dump fragment 194 (output already on disk)
+[driver] Restart: reusing dump fragment 195 (output already on disk)
+[driver] Restart: reusing dump fragment 196 (output already on disk)
+[driver] Restart: reusing dump fragment 197 (output already on disk)
+[driver] Restart: reusing dump fragment 198 (output already on disk)
+[driver] Restart: reusing dump fragment 199 (output already on disk)
+[driver] Restart: reusing dump fragment 200 (output already on disk)
+[driver] Restart: reusing dump fragment 201 (output already on disk)
+[driver] Restart: reusing dump fragment 202 (output already on disk)
+[driver] Restart: reusing dump fragment 203 (output already on disk)
+[driver] Restart: reusing dump fragment 204 (output already on disk)
+[driver] Restart: reusing dump fragment 205 (output already on disk)
+[driver] Restart: reusing dump fragment 206 (output already on disk)
+[driver] Restart: reusing dump fragment 207 (output already on disk)
+[driver] Restart: reusing dump fragment 208 (output already on disk)
+[driver] Restart: reusing dump fragment 209 (output already on disk)
+[driver] Restart: reusing dump fragment 210 (output already on disk)
+[driver] Restart: reusing dump fragment 211 (output already on disk)
+[driver] Restart: reusing dump fragment 212 (output already on disk)
+[driver] Restart: reusing dump fragment 213 (output already on disk)
+[driver] Restart: reusing dump fragment 214 (output already on disk)
+[driver] Restart: reusing dump fragment 215 (output already on disk)
+[driver] Restart: reusing dump fragment 216 (output already on disk)
+[driver] Restart: reusing dump fragment 217 (output already on disk)
+[driver] Restart: reusing dump fragment 218 (output already on disk)
+[driver] Restart: reusing dump fragment 219 (output already on disk)
+[driver] Restart: reusing dump fragment 220 (output already on disk)
+[driver] Restart: reusing dump fragment 221 (output already on disk)
+[driver] Restart: reusing dump fragment 222 (output already on disk)
+[driver] Restart: reusing dump fragment 223 (output already on disk)
+[driver] Restart: reusing dump fragment 224 (output already on disk)
+[driver] Restart: reusing dump fragment 225 (output already on disk)
+[driver] Restart: reusing dump fragment 226 (output already on disk)
+[driver] Restart: reusing dump fragment 227 (output already on disk)
+[driver] Restart: reusing dump fragment 228 (output already on disk)
+[driver] Restart: reusing dump fragment 229 (output already on disk)
+[driver] Restart: reusing dump fragment 230 (output already on disk)
+[driver] Restart: reusing dump fragment 231 (output already on disk)
+[driver] Restart: reusing dump fragment 232 (output already on disk)
+[driver] Restart: reusing dump fragment 233 (output already on disk)
+[driver] Restart: reusing dump fragment 234 (output already on disk)
+[driver] Restart: reusing dump fragment 235 (output already on disk)
+[driver] Restart: reusing dump fragment 236 (output already on disk)
+[driver] Restart: reusing dump fragment 237 (output already on disk)
+[driver] Restart: reusing dump fragment 238 (output already on disk)
+[driver] Restart: reusing dump fragment 239 (output already on disk)
+[driver] Restart: reusing dump fragment 240 (output already on disk)
+[driver] Restart: reusing dump fragment 241 (output already on disk)
+[driver] Restart: reusing dump fragment 242 (output already on disk)
+[driver] Restart: reusing dump fragment 243 (output already on disk)
+[driver] Restart: reusing dump fragment 244 (output already on disk)
+[driver] Restart: reusing dump fragment 245 (output already on disk)
+[driver] Restart: reusing dump fragment 246 (output already on disk)
+[driver] Restart: reusing dump fragment 247 (output already on disk)
+[driver] Restart: reusing dump fragment 248 (output already on disk)
+[driver] Restart: reusing dump fragment 249 (output already on disk)
+[driver] Restart: reusing dump fragment 250 (output already on disk)
+[driver] Restart: reusing dump fragment 251 (output already on disk)
+[driver] Restart: reusing dump fragment 252 (output already on disk)
+[driver] Restart: reusing dump fragment 253 (output already on disk)
+[driver] Restart: reusing dump fragment 254 (output already on disk)
+[driver] Restart: reusing dump fragment 255 (output already on disk)
+[driver] Restart: reusing dump fragment 256 (output already on disk)
+[driver] Restart: reusing dump fragment 257 (output already on disk)
+[driver] Restart: reusing dump fragment 258 (output already on disk)
+[driver] Restart: reusing dump fragment 259 (output already on disk)
+[driver] Restart: reusing dump fragment 260 (output already on disk)
+[driver] Restart: reusing dump fragment 261 (output already on disk)
+[driver] Restart: reusing dump fragment 262 (output already on disk)
+[driver] Restart: reusing dump fragment 263 (output already on disk)
+[driver] Restart: reusing dump fragment 264 (output already on disk)
+[driver] Restart: reusing dump fragment 265 (output already on disk)
+[driver] Restart: reusing dump fragment 266 (output already on disk)
+[driver] Restart: reusing dump fragment 267 (output already on disk)
+[driver] Restart: reusing dump fragment 268 (output already on disk)
+[driver] Restart: reusing dump fragment 269 (output already on disk)
+[driver] Restart: reusing dump fragment 270 (output already on disk)
+[driver] Restart: reusing dump fragment 271 (output already on disk)
+[driver] Restart: reusing dump fragment 272 (output already on disk)
+[driver] Restart: reusing dump fragment 273 (output already on disk)
+[driver] Restart: reusing dump fragment 274 (output already on disk)
+[driver] Restart: reusing dump fragment 275 (output already on disk)
+[driver] Restart: reusing dump fragment 276 (output already on disk)
+[driver] Restart: reusing dump fragment 277 (output already on disk)
+[driver] Restart: reusing dump fragment 278 (output already on disk)
+[driver] Restart: reusing dump fragment 279 (output already on disk)
+[driver] Restart: reusing dump fragment 280 (output already on disk)
+[driver] Restart: reusing dump fragment 281 (output already on disk)
+[driver] Restart: reusing dump fragment 282 (output already on disk)
+[driver] Restart: reusing dump fragment 283 (output already on disk)
+[driver] Restart: reusing dump fragment 284 (output already on disk)
+[driver] Restart: reusing dump fragment 285 (output already on disk)
+[driver] Restart: reusing dump fragment 286 (output already on disk)
+[driver] Restart: reusing dump fragment 287 (output already on disk)
+[driver] Restart: reusing dump fragment 288 (output already on disk)
+[driver] Restart: reusing dump fragment 289 (output already on disk)
+[driver] Restart: reusing dump fragment 290 (output already on disk)
+[driver] Restart: reusing dump fragment 291 (output already on disk)
+[driver] Restart: reusing dump fragment 292 (output already on disk)
+[driver] Restart: reusing dump fragment 293 (output already on disk)
+[driver] Restart: reusing dump fragment 294 (output already on disk)
+[driver] Restart: reusing dump fragment 295 (output already on disk)
+[driver] Restart: reusing dump fragment 296 (output already on disk)
+[driver] Restart: reusing dump fragment 297 (output already on disk)
+[driver] Restart: reusing dump fragment 298 (output already on disk)
+[driver] Restart: reusing dump fragment 299 (output already on disk)
+[driver] Restart: reusing dump fragment 300 (output already on disk)
+[driver] Restart: reusing dump fragment 301 (output already on disk)
+[driver] Restart: reusing dump fragment 302 (output already on disk)
+[driver] Waiting on 303 fragment status file(s) in 'jobs_EWF/jobs_fragments_production'
+[driver] All fragment jobs reported DONE.
+[driver] === Wave 2/2 : submitting 17 solve (FCI/SCI) job(s) (skipping 286 already complete), <= 32 in flight ===
+[driver] Restart: reusing CI fragment   0 (output already on disk)
+[driver] Restart: reusing CI fragment   1 (output already on disk)
+[driver] Restart: reusing CI fragment   2 (output already on disk)
+[driver] Restart: reusing CI fragment   3 (output already on disk)
+[driver] Restart: reusing CI fragment   4 (output already on disk)
+[driver] Restart: reusing CI fragment   5 (output already on disk)
+[driver] Restart: reusing CI fragment   6 (output already on disk)
+[driver] Restart: reusing CI fragment   7 (output already on disk)
+[driver] Restart: reusing CI fragment   8 (output already on disk)
+[driver] Restart: reusing CI fragment   9 (output already on disk)
+[driver] Restart: reusing CI fragment  10 (output already on disk)
+[driver] Restart: reusing CI fragment  11 (output already on disk)
+[driver] Restart: reusing CI fragment  12 (output already on disk)
+[driver] Restart: reusing CI fragment  13 (output already on disk)
+[driver] Restart: reusing CI fragment  14 (output already on disk)
+[driver] Restart: reusing CI fragment  15 (output already on disk)
+[driver] Restart: reusing CI fragment  16 (output already on disk)
+[driver] Restart: reusing CI fragment  17 (output already on disk)
+[driver] Restart: reusing CI fragment  18 (output already on disk)
+[driver] Restart: reusing CI fragment  19 (output already on disk)
+[driver] Restart: reusing CI fragment  20 (output already on disk)
+[driver] Restart: reusing CI fragment  21 (output already on disk)
+[driver] Restart: reusing CI fragment  22 (output already on disk)
+[driver] Restart: reusing CI fragment  23 (output already on disk)
+[driver] Restart: reusing CI fragment  24 (output already on disk)
+[driver] Restart: reusing CI fragment  25 (output already on disk)
+[driver] Restart: reusing CI fragment  26 (output already on disk)
+[driver] Restart: reusing CI fragment  27 (output already on disk)
+[driver] Restart: reusing CI fragment  28 (output already on disk)
+[driver] Restart: reusing CI fragment  29 (output already on disk)
+[driver] Restart: reusing CI fragment  30 (output already on disk)
+[driver] Restart: reusing CI fragment  31 (output already on disk)
+[driver] Restart: reusing CI fragment  32 (output already on disk)
+[driver] Restart: reusing CI fragment  33 (output already on disk)
+[driver] Restart: reusing CI fragment  34 (output already on disk)
+[driver] Restart: reusing CI fragment  35 (output already on disk)
+[driver] Restart: reusing CI fragment  36 (output already on disk)
+[driver] Restart: reusing CI fragment  37 (output already on disk)
+[driver] Restart: reusing CI fragment  38 (output already on disk)
+[driver] Restart: reusing CI fragment  39 (output already on disk)
+[driver] Restart: reusing CI fragment  40 (output already on disk)
+[driver] Restart: reusing CI fragment  41 (output already on disk)
+[driver] Restart: reusing CI fragment  42 (output already on disk)
+[driver] Restart: reusing CI fragment  43 (output already on disk)
+[driver] Restart: reusing CI fragment  44 (output already on disk)
+[driver] Restart: reusing CI fragment  45 (output already on disk)
+[driver] Restart: reusing CI fragment  46 (output already on disk)
+[driver] Restart: reusing CI fragment  47 (output already on disk)
+[driver] Restart: reusing CI fragment  48 (output already on disk)
+[driver] Restart: reusing CI fragment  49 (output already on disk)
+[driver] Restart: reusing CI fragment  50 (output already on disk)
+[driver] Restart: reusing CI fragment  51 (output already on disk)
+[driver] Restart: reusing CI fragment  52 (output already on disk)
+[driver] Restart: reusing CI fragment  53 (output already on disk)
+[driver] Restart: reusing CI fragment  54 (output already on disk)
+[driver] Restart: reusing CI fragment  55 (output already on disk)
+[driver] Restart: reusing CI fragment  56 (output already on disk)
+[driver] Restart: reusing CI fragment  57 (output already on disk)
+[driver] Restart: reusing CI fragment  58 (output already on disk)
+[driver] Restart: reusing CI fragment  59 (output already on disk)
+[driver] Restart: reusing CI fragment  60 (output already on disk)
+[driver] Restart: reusing CI fragment  61 (output already on disk)
+[driver] Restart: reusing CI fragment  62 (output already on disk)
+[driver] Restart: reusing CI fragment  63 (output already on disk)
+[driver] Restart: reusing CI fragment  64 (output already on disk)
+[driver] Restart: reusing CI fragment  65 (output already on disk)
+[driver] Restart: reusing CI fragment  66 (output already on disk)
+[driver] Restart: reusing CI fragment  67 (output already on disk)
+[driver] Restart: reusing CI fragment  68 (output already on disk)
+[driver] Restart: reusing CI fragment  69 (output already on disk)
+[driver] Restart: reusing CI fragment  70 (output already on disk)
+[driver] Restart: reusing CI fragment  71 (output already on disk)
+[driver] Restart: reusing CI fragment  72 (output already on disk)
+[driver] Restart: reusing CI fragment  73 (output already on disk)
+[driver] Restart: reusing CI fragment  74 (output already on disk)
+[driver] Restart: reusing CI fragment  75 (output already on disk)
+[driver] Restart: reusing CI fragment  76 (output already on disk)
+[driver] Restart: reusing CI fragment  77 (output already on disk)
+[driver] Restart: reusing CI fragment  78 (output already on disk)
+[driver] Restart: reusing CI fragment  80 (output already on disk)
+[driver] Restart: reusing CI fragment  81 (output already on disk)
+[driver] Restart: reusing CI fragment  83 (output already on disk)
+[driver] Restart: reusing CI fragment  84 (output already on disk)
+[driver] Restart: reusing CI fragment  88 (output already on disk)
+[driver] Restart: reusing CI fragment  89 (output already on disk)
+[driver] Restart: reusing CI fragment  93 (output already on disk)
+[driver] Restart: reusing CI fragment  95 (output already on disk)
+[driver] Restart: reusing CI fragment  97 (output already on disk)
+[driver] Restart: reusing CI fragment  98 (output already on disk)
+[driver] Restart: reusing CI fragment 101 (output already on disk)
+[driver] Restart: reusing CI fragment 103 (output already on disk)
+[driver] Restart: reusing CI fragment 106 (output already on disk)
+[driver] Restart: reusing CI fragment 108 (output already on disk)
+[driver] Restart: reusing CI fragment 109 (output already on disk)
+[driver] Restart: reusing CI fragment 110 (output already on disk)
+[driver] Restart: reusing CI fragment 111 (output already on disk)
+[driver] Restart: reusing CI fragment 112 (output already on disk)
+[driver] Restart: reusing CI fragment 113 (output already on disk)
+[driver] Restart: reusing CI fragment 114 (output already on disk)
+[driver] Restart: reusing CI fragment 115 (output already on disk)
+[driver] Restart: reusing CI fragment 116 (output already on disk)
+[driver] Restart: reusing CI fragment 117 (output already on disk)
+[driver] Restart: reusing CI fragment 118 (output already on disk)
+[driver] Restart: reusing CI fragment 119 (output already on disk)
+[driver] Restart: reusing CI fragment 120 (output already on disk)
+[driver] Restart: reusing CI fragment 121 (output already on disk)
+[driver] Restart: reusing CI fragment 122 (output already on disk)
+[driver] Restart: reusing CI fragment 123 (output already on disk)
+[driver] Restart: reusing CI fragment 124 (output already on disk)
+[driver] Restart: reusing CI fragment 125 (output already on disk)
+[driver] Restart: reusing CI fragment 126 (output already on disk)
+[driver] Restart: reusing CI fragment 127 (output already on disk)
+[driver] Restart: reusing CI fragment 128 (output already on disk)
+[driver] Restart: reusing CI fragment 129 (output already on disk)
+[driver] Restart: reusing CI fragment 130 (output already on disk)
+[driver] Restart: reusing CI fragment 131 (output already on disk)
+[driver] Restart: reusing CI fragment 132 (output already on disk)
+[driver] Restart: reusing CI fragment 133 (output already on disk)
+[driver] Restart: reusing CI fragment 134 (output already on disk)
+[driver] Restart: reusing CI fragment 135 (output already on disk)
+[driver] Restart: reusing CI fragment 136 (output already on disk)
+[driver] Restart: reusing CI fragment 137 (output already on disk)
+[driver] Restart: reusing CI fragment 138 (output already on disk)
+[driver] Restart: reusing CI fragment 139 (output already on disk)
+[driver] Restart: reusing CI fragment 140 (output already on disk)
+[driver] Restart: reusing CI fragment 141 (output already on disk)
+[driver] Restart: reusing CI fragment 142 (output already on disk)
+[driver] Restart: reusing CI fragment 143 (output already on disk)
+[driver] Restart: reusing CI fragment 144 (output already on disk)
+[driver] Restart: reusing CI fragment 145 (output already on disk)
+[driver] Restart: reusing CI fragment 146 (output already on disk)
+[driver] Restart: reusing CI fragment 147 (output already on disk)
+[driver] Restart: reusing CI fragment 148 (output already on disk)
+[driver] Restart: reusing CI fragment 149 (output already on disk)
+[driver] Restart: reusing CI fragment 150 (output already on disk)
+[driver] Restart: reusing CI fragment 151 (output already on disk)
+[driver] Restart: reusing CI fragment 152 (output already on disk)
+[driver] Restart: reusing CI fragment 153 (output already on disk)
+[driver] Restart: reusing CI fragment 154 (output already on disk)
+[driver] Restart: reusing CI fragment 155 (output already on disk)
+[driver] Restart: reusing CI fragment 156 (output already on disk)
+[driver] Restart: reusing CI fragment 157 (output already on disk)
+[driver] Restart: reusing CI fragment 158 (output already on disk)
+[driver] Restart: reusing CI fragment 159 (output already on disk)
+[driver] Restart: reusing CI fragment 160 (output already on disk)
+[driver] Restart: reusing CI fragment 161 (output already on disk)
+[driver] Restart: reusing CI fragment 162 (output already on disk)
+[driver] Restart: reusing CI fragment 163 (output already on disk)
+[driver] Restart: reusing CI fragment 164 (output already on disk)
+[driver] Restart: reusing CI fragment 165 (output already on disk)
+[driver] Restart: reusing CI fragment 166 (output already on disk)
+[driver] Restart: reusing CI fragment 167 (output already on disk)
+[driver] Restart: reusing CI fragment 168 (output already on disk)
+[driver] Restart: reusing CI fragment 169 (output already on disk)
+[driver] Restart: reusing CI fragment 170 (output already on disk)
+[driver] Restart: reusing CI fragment 171 (output already on disk)
+[driver] Restart: reusing CI fragment 172 (output already on disk)
+[driver] Restart: reusing CI fragment 173 (output already on disk)
+[driver] Restart: reusing CI fragment 174 (output already on disk)
+[driver] Restart: reusing CI fragment 175 (output already on disk)
+[driver] Restart: reusing CI fragment 176 (output already on disk)
+[driver] Restart: reusing CI fragment 177 (output already on disk)
+[driver] Restart: reusing CI fragment 178 (output already on disk)
+[driver] Restart: reusing CI fragment 179 (output already on disk)
+[driver] Restart: reusing CI fragment 180 (output already on disk)
+[driver] Restart: reusing CI fragment 181 (output already on disk)
+[driver] Restart: reusing CI fragment 182 (output already on disk)
+[driver] Restart: reusing CI fragment 183 (output already on disk)
+[driver] Restart: reusing CI fragment 184 (output already on disk)
+[driver] Restart: reusing CI fragment 185 (output already on disk)
+[driver] Restart: reusing CI fragment 186 (output already on disk)
+[driver] Restart: reusing CI fragment 187 (output already on disk)
+[driver] Restart: reusing CI fragment 188 (output already on disk)
+[driver] Restart: reusing CI fragment 189 (output already on disk)
+[driver] Restart: reusing CI fragment 190 (output already on disk)
+[driver] Restart: reusing CI fragment 191 (output already on disk)
+[driver] Restart: reusing CI fragment 192 (output already on disk)
+[driver] Restart: reusing CI fragment 193 (output already on disk)
+[driver] Restart: reusing CI fragment 194 (output already on disk)
+[driver] Restart: reusing CI fragment 195 (output already on disk)
+[driver] Restart: reusing CI fragment 196 (output already on disk)
+[driver] Restart: reusing CI fragment 197 (output already on disk)
+[driver] Restart: reusing CI fragment 198 (output already on disk)
+[driver] Restart: reusing CI fragment 199 (output already on disk)
+[driver] Restart: reusing CI fragment 200 (output already on disk)
+[driver] Restart: reusing CI fragment 201 (output already on disk)
+[driver] Restart: reusing CI fragment 202 (output already on disk)
+[driver] Restart: reusing CI fragment 203 (output already on disk)
+[driver] Restart: reusing CI fragment 204 (output already on disk)
+[driver] Restart: reusing CI fragment 205 (output already on disk)
+[driver] Restart: reusing CI fragment 206 (output already on disk)
+[driver] Restart: reusing CI fragment 207 (output already on disk)
+[driver] Restart: reusing CI fragment 208 (output already on disk)
+[driver] Restart: reusing CI fragment 209 (output already on disk)
+[driver] Restart: reusing CI fragment 210 (output already on disk)
+[driver] Restart: reusing CI fragment 211 (output already on disk)
+[driver] Restart: reusing CI fragment 212 (output already on disk)
+[driver] Restart: reusing CI fragment 213 (output already on disk)
+[driver] Restart: reusing CI fragment 214 (output already on disk)
+[driver] Restart: reusing CI fragment 215 (output already on disk)
+[driver] Restart: reusing CI fragment 216 (output already on disk)
+[driver] Restart: reusing CI fragment 217 (output already on disk)
+[driver] Restart: reusing CI fragment 218 (output already on disk)
+[driver] Restart: reusing CI fragment 219 (output already on disk)
+[driver] Restart: reusing CI fragment 220 (output already on disk)
+[driver] Restart: reusing CI fragment 221 (output already on disk)
+[driver] Restart: reusing CI fragment 222 (output already on disk)
+[driver] Restart: reusing CI fragment 223 (output already on disk)
+[driver] Restart: reusing CI fragment 225 (output already on disk)
+[driver] Restart: reusing CI fragment 226 (output already on disk)
+[driver] Restart: reusing CI fragment 227 (output already on disk)
+[driver] Restart: reusing CI fragment 228 (output already on disk)
+[driver] Restart: reusing CI fragment 229 (output already on disk)
+[driver] Restart: reusing CI fragment 230 (output already on disk)
+[driver] Restart: reusing CI fragment 231 (output already on disk)
+[driver] Restart: reusing CI fragment 232 (output already on disk)
+[driver] Restart: reusing CI fragment 233 (output already on disk)
+[driver] Restart: reusing CI fragment 234 (output already on disk)
+[driver] Restart: reusing CI fragment 235 (output already on disk)
+[driver] Restart: reusing CI fragment 236 (output already on disk)
+[driver] Restart: reusing CI fragment 237 (output already on disk)
+[driver] Restart: reusing CI fragment 238 (output already on disk)
+[driver] Restart: reusing CI fragment 239 (output already on disk)
+[driver] Restart: reusing CI fragment 240 (output already on disk)
+[driver] Restart: reusing CI fragment 241 (output already on disk)
+[driver] Restart: reusing CI fragment 242 (output already on disk)
+[driver] Restart: reusing CI fragment 243 (output already on disk)
+[driver] Restart: reusing CI fragment 244 (output already on disk)
+[driver] Restart: reusing CI fragment 245 (output already on disk)
+[driver] Restart: reusing CI fragment 246 (output already on disk)
+[driver] Restart: reusing CI fragment 247 (output already on disk)
+[driver] Restart: reusing CI fragment 248 (output already on disk)
+[driver] Restart: reusing CI fragment 249 (output already on disk)
+[driver] Restart: reusing CI fragment 250 (output already on disk)
+[driver] Restart: reusing CI fragment 251 (output already on disk)
+[driver] Restart: reusing CI fragment 252 (output already on disk)
+[driver] Restart: reusing CI fragment 253 (output already on disk)
+[driver] Restart: reusing CI fragment 254 (output already on disk)
+[driver] Restart: reusing CI fragment 255 (output already on disk)
+[driver] Restart: reusing CI fragment 256 (output already on disk)
+[driver] Restart: reusing CI fragment 257 (output already on disk)
+[driver] Restart: reusing CI fragment 258 (output already on disk)
+[driver] Restart: reusing CI fragment 259 (output already on disk)
+[driver] Restart: reusing CI fragment 260 (output already on disk)
+[driver] Restart: reusing CI fragment 261 (output already on disk)
+[driver] Restart: reusing CI fragment 262 (output already on disk)
+[driver] Restart: reusing CI fragment 263 (output already on disk)
+[driver] Restart: reusing CI fragment 264 (output already on disk)
+[driver] Restart: reusing CI fragment 265 (output already on disk)
+[driver] Restart: reusing CI fragment 266 (output already on disk)
+[driver] Restart: reusing CI fragment 267 (output already on disk)
+[driver] Restart: reusing CI fragment 268 (output already on disk)
+[driver] Restart: reusing CI fragment 269 (output already on disk)
+[driver] Restart: reusing CI fragment 270 (output already on disk)
+[driver] Restart: reusing CI fragment 271 (output already on disk)
+[driver] Restart: reusing CI fragment 272 (output already on disk)
+[driver] Restart: reusing CI fragment 273 (output already on disk)
+[driver] Restart: reusing CI fragment 274 (output already on disk)
+[driver] Restart: reusing CI fragment 275 (output already on disk)
+[driver] Restart: reusing CI fragment 276 (output already on disk)
+[driver] Restart: reusing CI fragment 277 (output already on disk)
+[driver] Restart: reusing CI fragment 278 (output already on disk)
+[driver] Restart: reusing CI fragment 279 (output already on disk)
+[driver] Restart: reusing CI fragment 280 (output already on disk)
+[driver] Restart: reusing CI fragment 281 (output already on disk)
+[driver] Restart: reusing CI fragment 282 (output already on disk)
+[driver] Restart: reusing CI fragment 283 (output already on disk)
+[driver] Restart: reusing CI fragment 284 (output already on disk)
+[driver] Restart: reusing CI fragment 285 (output already on disk)
+[driver] Restart: reusing CI fragment 286 (output already on disk)
+[driver] Restart: reusing CI fragment 287 (output already on disk)
+[driver] Restart: reusing CI fragment 288 (output already on disk)
+[driver] Restart: reusing CI fragment 289 (output already on disk)
+[driver] Restart: reusing CI fragment 290 (output already on disk)
+[driver] Restart: reusing CI fragment 291 (output already on disk)
+[driver] Restart: reusing CI fragment 292 (output already on disk)
+[driver] Restart: reusing CI fragment 293 (output already on disk)
+[driver] Restart: reusing CI fragment 294 (output already on disk)
+[driver] Restart: reusing CI fragment 295 (output already on disk)
+[driver] Restart: reusing CI fragment 296 (output already on disk)
+[driver] Restart: reusing CI fragment 297 (output already on disk)
+[driver] Restart: reusing CI fragment 298 (output already on disk)
+[driver] Restart: reusing CI fragment 299 (output already on disk)
+[driver] Restart: reusing CI fragment 300 (output already on disk)
+[driver] Restart: reusing CI fragment 301 (output already on disk)
+[driver] Restart: reusing CI fragment 302 (output already on disk)
+[driver] Submitted CI fragment  79  -> Slurm job 6062522  (jobs_EWF/jobs_ci_calculations/frag_solve_079.sh)
+[driver] Submitted CI fragment  82  -> Slurm job 6062524  (jobs_EWF/jobs_ci_calculations/frag_solve_082.sh)
+[driver] Submitted CI fragment  85  -> Slurm job 6062525  (jobs_EWF/jobs_ci_calculations/frag_solve_085.sh)
+[driver] Submitted CI fragment  86  -> Slurm job 6062526  (jobs_EWF/jobs_ci_calculations/frag_solve_086.sh)
+[driver] Submitted CI fragment  87  -> Slurm job 6062527  (jobs_EWF/jobs_ci_calculations/frag_solve_087.sh)
+[driver] Submitted CI fragment  90  -> Slurm job 6062528  (jobs_EWF/jobs_ci_calculations/frag_solve_090.sh)
+[driver] Submitted CI fragment  91  -> Slurm job 6062529  (jobs_EWF/jobs_ci_calculations/frag_solve_091.sh)
+[driver] Submitted CI fragment  92  -> Slurm job 6062530  (jobs_EWF/jobs_ci_calculations/frag_solve_092.sh)
+[driver] Submitted CI fragment  94  -> Slurm job 6062531  (jobs_EWF/jobs_ci_calculations/frag_solve_094.sh)
+[driver] Submitted CI fragment  96  -> Slurm job 6062532  (jobs_EWF/jobs_ci_calculations/frag_solve_096.sh)
+[driver] Submitted CI fragment  99  -> Slurm job 6062533  (jobs_EWF/jobs_ci_calculations/frag_solve_099.sh)
+[driver] Submitted CI fragment 100  -> Slurm job 6062534  (jobs_EWF/jobs_ci_calculations/frag_solve_100.sh)
+[driver] Submitted CI fragment 102  -> Slurm job 6062535  (jobs_EWF/jobs_ci_calculations/frag_solve_102.sh)
+[driver] Submitted CI fragment 104  -> Slurm job 6062536  (jobs_EWF/jobs_ci_calculations/frag_solve_104.sh)
+[driver] Submitted CI fragment 105  -> Slurm job 6062537  (jobs_EWF/jobs_ci_calculations/frag_solve_105.sh)
+[driver] Submitted CI fragment 107  -> Slurm job 6062538  (jobs_EWF/jobs_ci_calculations/frag_solve_107.sh)
+[driver] Submitted CI fragment 224  -> Slurm job 6062539  (jobs_EWF/jobs_ci_calculations/frag_solve_224.sh)
+[driver] Waiting on 303 fragment status file(s) in 'jobs_EWF/jobs_ci_calculations'
+[driver]   done=286/303  running=0  queued=17  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=286/303  running=17  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=287/303  running=16  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=288/303  running=15  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=289/303  running=14  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=290/303  running=13  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=291/303  running=12  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=292/303  running=11  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=293/303  running=10  queued=0  (poll 15s)
+[driver]   done=294/303  running=9  queued=0  (poll 15s)
+[driver]   done=294/303  running=9  queued=0  (poll 15s)
+[driver]   done=294/303  running=9  queued=0  (poll 15s)
+[driver]   done=295/303  running=8  queued=0  (poll 15s)
+[driver]   done=295/303  running=8  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=296/303  running=7  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=297/303  running=6  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=298/303  running=5  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=299/303  running=4  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=300/303  running=3  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=301/303  running=2  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver]   done=302/303  running=1  queued=0  (poll 15s)
+[driver] All fragment jobs reported DONE.
+[driver] Assembly route: cluster_energy (per-fragment energy sum; no global 919^4 cumulant is ever formed -- energy only)
+[driver] Per-cluster energies (heff + eris):
+                      N  E_cluster = -108.0405340792 Ha  [SQD, norb=16]
+                      H  E_cluster = -22.9191265245 Ha  [FCI, norb=8]
+                      H  E_cluster = -22.7727643168 Ha  [FCI, norb=8]
+                      H  E_cluster = -22.9653270298 Ha  [FCI, norb=8]
+                      C  E_cluster = -177.1130865501 Ha  [SQD, norb=28]
+                      H  E_cluster = -18.6699498229 Ha  [FCI, norb=8]
+                      C  E_cluster = -141.1325623098 Ha  [SQD, norb=24]
+                      H  E_cluster = -18.2604737848 Ha  [FCI, norb=8]
+                      H  E_cluster = -18.2164964514 Ha  [FCI, norb=8]
+                      C  E_cluster = -156.3015240685 Ha  [SQD, norb=22]
+                      O  E_cluster = -154.2877120289 Ha  [SQD, norb=17]
+                      N  E_cluster = -111.2992397625 Ha  [SQD, norb=15]
+                      H  E_cluster = -21.0852023651 Ha  [FCI, norb=7]
+                      H  E_cluster = -21.0298349519 Ha  [FCI, norb=7]
+                      C  E_cluster = -167.4849718267 Ha  [SQD, norb=25]
+                      O  E_cluster = -150.0029569873 Ha  [SQD, norb=18]
+                      N  E_cluster = -167.3427150818 Ha  [SQD, norb=24]
+                      H  E_cluster = -25.9384222342 Ha  [FCI, norb=9]
+                      C  E_cluster = -186.8061769604 Ha  [SQD, norb=30]
+                      H  E_cluster = -23.2247300581 Ha  [FCI, norb=9]
+                      C  E_cluster = -135.6853738370 Ha  [SQD, norb=25]
+                      H  E_cluster = -17.8020626024 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.8144049670 Ha  [FCI, norb=8]
+                      C  E_cluster = -154.8546479423 Ha  [SQD, norb=28]
+                      H  E_cluster = -17.6396180908 Ha  [FCI, norb=8]
+                      C  E_cluster = -89.6957231326 Ha  [SQD, norb=17]
+                      H  E_cluster = -17.8076591939 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.8604337054 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.8153637585 Ha  [FCI, norb=8]
+                      C  E_cluster = -89.9378695355 Ha  [SQD, norb=17]
+                      H  E_cluster = -17.9466213040 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.8773427098 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7887344028 Ha  [FCI, norb=8]
+                      C  E_cluster = -167.0094309311 Ha  [SQD, norb=25]
+                      O  E_cluster = -149.5332657584 Ha  [SQD, norb=20]
+                      N  E_cluster = -155.7125446973 Ha  [SQD, norb=23]
+                      H  E_cluster = -25.7947728572 Ha  [FCI, norb=8]
+                      C  E_cluster = -183.4233984919 Ha  [SQD, norb=30]
+                      H  E_cluster = -17.6248193064 Ha  [FCI, norb=8]
+                      C  E_cluster = -123.4672969347 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.8643811318 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.8359028091 Ha  [FCI, norb=8]
+                      C  E_cluster = -192.5038435189 Ha  [SQD, norb=33]
+                      C  E_cluster = -151.5762411654 Ha  [SQD, norb=27]
+                      H  E_cluster = -17.3707159618 Ha  [FCI, norb=8]
+                      C  E_cluster = -171.3662523575 Ha  [SQD, norb=28]
+                      H  E_cluster = -17.4955646261 Ha  [FCI, norb=8]
+                      C  E_cluster = -191.6475305046 Ha  [SQD, norb=28]
+                      O  E_cluster = -122.7064263925 Ha  [SQD, norb=15]
+                      H  E_cluster = -23.9885951071 Ha  [FCI, norb=7]
+                      C  E_cluster = -172.0722122006 Ha  [SQD, norb=27]
+                      H  E_cluster = -17.5639491435 Ha  [FCI, norb=8]
+                      C  E_cluster = -140.5212773235 Ha  [SQD, norb=25]
+                      H  E_cluster = -17.6137173075 Ha  [FCI, norb=8]
+                      C  E_cluster = -178.1700835391 Ha  [SQD, norb=27]
+                      O  E_cluster = -150.1535087899 Ha  [SQD, norb=19]
+                      N  E_cluster = -156.2646183220 Ha  [SQD, norb=22]
+                      H  E_cluster = -25.6330425185 Ha  [FCI, norb=8]
+                      C  E_cluster = -186.0402825569 Ha  [SQD, norb=30]
+                      H  E_cluster = -23.4962837219 Ha  [FCI, norb=9]
+                      C  E_cluster = -166.1384705861 Ha  [SQD, norb=29]
+                      H  E_cluster = -17.5510409953 Ha  [FCI, norb=8]
+                      C  E_cluster = -89.4655959436 Ha  [SQD, norb=17]
+                      H  E_cluster = -17.7015745496 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7819311807 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7317035098 Ha  [FCI, norb=8]
+                      C  E_cluster = -123.9530717287 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.5928263135 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5272685984 Ha  [FCI, norb=8]
+                      C  E_cluster = -89.0441952624 Ha  [SQD, norb=17]
+                      H  E_cluster = -17.6536787082 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7321722953 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7011146471 Ha  [FCI, norb=8]
+                      C  E_cluster = -179.9774508036 Ha  [SQD, norb=26]
+                      O  E_cluster = -150.5673979797 Ha  [SQD, norb=19]
+                      N  E_cluster = -156.0775637805 Ha  [SQD, norb=22]
+                      H  E_cluster = -25.4233422027 Ha  [FCI, norb=8]
+                      C  E_cluster = -185.4034606426 Ha  [SQD, norb=30]
+                      H  E_cluster = -17.5609689629 Ha  [FCI, norb=8]
+                      C  E_cluster = -123.6024654603 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.4393219705 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6102959265 Ha  [FCI, norb=8]
+                      C  E_cluster = -128.5134857930 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.7583591970 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6890733428 Ha  [FCI, norb=8]
+                      C  E_cluster = -156.1852976324 Ha  [SQD, norb=23]
+                      O  E_cluster = -151.2854305923 Ha  [SQD, norb=18]
+                      N  E_cluster = -111.1224014404 Ha  [SQD, norb=15]
+                      H  E_cluster = -21.1725721354 Ha  [FCI, norb=7]
+                      H  E_cluster = -21.1002247165 Ha  [FCI, norb=7]
+                      C  E_cluster = -178.5834611902 Ha  [SQD, norb=26]
+                      O  E_cluster = -149.0615401796 Ha  [SQD, norb=18]
+                      N  E_cluster = -154.0919606941 Ha  [SQD, norb=23]
+                      H  E_cluster = -24.9633318320 Ha  [FCI, norb=8]
+                      C  E_cluster = -184.7847250827 Ha  [SQD, norb=30]
+                      H  E_cluster = -23.0037869783 Ha  [FCI, norb=9]
+                      C  E_cluster = -123.0513048827 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.5504528341 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5579424827 Ha  [FCI, norb=8]
+                      C  E_cluster = -180.6137777606 Ha  [SQD, norb=32]
+                      C  E_cluster = -153.6848054032 Ha  [SQD, norb=26]
+                      H  E_cluster = -17.4808820750 Ha  [FCI, norb=8]
+                      N  E_cluster = -163.7214268081 Ha  [SQD, norb=24]
+                      H  E_cluster = -25.2297215535 Ha  [FCI, norb=9]
+                      C  E_cluster = -201.1009607019 Ha  [SQD, norb=33]
+                      C  E_cluster = -151.3823143146 Ha  [SQD, norb=26]
+                      H  E_cluster = -17.3477811565 Ha  [FCI, norb=8]
+                      C  E_cluster = -148.3643944714 Ha  [SQD, norb=28]
+                      H  E_cluster = -17.1353399280 Ha  [FCI, norb=8]
+                      C  E_cluster = -148.5395328809 Ha  [SQD, norb=26]
+                      H  E_cluster = -17.1197314205 Ha  [FCI, norb=8]
+                      C  E_cluster = -148.4632632524 Ha  [SQD, norb=27]
+                      H  E_cluster = -17.0965710603 Ha  [FCI, norb=8]
+                      C  E_cluster = -196.5671819327 Ha  [SQD, norb=33]
+                      C  E_cluster = -178.4474807278 Ha  [SQD, norb=26]
+                      O  E_cluster = -147.5323666188 Ha  [SQD, norb=20]
+                      N  E_cluster = -153.8182071117 Ha  [SQD, norb=22]
+                      H  E_cluster = -25.3406976284 Ha  [FCI, norb=9]
+                      C  E_cluster = -181.8784134327 Ha  [SQD, norb=30]
+                      H  E_cluster = -22.3273913993 Ha  [FCI, norb=9]
+                      C  E_cluster = -121.7557113541 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.1423070480 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2038638709 Ha  [FCI, norb=8]
+                      C  E_cluster = -152.8650890205 Ha  [SQD, norb=28]
+                      H  E_cluster = -17.0861924684 Ha  [FCI, norb=8]
+                      C  E_cluster = -88.3936085900 Ha  [SQD, norb=17]
+                      H  E_cluster = -17.4341261430 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4829149300 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4682959927 Ha  [FCI, norb=8]
+                      C  E_cluster = -88.6770211554 Ha  [SQD, norb=18]
+                      H  E_cluster = -17.4723565820 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4788039016 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3151826906 Ha  [FCI, norb=8]
+                      C  E_cluster = -175.3524806762 Ha  [SQD, norb=26]
+                      O  E_cluster = -146.8396476405 Ha  [SQD, norb=17]
+                      N  E_cluster = -163.6207052064 Ha  [SQD, norb=24]
+                      H  E_cluster = -24.7743077257 Ha  [FCI, norb=9]
+                      C  E_cluster = -182.5124957114 Ha  [SQD, norb=29]
+                      H  E_cluster = -17.0077440079 Ha  [FCI, norb=8]
+                      C  E_cluster = -112.2695731985 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.2279998641 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2421135289 Ha  [FCI, norb=8]
+                      C  E_cluster = -112.7274700439 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.1336806694 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.0881946824 Ha  [FCI, norb=8]
+                      C  E_cluster = -123.8642625253 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.0347996937 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.0208507547 Ha  [FCI, norb=8]
+                      C  E_cluster = -116.9663891283 Ha  [SQD, norb=21]
+                      H  E_cluster = -17.2512447010 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2194848602 Ha  [FCI, norb=8]
+                      N  E_cluster = -94.7858626999 Ha  [SQD, norb=14]
+                      H  E_cluster = -19.9464995340 Ha  [FCI, norb=7]
+                      H  E_cluster = -19.9153325018 Ha  [FCI, norb=7]
+                      C  E_cluster = -175.8717801267 Ha  [SQD, norb=26]
+                      O  E_cluster = -148.0319606369 Ha  [SQD, norb=17]
+                      N  E_cluster = -152.2069167864 Ha  [SQD, norb=23]
+                      H  E_cluster = -24.2262404874 Ha  [FCI, norb=9]
+                      C  E_cluster = -167.8147797875 Ha  [SQD, norb=28]
+                      H  E_cluster = -21.5854463298 Ha  [FCI, norb=9]
+                      C  E_cluster = -144.9215079455 Ha  [SQD, norb=26]
+                      H  E_cluster = -20.7180232466 Ha  [FCI, norb=9]
+                      H  E_cluster = -15.7224932582 Ha  [FCI, norb=8]
+                      C  E_cluster = -151.5787568952 Ha  [SQD, norb=21]
+                      O  E_cluster = -137.6997810603 Ha  [SQD, norb=15]
+                      O  E_cluster = -137.6294597294 Ha  [SQD, norb=15]
+                      C  E_cluster = -175.8838929725 Ha  [SQD, norb=26]
+                      O  E_cluster = -131.9628367143 Ha  [SQD, norb=16]
+                      N  E_cluster = -151.7350499056 Ha  [SQD, norb=23]
+                      H  E_cluster = -24.1310901431 Ha  [FCI, norb=8]
+                      C  E_cluster = -139.1883246991 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.0622485058 Ha  [FCI, norb=8]
+                      H  E_cluster = -16.9911449956 Ha  [FCI, norb=8]
+                      C  E_cluster = -163.9595407804 Ha  [SQD, norb=24]
+                      O  E_cluster = -147.4685033613 Ha  [SQD, norb=17]
+                      N  E_cluster = -152.7964806177 Ha  [SQD, norb=23]
+                      H  E_cluster = -24.6855495826 Ha  [FCI, norb=9]
+                      C  E_cluster = -142.1092417030 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.5537735127 Ha  [FCI, norb=8]
+                      H  E_cluster = -22.8987865318 Ha  [FCI, norb=9]
+                      C  E_cluster = -177.4113270277 Ha  [SQD, norb=26]
+                      O  E_cluster = -146.6115962106 Ha  [SQD, norb=19]
+                      N  E_cluster = -201.0020813017 Ha  [SQD, norb=28]
+                      C  E_cluster = -140.2361635332 Ha  [SQD, norb=25]
+                      H  E_cluster = -17.5351452976 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3718390832 Ha  [FCI, norb=8]
+                      C  E_cluster = -126.3421680881 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.5811704989 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.5225304422 Ha  [FCI, norb=8]
+                      C  E_cluster = -125.8878843728 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.3126745511 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3465874117 Ha  [FCI, norb=8]
+                      C  E_cluster = -186.4734544727 Ha  [SQD, norb=30]
+                      H  E_cluster = -23.8805288679 Ha  [FCI, norb=9]
+                      C  E_cluster = -179.7713424998 Ha  [SQD, norb=25]
+                      O  E_cluster = -149.9093543408 Ha  [SQD, norb=17]
+                      N  E_cluster = -167.8316168323 Ha  [SQD, norb=24]
+                      H  E_cluster = -24.7594050561 Ha  [FCI, norb=9]
+                      C  E_cluster = -199.2352722583 Ha  [SQD, norb=30]
+                      H  E_cluster = -17.1661119102 Ha  [FCI, norb=8]
+                      C  E_cluster = -132.0651558720 Ha  [SQD, norb=21]
+                      H  E_cluster = -17.6352763980 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4726049659 Ha  [FCI, norb=8]
+                      O  E_cluster = -112.5940583911 Ha  [SQD, norb=14]
+                      H  E_cluster = -23.2111632038 Ha  [FCI, norb=6]
+                      C  E_cluster = -163.7892136604 Ha  [SQD, norb=25]
+                      O  E_cluster = -148.2731529036 Ha  [SQD, norb=17]
+                      N  E_cluster = -151.9000690007 Ha  [SQD, norb=24]
+                      H  E_cluster = -24.3781965026 Ha  [FCI, norb=8]
+                      C  E_cluster = -186.0897115561 Ha  [SQD, norb=29]
+                      H  E_cluster = -17.0918065682 Ha  [FCI, norb=8]
+                      C  E_cluster = -131.6783699503 Ha  [SQD, norb=21]
+                      H  E_cluster = -17.2147542983 Ha  [FCI, norb=8]
+                      H  E_cluster = -16.9078948275 Ha  [FCI, norb=8]
+                      O  E_cluster = -120.1519040149 Ha  [SQD, norb=16]
+                      H  E_cluster = -28.6477099994 Ha  [FCI, norb=8]
+                      C  E_cluster = -177.6647683134 Ha  [SQD, norb=26]
+                      O  E_cluster = -148.4141409634 Ha  [SQD, norb=18]
+                      N  E_cluster = -154.5519178773 Ha  [SQD, norb=23]
+                      H  E_cluster = -25.0626445064 Ha  [FCI, norb=8]
+                      C  E_cluster = -142.3047216746 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.3830498892 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.3456379054 Ha  [FCI, norb=8]
+                      C  E_cluster = -166.1475078474 Ha  [SQD, norb=24]
+                      O  E_cluster = -149.5846527736 Ha  [SQD, norb=17]
+                      N  E_cluster = -154.5632909317 Ha  [SQD, norb=23]
+                      H  E_cluster = -25.1279099497 Ha  [FCI, norb=8]
+                      C  E_cluster = -184.8383213216 Ha  [SQD, norb=30]
+                      H  E_cluster = -22.5157691001 Ha  [FCI, norb=9]
+                      C  E_cluster = -124.0679228963 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.4741703599 Ha  [FCI, norb=8]
+                      H  E_cluster = -22.2903055689 Ha  [FCI, norb=9]
+                      C  E_cluster = -124.9823537500 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.6303223463 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7576112589 Ha  [FCI, norb=8]
+                      C  E_cluster = -128.5205584154 Ha  [SQD, norb=23]
+                      H  E_cluster = -18.2450306676 Ha  [FCI, norb=8]
+                      H  E_cluster = -18.1544961675 Ha  [FCI, norb=8]
+                      N  E_cluster = -159.6283310463 Ha  [SQD, norb=23]
+                      H  E_cluster = -21.4269435243 Ha  [FCI, norb=8]
+                      C  E_cluster = -160.7159500018 Ha  [SQD, norb=24]
+                      N  E_cluster = -123.6461574442 Ha  [SQD, norb=17]
+                      H  E_cluster = -21.9134996858 Ha  [FCI, norb=8]
+                      H  E_cluster = -22.0946079043 Ha  [FCI, norb=8]
+                      N  E_cluster = -123.5381307726 Ha  [SQD, norb=17]
+                      H  E_cluster = -22.1577687630 Ha  [FCI, norb=8]
+                      H  E_cluster = -22.1758985146 Ha  [FCI, norb=8]
+                      C  E_cluster = -176.3393283551 Ha  [SQD, norb=27]
+                      O  E_cluster = -148.0171111583 Ha  [SQD, norb=18]
+                      N  E_cluster = -201.2094600264 Ha  [SQD, norb=28]
+                      C  E_cluster = -130.7012403294 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.8473484354 Ha  [FCI, norb=8]
+                      H  E_cluster = -24.5994272244 Ha  [FCI, norb=9]
+                      C  E_cluster = -128.4673861317 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.7325340311 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.7686048702 Ha  [FCI, norb=8]
+                      C  E_cluster = -126.0804920990 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.6541772748 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6548252410 Ha  [FCI, norb=8]
+                      C  E_cluster = -187.6809405972 Ha  [SQD, norb=30]
+                      H  E_cluster = -22.8574449073 Ha  [FCI, norb=9]
+                      C  E_cluster = -164.8497707193 Ha  [SQD, norb=25]
+                      O  E_cluster = -149.3670159919 Ha  [SQD, norb=18]
+                      N  E_cluster = -201.0544394933 Ha  [SQD, norb=28]
+                      C  E_cluster = -129.3638539041 Ha  [SQD, norb=23]
+                      H  E_cluster = -24.3654415966 Ha  [FCI, norb=9]
+                      H  E_cluster = -17.5291241790 Ha  [FCI, norb=8]
+                      C  E_cluster = -125.4558189027 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.4677400200 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.2905826892 Ha  [FCI, norb=8]
+                      C  E_cluster = -125.6612748835 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.4809842641 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4721008621 Ha  [FCI, norb=8]
+                      C  E_cluster = -187.6419538322 Ha  [SQD, norb=30]
+                      H  E_cluster = -22.7043813536 Ha  [FCI, norb=9]
+                      C  E_cluster = -178.4444435618 Ha  [SQD, norb=26]
+                      O  E_cluster = -148.6002617930 Ha  [SQD, norb=17]
+                      N  E_cluster = -201.7525703729 Ha  [SQD, norb=28]
+                      C  E_cluster = -128.8044347985 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.5366818714 Ha  [FCI, norb=8]
+                      H  E_cluster = -23.0537379707 Ha  [FCI, norb=9]
+                      C  E_cluster = -126.5689139547 Ha  [SQD, norb=23]
+                      H  E_cluster = -17.4754601667 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.4070794277 Ha  [FCI, norb=8]
+                      C  E_cluster = -125.8154155368 Ha  [SQD, norb=24]
+                      H  E_cluster = -17.6772933332 Ha  [FCI, norb=8]
+                      H  E_cluster = -17.6789332171 Ha  [FCI, norb=8]
+                      C  E_cluster = -187.7624785819 Ha  [SQD, norb=29]
+                      H  E_cluster = -23.6745864872 Ha  [FCI, norb=9]
+                      C  E_cluster = -164.7950488707 Ha  [SQD, norb=25]
+                      O  E_cluster = -148.0385882109 Ha  [SQD, norb=17]
+                      N  E_cluster = -152.6313679264 Ha  [SQD, norb=22]
+                      H  E_cluster = -25.4576360597 Ha  [FCI, norb=8]
+                      C  E_cluster = -197.9457759611 Ha  [SQD, norb=31]
+                      H  E_cluster = -22.3278747887 Ha  [FCI, norb=9]
+                      C  E_cluster = -129.9836463121 Ha  [SQD, norb=21]
+                      H  E_cluster = -17.0385804676 Ha  [FCI, norb=8]
+                      H  E_cluster = -24.5066350994 Ha  [FCI, norb=9]
+                      O  E_cluster = -120.1186718237 Ha  [SQD, norb=14]
+                      H  E_cluster = -28.5250413284 Ha  [FCI, norb=8]
+                      C  E_cluster = -166.8961488943 Ha  [SQD, norb=22]
+                      O  E_cluster = -139.2249875692 Ha  [SQD, norb=16]
+                      O  E_cluster = -139.2756469652 Ha  [SQD, norb=15]
+[driver] EWF-FCI/SQD energy: -7354.1575730415 Ha
+[driver] energy-only task: skipping nuclear-gradient assembly
+
+EWF-FCI/SQD energy (energy-only task): -7354.1575730415 Ha
