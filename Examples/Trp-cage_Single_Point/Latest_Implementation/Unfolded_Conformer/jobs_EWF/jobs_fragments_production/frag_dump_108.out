@@ -1,0 +1,10 @@
+No module named 'dyson'
+Dyson required for self-energy calculations
+[driver] Restart mode: ON -- reusing existing artefacts in 'jobs_EWF' where possible (step_<NNN>/result.json, step_<NNN>/hf.chk, cluster_<i>.h5, rdm_<i>.h5, iter_*/sbd_job.status, count_dict.txt).
+[dump frag=108] Building mol + RHF
+[HF] Restart: reused converged RHF from jobs_EWF/hf.chk + cached AO .npy integrals (E_HF=-7343.9620806113 Ha)
+[dump frag=108] HF energy: -7343.9620806113
+[dump frag=108] vayesta.ewf.EWF(solver=DUMP, bath_options=dict(threshold=1e-05))
+[dump frag=108] Running ONLY fragment 'Fragment 108: H' -> jobs_EWF/cluster_108.h5
+[ERIS] Using FULL AO/DF integrals
+[dump frag=108] Wrote cluster file jobs_EWF/cluster_108.h5
