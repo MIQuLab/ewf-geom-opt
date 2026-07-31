@@ -1,0 +1,209 @@
+name: Bug Report
+about: Report a problem with ewf-geom-opt
+title: "[BUG] "
+labels: bug
+assignees: ''
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the form below as completely as possible.
+        The more detail you provide, the faster we can identify and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: A clear and concise description of what the bug is.
+      placeholder: "Describe what went wrong..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: run-task
+    attributes:
+      label: Run task
+      description: What was the value of `calculation.run_task`?
+      options:
+        - geomopt
+        - gradient
+        - energy
+        - circuits
+    validations:
+      required: true
+
+  - type: dropdown
+    id: run-mode
+    attributes:
+      label: Run mode
+      description: What was the value of `calculation.run_mode`?
+      options:
+        - ewf
+        - unfragmented_EWF_limit
+        - true_unfragmented
+    validations:
+      required: true
+
+  - type: dropdown
+    id: solver
+    attributes:
+      label: Solver
+      description: Which solver was being used? (`ewf.solver` or `multi_solver`)
+      options:
+        - FCI
+        - SCI
+        - SCI_SBD
+        - SQD
+        - Multi-solver (FCI + SCI)
+        - Multi-solver (FCI + SCI_SBD)
+        - Multi-solver (FCI + SQD)
+        - Not applicable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: assembly
+    attributes:
+      label: Density assembly route
+      description: What was the value of `ewf.assembly`?
+      options:
+        - rdm_t_lambda
+        - rdm_t
+        - ci
+        - democratic
+        - projected_lambda
+        - cluster_energy
+        - Not applicable / not set
+    validations:
+      required: true
+
+  - type: dropdown
+    id: optimizer
+    attributes:
+      label: Geometry optimizer backend
+      description: What was the value of `geomopt.optimizer`?
+      options:
+        - sella
+        - geometric
+        - berny
+        - Not applicable (single-point or energy only)
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "e.g. 3.11.2"
+    validations:
+      required: true
+
+  - type: input
+    id: pyscf-version
+    attributes:
+      label: PySCF version
+      placeholder: "e.g. 2.6.0"
+    validations:
+      required: true
+
+  - type: input
+    id: vayesta-version
+    attributes:
+      label: Vayesta version
+      placeholder: "e.g. 1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: qiskit-version
+    attributes:
+      label: Qiskit / qiskit-ibm-runtime version
+      description: Fill in only if using SQD solver.
+      placeholder: "e.g. qiskit 1.1.0, qiskit-ibm-runtime 0.23.0"
+
+  - type: input
+    id: hpc-env
+    attributes:
+      label: HPC cluster and Slurm version
+      description: Fill in if the bug involves job submission or Slurm.
+      placeholder: "e.g. MSU HPCC, Slurm 23.11"
+
+  - type: dropdown
+    id: gpu
+    attributes:
+      label: GPU used?
+      options:
+        - "No"
+        - "Yes — GPU HF only (hf.gpu: true)"
+        - "Yes — GPU SBD only (sbd.proc_type: 1)"
+        - "Yes — both GPU HF and GPU SBD"
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config.yaml sections
+      description: |
+        Paste the relevant sections of your config.yaml.
+        **Remove any sensitive HPC credentials, API keys, or account names before posting.**
+      render: yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "What did you expect to happen?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and error output
+      description: Include any error messages or stack traces.
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log files
+      description: |
+        Paste or attach relevant sections from:
+        - Main driver log
+        - Slurm `.out` / `.err` files
+        - `sbd_solver_logfile.log` (for SCI_SBD / SQD issues)
+        - `iter_*/iteration_summary.json` (for SQD loop issues)
+      render: bash
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: |
+        Any other context — molecule size, number of fragments, cluster dimensions (norb),
+        whether this is a restart run, etc.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have removed all API keys, tokens, and HPC credentials from the config I pasted
+          required: true
+        - label: I have checked the existing issues to make sure this is not a duplicate
+          required: true
