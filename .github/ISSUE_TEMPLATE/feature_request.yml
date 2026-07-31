@@ -1,8 +1,7 @@
 name: Feature Request
-about: Suggest a new feature or improvement for ewf-geom-opt
+description: Suggest a new feature or improvement for ewf-geom-opt
 title: "[FEATURE] "
 labels: enhancement
-assignees: ''
 
 body:
   - type: markdown
