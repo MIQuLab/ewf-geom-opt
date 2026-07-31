@@ -1,0 +1,52 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "ewf-geom-opt: EWF-Based Geometry Optimization with SQD Solver"
+abstract: "Geometry optimization driven by Embedded Wave Function (EWF) analytic
+  nuclear gradients, built on quantum embedding with FCI / Selected-CI / SCI-SBD /
+  SQD (Sample-based Quantum Diagonalization) cluster solvers, PySCF integrals, and
+  a choice of geometry optimizer (geomeTRIC, PyBerny, or Sella)."
+repository-code: "https://github.com/MIQuLab/ewf-geom-opt"
+license: MIT
+version: 1.0.0
+date-released: "2026-07-17"
+
+authors:
+  - family-names: Kaliakin
+    given-names: Danil
+    affiliation: "Computational Life Sciences, Cleveland Clinic Research, Cleveland, Ohio 44106, United States"
+  - family-names: Shajan
+    given-names: Akhil
+    affiliation: "Computational Life Sciences, Cleveland Clinic Research, Cleveland, Ohio 44106, United States"
+  - family-names: Liang
+    given-names: Fangchun
+    affiliation: "Computational Life Sciences, Cleveland Clinic Research, Cleveland, Ohio 44106, United States"
+  - family-names: Li
+    given-names: Zhen
+    affiliation: "Computational Life Sciences, Cleveland Clinic Research, Cleveland, Ohio 44106, United States"
+  - family-names: Merz
+    given-names: Kenneth M.
+    name-suffix: Jr.
+    affiliation: "Computational Life Sciences, Cleveland Clinic Research, Cleveland, Ohio 44106, United States"
+
+preferred-citation:
+  type: article
+  title: "Quantum-Centric Geometry Optimization with Wave-Function-Based Embedding"
+  authors:
+    - family-names: Kaliakin
+      given-names: Danil
+    - family-names: Shajan
+      given-names: Akhil
+    - family-names: Liang
+      given-names: Fangchun
+    - family-names: Li
+      given-names: Zhen
+    - family-names: Merz
+      given-names: Kenneth M.
+      name-suffix: Jr.
+  year: 2026
+  url: "https://arxiv.org/abs/2607.16410"
+  identifiers:
+    - type: other
+      value: "arXiv:2607.16410"
+      description: "arXiv preprint"
