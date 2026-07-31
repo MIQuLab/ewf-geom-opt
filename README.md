@@ -6,6 +6,27 @@ The central contribution of this project is a pair of density-assembly routes �
 
 ---
 
+## Related project
+
+This repository is a **sister project** to
+[**quantum-fragment-methods**](https://github.com/qiskit-community/quantum-fragment-methods)
+in the [Qiskit Community](https://github.com/qiskit-community) organization. Both
+develop EWF-SQD — fragment-based quantum embedding with sample-based quantum
+diagonalization — with deliberately complementary aims:
+
+| Project | Focus |
+|---|---|
+| **This project** | Novel, frontier functionality for EWF-SQD: analytic nuclear gradients, geometry optimization, and new density-assembly routes — capability that is still experimental and being established |
+| [**quantum-fragment-methods**](https://github.com/qiskit-community/quantum-fragment-methods) | Integrating EWF-SQD into the Qiskit software ecosystem: closer alignment with [`qiskit-addon-sqd`](https://github.com/qiskit/qiskit-addon-sqd), a stable and user-friendly interface, and a containerized deployment |
+
+Methods are explored here and hardened there. If you want a supported, packaged
+EWF-SQD implementation to *use*, start with **quantum-fragment-methods**. If you
+are interested in the research frontier of the method — gradients, geometry
+optimization, new ways of assembling the global density — this is the right
+place.
+
+---
+
 ## Repository layout
 
 | Path | Contents |
