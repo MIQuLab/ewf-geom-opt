@@ -1,9 +1,11 @@
 #!/bin/sh
 
-#SBATCH --job-name=g_opt_ewf
-#SBATCH --partition=bigmem
-#SBATCH --mem=170G
-#SBATCH --ntasks=4
+#SBATCH --job-name=trp-cage
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=500G      
+#SBATCH --partition=merzk-a100
+#SBATCH --gpus-per-node=1   
 
 module load gcc/11.2.0 cuda12.3/toolkit/12.3.2 cudnn8.9-cuda12.3/8.9.7.29 boost/1.85.0
 export PATH="/home/liz7/isilon/Zhen/mpich/bin:$PATH"
