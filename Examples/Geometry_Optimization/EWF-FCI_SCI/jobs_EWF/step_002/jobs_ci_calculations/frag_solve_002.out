@@ -1,0 +1,8 @@
+No module named 'dyson'
+Dyson required for self-energy calculations
+[solve frag=2] Loaded Cluster(fragment_2, name=C, norb=16, nocc=9)
+[solve frag=2] Multi-solver: cluster norb=16 >= norb_threshold=13 -> SCI_SBD
+[solve frag=2] Solving cluster (norb=16) with SCI_SBD (PySCF SCI growth + external SBD eigensolver; select_cutoff=0.001; submits per-cycle Slurm jobs)
+[solve frag=2] E_cluster (SCI_SBD) = -92.2809960808 Ha
+[solve frag=2] Assembly route 'rdm_t_lambda' uses the cluster RDMs directly -- skipping the CISD extraction.
+[solve frag=2] Wrote RDM file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SCI/jobs_EWF/step_002/rdm_002.h5

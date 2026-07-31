@@ -1,0 +1,8 @@
+No module named 'dyson'
+Dyson required for self-energy calculations
+[dump frag=2] Building mol + RHF
+[HF] worker: reused converged RHF from /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SQD/jobs_EWF/step_000/hf.chk + cached AO .npy integrals (E_HF=-189.5319968139 Ha)
+[dump frag=2] HF energy: -189.5319968139
+[dump frag=2] vayesta.ewf.EWF(solver=DUMP, bath_options=dict(threshold=1e-05))
+[dump frag=2] Running ONLY fragment 'Fragment 2: C' -> /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SQD/jobs_EWF/step_000/cluster_002.h5
+[dump frag=2] Wrote cluster file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SQD/jobs_EWF/step_000/cluster_002.h5

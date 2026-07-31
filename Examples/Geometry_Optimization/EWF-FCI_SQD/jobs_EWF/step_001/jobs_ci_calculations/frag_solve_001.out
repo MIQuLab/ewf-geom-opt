@@ -1,0 +1,18 @@
+No module named 'dyson'
+Dyson required for self-energy calculations
+[solve frag=1] Loaded Cluster(fragment_1, name=C, norb=22, nocc=13)
+[solve frag=1] Multi-solver: cluster norb=22 >= norb_threshold=13 -> SQD
+[solve frag=1] Solving cluster (norb=22) with SQD (quantum sampling + SBD configuration recovery + ext-SQD; iterations=5, n_batches=4; submits one Slurm job per SBD batch and a final ext-SQD job)
+Parsing /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SQD/jobs_EWF/step_001/sqd_scratch_001/fci_dump.txt
+converged SCF energy = -146.807339868908
+E(CCSD) = -147.0493035204324  E_corr = -0.2419636515241212
+  >> removing node: 114 | Readout err: 0.3519
+  >> removing node: 134 | Readout err: 0.1270
+num edges after node removal: 172
+num edges before: 172
+num edges after: 171
+The best layout has a total error of: 0.34488383323977645
+  SQD: submitted IBM Runtime job d9i88nkhonhs73ae4ef0 on ibm_cleveland
+[solve frag=1] E_cluster (SQD) = -147.0529262642 Ha
+[solve frag=1] Assembly route 'rdm_t_lambda' uses the cluster RDMs directly -- skipping the CISD extraction.
+[solve frag=1] Wrote RDM file /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SQD/jobs_EWF/step_001/rdm_001.h5

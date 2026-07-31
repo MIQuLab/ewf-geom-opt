@@ -1,0 +1,27 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.87652 (sec) 
+ Elapsed time for init 1.908279 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.448448 (sec) 
+ Davidson iteration 0.0 (tol=6.434413055289727e-09): -303.5662539027626
+ Elapsed time for davidson 7.099070999999999 (sec) 
+ Elapsed time for diagonalization 7.099099 (sec) 
+ Elapsed time for mult 1.22585 (sec) 
+ Energy = -303.5662539027626
+ Elapsed time for measurement 13.956564 (sec) 
+ Sample-based diagonalization: Energy = -303.5662539027626
+ Sample-based diagonalization: density = [1.99999714249578,1.999973844173374,1.99996934181103,1.999969372480057,1.992069638922521,1.985617239948448,1.984667190945485,1.978770097429653,1.978867614386339,1.970329565289918,1.977231283494633,1.97548578843491,1.975395526836682,1.972549457663717,1.880047698827251,1.979444477138653,0.1281448894086844,0.03387776164895077,0.02622896820360785,0.02824510896539848,0.02228106060172521,0.01987194982096626,0.02345077617688644,0.01986460112743802,0.02386081793537254,0.02378878582727951
+ Sample-based diagonalization: carryover bitstrings = [], size = 0
+ Elapse time for dumping one-particle rdm = 0.000905
+ Elapse time for dumping two-particle rdm = 0.442853
+ Zero-Body energy = 0
+ One-Body energy = -484.1019177743514
+ Two-Body energy = 180.5356638716652
+ One-Body + Two-Body energy = -303.5662539026862
+ Zero-Body + One-Body + Two-Body energy = -303.5662539026862

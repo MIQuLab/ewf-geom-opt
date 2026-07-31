@@ -1,0 +1,27 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.057486 (sec) 
+ Elapsed time for init 1.349461 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.004802 (sec) 
+ Davidson iteration 0.0 (tol=5.2770873813246e-09): -136.7601956833032
+ Elapsed time for davidson 0.838715 (sec) 
+ Elapsed time for diagonalization 0.838727 (sec) 
+ Elapsed time for mult 0.325021 (sec) 
+ Energy = -136.7601956833032
+ Elapsed time for measurement 0.393114 (sec) 
+ Sample-based diagonalization: Energy = -136.7601956833032
+ Sample-based diagonalization: density = [1.999996911421879,1.999562843693253,1.991949789636372,1.983080216581263,1.982449191270186,1.987204165165396,1.99668249071108,1.976665336569703,1.890606089680128,1.984624386123548,0.1201719219364753,0.02451372236912174,0.008646697713328381,0.00820189939543399,0.02586552614479383,0.01977881158804549
+ Sample-based diagonalization: carryover bitstrings = [], size = 0
+ Elapse time for dumping one-particle rdm = 0.000397
+ Elapse time for dumping two-particle rdm = 0.06232
+ Zero-Body energy = 0
+ One-Body energy = -215.8115376227951
+ Two-Body energy = 79.05134193949085
+ One-Body + Two-Body energy = -136.7601956833042
+ Zero-Body + One-Body + Two-Body energy = -136.7601956833042
