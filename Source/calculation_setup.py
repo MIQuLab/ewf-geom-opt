@@ -40,19 +40,28 @@ OPTIMIZER_TOKENS = {
     "Berny": "berny",
 }
 
+# --- Shipped HPC site definitions ------------------------------------------
+# The example CCF/MSU site definitions live in Examples/HPC_Settings/, not next
+# to this script, so resolve them relative to the repository root (one level up
+# from Source/).  Used only as a fallback when the working directory holds no
+# settings file of its own -- see :func:`select_hpc_settings`.
+SHIPPED_HPC_SETTINGS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "Examples", "HPC_Settings")
+
 
 def select_hpc_settings(question="Which HPC settings to use?"):
-    """Discover ``*_HPC_settings.yaml`` in the CWD (and this script's dir, so the
-    shipped CCF/MSU presets are always available) and return a loaded settings
-    dict, prompting when more than one is found.  Exits with a helpful message
-    when none exist."""
+    """Discover ``*_HPC_settings.yaml`` in the CWD (falling back to the shipped
+    CCF/MSU presets in ``Examples/HPC_Settings/``, so they are always available)
+    and return a loaded settings dict, prompting when more than one is found.
+    Exits with a helpful message when none exist."""
     # Prefer settings files in the working directory; only if there are none
-    # fall back to the CCF/MSU presets shipped next to this script.  This keeps
-    # a user's own definitions un-cluttered while still working out of the box.
+    # fall back to the CCF/MSU presets shipped under Examples/HPC_Settings/.
+    # This keeps a user's own definitions un-cluttered while still working out
+    # of the box.
     found = hpc_settings.discover([os.getcwd()])
     if not found:
-        found = hpc_settings.discover(
-            [os.path.dirname(os.path.abspath(__file__))])
+        found = hpc_settings.discover([SHIPPED_HPC_SETTINGS_DIR])
     if not found:
         print("\nERROR: no '*_HPC_settings.yaml' file found in the current "
               "directory.\nGenerate one first with:\n"

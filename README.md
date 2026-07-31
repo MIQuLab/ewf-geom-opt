@@ -31,7 +31,7 @@ place.
 
 | Path | Contents |
 |---|---|
-| [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, config, test geometry, Slurm script |
+| [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, cluster solvers, HPC-settings loader, interactive config generator |
 | [`Examples/`](Examples/) | Example outputs and config files |
 | [`Utilities/`](Utilities/) | Standalone analysis tools — Slurm job diagnostics, geometry comparison, fragmentation-effect analysis (each documented in [`Utilities/README.md`](Utilities/README.md)) |
 
@@ -46,6 +46,8 @@ place.
 | `sqd_solver.py` | `SQD` solver: sample-based quantum diagonalization — quantum-sampled bitstrings drive an iterative SBD subspace-recovery loop (one Slurm job per parallel batch) followed by a final ext-SQD SBD job with PyCI single-excitation augmentation |
 | `sqd_quantum_sampling.py` | Quantum-sampling source for `SQD`: either reuses a pre-collected `count_dict.txt` or runs an LUCJ ansatz on an IBM Quantum backend via Qiskit IBM Runtime + ffsim |
 | `zigzag_layout.py` | Heavy-hex zigzag physical-qubit layout selector used by the LUCJ ansatz when `SQD` samples on the fly |
+| `sbd_wrapper.py` | Parser for the external SBD solver's output — energies, timings, Davidson iteration counts |
+| `hpc_settings.py` | HPC site definitions: loads and normalizes a `<name>_HPC_settings.yaml`, and renders the chosen settings into the `config.yaml` Slurm blocks and `submit_slurm_*` scripts |
 | `calculation_setup.py` | Interactive generator for a focused `config.yaml` (see *Usage → Generating a config*) |
 
 ---
@@ -309,7 +311,7 @@ The task can be overridden per invocation with `--task {geomopt,gradient,energy,
 
 ### HPC settings (`hpc_settings_setup.py`)
 
-The Slurm/environment specifics of a cluster — SBD executable(s) and MPI launcher(s), whether the scheduler uses `--account` / `--time` / `--partition` (and the values per job type), one or more GPU models (each with its own SBD build, `cpus_per_gpu`, and `--gpus-per-node` qualifier), and the CPU/GPU module-load + PATH-export environment — live in a per-cluster **`<name>_HPC_settings.yaml`** file. Generate one interactively (once per cluster) with [`Utilities/hpc_settings_setup.py`](Utilities/hpc_settings_setup.py); it writes the settings file plus three matching submission scripts (`submit_slurm_<name>_cpu.sh`, `submit_slurm_<name>_gpu.sh` for GPU SBD, and `submit_slurm_<name>_gpu_hf.sh` for GPU SBD **and** GPU-accelerated HF). The time categories are `{main, dump, fci, parent, sbd}` and the partition categories are `{dump, fci, parent, gpu}`, where `parent` covers the SCI_SBD/SQD orchestrator jobs (and CPU-based child SBD jobs) and `gpu` covers all GPU work (GPU HF and GPU SBD). Two example definitions, [`Source/CCF_HPC_settings.yaml`](Source/CCF_HPC_settings.yaml) and [`Source/MSU_HPC_settings.yaml`](Source/MSU_HPC_settings.yaml), ship with the repo — usable as-is or as templates. `calculation_setup.py` and `bulk_calculations_setup.py` discover the `*_HPC_settings.yaml` files in the working directory (falling back to the shipped examples if the working directory has none) and ask which cluster to target; if none are found anywhere they print a message asking you to generate one first.
+The Slurm/environment specifics of a cluster — SBD executable(s) and MPI launcher(s), whether the scheduler uses `--account` / `--time` / `--partition` (and the values per job type), one or more GPU models (each with its own SBD build, `cpus_per_gpu`, and `--gpus-per-node` qualifier), and the CPU/GPU module-load + PATH-export environment — live in a per-cluster **`<name>_HPC_settings.yaml`** file. Generate one interactively (once per cluster) with [`Utilities/hpc_settings_setup.py`](Utilities/hpc_settings_setup.py); it writes the settings file plus three matching submission scripts (`submit_slurm_<name>_cpu.sh`, `submit_slurm_<name>_gpu.sh` for GPU SBD, and `submit_slurm_<name>_gpu_hf.sh` for GPU SBD **and** GPU-accelerated HF). The time categories are `{main, dump, fci, parent, sbd}` and the partition categories are `{dump, fci, parent, gpu}`, where `parent` covers the SCI_SBD/SQD orchestrator jobs (and CPU-based child SBD jobs) and `gpu` covers all GPU work (GPU HF and GPU SBD). Two example definitions, [`Examples/HPC_Settings/CCF_HPC_settings.yaml`](Examples/HPC_Settings/CCF_HPC_settings.yaml) and [`Examples/HPC_Settings/MSU_HPC_settings.yaml`](Examples/HPC_Settings/MSU_HPC_settings.yaml), ship with the repo — usable as-is or as templates. `calculation_setup.py` and `bulk_calculations_setup.py` discover the `*_HPC_settings.yaml` files in the working directory (falling back to the shipped examples if the working directory has none) and ask which cluster to target; if none are found anywhere they print a message asking you to generate one first.
 
 ### Generating a config (`calculation_setup.py`)
 
@@ -335,7 +337,7 @@ Each generated `config.yaml` is a template (fill in `basis`/charge/spin, Slurm r
 
 ### Configuration
 
-All settings live in [`Source/config.yaml`](Source/config.yaml):
+All settings live in the run's `config.yaml`, generated by `calculation_setup.py` — complete examples in [`Examples/Geometry_Optimization/`](Examples/Geometry_Optimization/):
 
 ```yaml
 ewf:
@@ -353,7 +355,7 @@ ewf:
 calculation:
   run_task: geomopt           # geomopt | gradient | energy | circuits (see Run tasks)
   run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented (see Run modes)
-  geometry_file: propylene.txt
+  geometry_file: geometry.txt
   basis: sto-3g
   ...
 
