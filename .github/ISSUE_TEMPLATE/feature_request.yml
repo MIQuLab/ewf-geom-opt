@@ -1,0 +1,94 @@
+name: Feature Request
+about: Suggest a new feature or improvement for ewf-geom-opt
+title: "[FEATURE] "
+labels: enhancement
+assignees: ''
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! For large changes (new density-assembly routes,
+        new solver integrations, new optimizer backends), please open this issue to discuss
+        the approach **before** starting implementation to avoid duplicated effort.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear and concise description of the feature or improvement you are proposing.
+      placeholder: "Describe the feature..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area of the codebase
+      description: Which part of the project does this relate to?
+      options:
+        - Density-assembly route (new or improved)
+        - Cluster solver (FCI / SCI / SCI_SBD / SQD)
+        - Geometry optimizer backend
+        - Gradient / Lagrangian code
+        - HPC / Slurm workflow
+        - Restart behavior
+        - Utilities / analysis tools
+        - Configuration (config.yaml)
+        - Documentation / examples
+        - Other
+      multiple: true
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: |
+        What problem does this solve? Why is it useful for EWF-based geometry optimization?
+        If this is related to a specific solver or assembly route, mention it here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Proposed approach
+      description: |
+        How do you think this could be implemented?
+        - Which files or modules would be affected?
+        - Are there changes needed to config.yaml options?
+        - Does it require new dependencies?
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternative approaches you considered and why you prefer this one.
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: |
+        Link any relevant papers, issues, or related implementations. For example:
+        - Related Vayesta functionality
+        - Related qiskit-addon-sqd feature
+        - Supporting paper or preprint (arXiv link)
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other context, benchmarks, or examples that support this request.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have checked existing issues to make sure this is not already requested
+          required: true
+        - label: For large changes, I understand this issue should be discussed before implementation begins
+          required: true
