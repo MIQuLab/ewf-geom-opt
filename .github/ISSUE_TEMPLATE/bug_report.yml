@@ -1,8 +1,8 @@
 name: Bug Report
-about: Report a problem with ewf-geom-opt
+description: Report a problem with ewf-geom-opt
 title: "[BUG] "
-labels: bug
-assignees: ''
+labels: ["bug"]
+assignees: []
 
 body:
   - type: markdown
