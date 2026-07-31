@@ -14,7 +14,7 @@
 # ===========================================================================
 
 ewf:
-  bath_threshold: 1.0e-5      # DMET bath truncation threshold
+  bath_threshold: 1.0e-5      # bath truncation threshold
   solver: SCI             # single-solver value (ignored when multi_solver.enabled is true)
   sci_select_cutoff: 1.0e-3   # SCI / SCI_SBD determinant-selection cutoff
   multi_solver:

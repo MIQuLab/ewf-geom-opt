@@ -370,7 +370,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     # --- ewf block ----------------------------------------------------------
     a("ewf:")
     if is_ewf:
-        a("  bath_threshold: 1.0e-5      # DMET bath truncation threshold")
+        a("  bath_threshold: 1.0e-5      # bath truncation threshold")
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# single-solver value"
           f" (ignored when multi_solver.enabled is true)")
