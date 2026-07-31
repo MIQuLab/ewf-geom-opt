@@ -10,7 +10,7 @@ published results.
 |---|---|
 | [`HPC_Settings/`](HPC_Settings/) | Site definitions for two real clusters + Slurm submission templates |
 | [`Geometry_Optimization/`](Geometry_Optimization/) | Acetone geometry optimization: EWF-(FCI,SCI), EWF-(FCI,SQD), unfragmented SCI |
-| [`Trp-cage_Single_Point/`](Trp-cage_Single_Point/) | Large-scale single-point energies on folded / unfolded Trp-cage, with reference data from [*JCTC* **2026**, *22*, 6041](https://pubs.acs.org/jctcce/article/22/12/6041/5166449/Molecular-Quantum-Computations-on-a-Protein) |
+| [`Trp-cage_Single_Point/`](Trp-cage_Single_Point/) | Large-scale single-point energies on folded / unfolded Trp-cage, with reference data from [*JCTC* **2026**, *22* (12), 6041–6056](https://pubs.acs.org/jctcce/article/22/12/6041/5166449/Molecular-Quantum-Computations-on-a-Protein) |
 
 ---
 
@@ -122,7 +122,7 @@ benchmark for the current implementation.
 ### Reference
 
 > [**Molecular Quantum Computations on a Protein**](https://pubs.acs.org/jctcce/article/22/12/6041/5166449/Molecular-Quantum-Computations-on-a-Protein)
-> *Journal of Chemical Theory and Computation* **2026**, *22* (12), 6041.
+> *Journal of Chemical Theory and Computation* **2026**, *22* (12), 6041–6056.
 
 That paper reports EWF-(FCI,SQD) relative energies for the two conformers and
 additionally demonstrates **EWF-CCSD** calculations; the CCSD reference data is
