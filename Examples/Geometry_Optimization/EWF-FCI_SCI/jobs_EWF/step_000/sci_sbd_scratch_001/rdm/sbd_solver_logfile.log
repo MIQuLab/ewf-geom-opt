@@ -1,0 +1,27 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.384829 (sec) 
+ Elapsed time for init 1.593216 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.116345 (sec) 
+ Davidson iteration 0.0 (tol=7.078257144194455e-09): -148.0672126965369
+ Elapsed time for davidson 2.307521 (sec) 
+ Elapsed time for diagonalization 2.307544 (sec) 
+ Elapsed time for mult 0.693082 (sec) 
+ Energy = -148.0672126965368
+ Elapsed time for measurement 3.402442 (sec) 
+ Sample-based diagonalization: Energy = -148.0672126965368
+ Sample-based diagonalization: density = [1.999971398203793,1.993332574001283,1.988643816260721,1.988209963183465,1.982153738399487,1.982584672779643,1.980485100305264,1.971493323917887,1.978055958208398,1.977789851347347,1.97755650779218,1.90148786605981,1.983874809848522,0.1078651549786977,0.02468712720645814,0.02438077659232748,0.02216674498270478,0.01986149594038502,0.01624165485309043,0.02102280908936088,0.01617545399922183,0.02165222701856934,0.02030697503140235
+ Sample-based diagonalization: carryover bitstrings = [], size = 0
+ Elapse time for dumping one-particle rdm = 0.000914
+ Elapse time for dumping two-particle rdm = 0.247123
+ Zero-Body energy = 0
+ One-Body energy = -256.8351514647358
+ Two-Body energy = 108.7679387681998
+ One-Body + Two-Body energy = -148.067212696536
+ Zero-Body + One-Body + Two-Body energy = -148.067212696536

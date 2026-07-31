@@ -1,0 +1,27 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.898203 (sec) 
+ Elapsed time for init 1.856897 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.433298 (sec) 
+ Davidson iteration 0.0 (tol=4.481991538393722e-09): -304.6588169833905
+ Elapsed time for davidson 7.496909 (sec) 
+ Elapsed time for diagonalization 7.496934 (sec) 
+ Elapsed time for mult 1.427746 (sec) 
+ Energy = -304.6588169833903
+ Elapsed time for measurement 13.7352 (sec) 
+ Sample-based diagonalization: Energy = -304.6588169833903
+ Sample-based diagonalization: density = [1.99999707360243,1.999973316356101,1.999968961718614,1.999968924886277,1.992128817705538,1.986014239639307,1.984989499591399,1.979365225588539,1.979556266782166,1.97078875954415,1.97788868493047,1.975976124961329,1.975961367872961,1.973664545908463,1.885170070153689,1.979823010979329,0.123169843578694,0.03208415410597582,0.02577608689868013,0.02742126768438517,0.02178487872630747,0.01967103084793029,0.02298524573802824,0.01950523175795387,0.0234732135942174,0.02289415684119131
+ Sample-based diagonalization: carryover bitstrings = [], size = 0
+ Elapse time for dumping one-particle rdm = 0.000936
+ Elapse time for dumping two-particle rdm = 0.415671
+ Zero-Body energy = 0
+ One-Body energy = -486.2041622393313
+ Two-Body energy = 181.5453452560208
+ One-Body + Two-Body energy = -304.6588169833105
+ Zero-Body + One-Body + Two-Body energy = -304.6588169833105

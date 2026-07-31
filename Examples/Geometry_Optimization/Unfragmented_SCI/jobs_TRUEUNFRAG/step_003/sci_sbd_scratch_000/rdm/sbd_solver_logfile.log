@@ -1,0 +1,27 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.9147719999999999 (sec) 
+ Elapsed time for init 1.862132 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.428714 (sec) 
+ Davidson iteration 0.0 (tol=4.098049798002023e-09): -305.3004924181864
+ Elapsed time for davidson 5.328698 (sec) 
+ Elapsed time for diagonalization 5.328755999999999 (sec) 
+ Elapsed time for mult 1.083903 (sec) 
+ Energy = -305.3004924181864
+ Elapsed time for measurement 12.964571 (sec) 
+ Sample-based diagonalization: Energy = -305.3004924181864
+ Sample-based diagonalization: density = [1.999997033184833,1.999973028726382,1.999968842547569,1.999968820483207,1.992160887409384,1.986224797010416,1.985109264469522,1.979624427036405,1.979845640505121,1.970865971698358,1.978225634224952,1.976010531402895,1.976247198754401,1.974242874489999,1.888133689554225,1.979946877225528,0.1202977426387264,0.03089855867976949,0.02567599525824811,0.02703228334812032,0.02166544694749072,0.01980350013872556,0.02291826548059674,0.0195163792710249,0.02331407947452909,0.02233223003419746
+ Sample-based diagonalization: carryover bitstrings = [], size = 0
+ Elapse time for dumping one-particle rdm = 0.000861
+ Elapse time for dumping two-particle rdm = 0.416267
+ Zero-Body energy = 0
+ One-Body energy = -487.4474045360942
+ Two-Body energy = 182.1469121179647
+ One-Body + Two-Body energy = -305.3004924181296
+ Zero-Body + One-Body + Two-Body energy = -305.3004924181296

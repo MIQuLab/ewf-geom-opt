@@ -40,19 +40,60 @@ OPTIMIZER_TOKENS = {
     "Berny": "berny",
 }
 
+# --- Shipped HPC site definitions ------------------------------------------
+# The example CCF/MSU site definitions live in Examples/HPC_Settings/, not next
+# to this script, so resolve them relative to the repository root (one level up
+# from Source/).  Used only as a fallback when the working directory holds no
+# settings file of its own -- see :func:`select_hpc_settings`.
+SHIPPED_HPC_SETTINGS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "Examples", "HPC_Settings")
+
+
+def _warn_shipped_fallback(found):
+    """Tell the user we are about to configure their run from someone else's
+    cluster definition, because they did not supply one of their own.
+
+    Worth being loud about: the presets carry CCF/MSU executable paths,
+    partitions, accounts and module loads, so a config generated from them will
+    look complete yet fail on submission at a different site.
+    """
+    labels = ", ".join(lbl for lbl, _ in found)
+    print("\nWARNING: no '*_HPC_settings.yaml' found in the current directory "
+          f"({os.getcwd()}).\n"
+          f"         Falling back to the example presets shipped in\n"
+          f"         {SHIPPED_HPC_SETTINGS_DIR}  ({labels}).\n"
+          "         These describe other clusters -- their SBD executable "
+          "paths, MPI\n"
+          "         launchers, partitions, accounts and module loads will "
+          "almost certainly\n"
+          "         not match your site, so review every '<-- UPDATE' line "
+          "in the\n"
+          "         generated config.yaml before submitting.\n"
+          "         To define your own cluster instead:\n"
+          "             python Utilities/hpc_settings_setup.py\n"
+          "         or copy one of the presets above here and edit it.",
+          file=sys.stderr)
+
 
 def select_hpc_settings(question="Which HPC settings to use?"):
-    """Discover ``*_HPC_settings.yaml`` in the CWD (and this script's dir, so the
-    shipped CCF/MSU presets are always available) and return a loaded settings
-    dict, prompting when more than one is found.  Exits with a helpful message
-    when none exist."""
+    """Discover ``*_HPC_settings.yaml`` in the CWD and return a loaded settings
+    dict, prompting when more than one is found.
+
+    When the working directory has none, fall back to the shipped CCF/MSU
+    presets in ``Examples/HPC_Settings/`` so the script still works out of the
+    box -- but warn first, since those describe other people's clusters.  Exits
+    with a helpful message when no settings exist anywhere.
+    """
     # Prefer settings files in the working directory; only if there are none
-    # fall back to the CCF/MSU presets shipped next to this script.  This keeps
-    # a user's own definitions un-cluttered while still working out of the box.
+    # fall back to the CCF/MSU presets shipped under Examples/HPC_Settings/.
+    # This keeps a user's own definitions un-cluttered while still working out
+    # of the box.
     found = hpc_settings.discover([os.getcwd()])
     if not found:
-        found = hpc_settings.discover(
-            [os.path.dirname(os.path.abspath(__file__))])
+        found = hpc_settings.discover([SHIPPED_HPC_SETTINGS_DIR])
+        if found:
+            _warn_shipped_fallback(found)
     if not found:
         print("\nERROR: no '*_HPC_settings.yaml' file found in the current "
               "directory.\nGenerate one first with:\n"
@@ -329,7 +370,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     # --- ewf block ----------------------------------------------------------
     a("ewf:")
     if is_ewf:
-        a("  bath_threshold: 1.0e-5      # DMET bath truncation threshold")
+        a("  bath_threshold: 1.0e-5      # bath truncation threshold")
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# single-solver value"
           f" (ignored when multi_solver.enabled is true)")
@@ -345,8 +386,19 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             a("    norb_threshold: 13        # clusters with norb < this -> high_accuracy_solver")
             a(f"    high_accuracy_solver: {high_solver}")
             a(f"    approximate_solver: {approx_solver}")
-        a("  assembly: rdm_t_lambda      # density-assembly route"
-          " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
+        if run_task == "energy":
+            a("  # ENERGY-ONLY fast path: sums the per-fragment energy directly")
+            a("  # (cluster cumulant x cluster ERIs) instead of assembling the")
+            a("  # global density, so the nmo^4 tensors are never formed.  Same")
+            a("  # energy as 'democratic', but O(nfrag*norb^4) instead of")
+            a("  # O(nmo^4) -- the only practical route for large (100+")
+            a("  # fragment) single points.  It yields no density, so it cannot")
+            a("  # be used for gradient / geomopt runs.")
+            a("  assembly: cluster_energy    # energy-only"
+              " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
+        else:
+            a("  assembly: rdm_t_lambda      # density-assembly route"
+              " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
     else:
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / SQD")

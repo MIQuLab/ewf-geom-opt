@@ -1,0 +1,12 @@
+ Elapsed time for helper construction 0.523505 (sec) 
+ Elapsed time for init 0.018688 (sec) 
+ Elapsed time for makeQChamDiagTerms 10.0028 (sec) 
+ Davidson iteration 0.0 (tol=0): -196.2210337267087
+ Elapsed time for davidson 11.951083 (sec) 
+ Elapsed time for diagonalization 11.951318 (sec) 
+ Elapsed time for mult 0.408759 (sec) 
+ Energy = -196.2210337267087
+ Elapsed time for measurement 0.07193099999999999 (sec) 
+ Sample-based diagonalization: Energy = -196.2210337267087
+ Sample-based diagonalization: density = [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ Sample-based diagonalization: carryover bitstrings = [], size = 0

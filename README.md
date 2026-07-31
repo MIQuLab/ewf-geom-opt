@@ -6,11 +6,32 @@ The central contribution of this project is a pair of density-assembly routes �
 
 ---
 
+## Related project
+
+This repository is a **sister project** to
+[**quantum-fragment-methods**](https://github.com/qiskit-community/quantum-fragment-methods)
+in the [Qiskit Community](https://github.com/qiskit-community) organization. Both
+develop EWF-SQD — fragment-based quantum embedding with sample-based quantum
+diagonalization — with deliberately complementary aims:
+
+| Project | Focus |
+|---|---|
+| **This project** | Novel, frontier functionality for EWF-SQD: analytic nuclear gradients, geometry optimization, and new density-assembly routes — capability that is still experimental and being established |
+| [**quantum-fragment-methods**](https://github.com/qiskit-community/quantum-fragment-methods) | Integrating EWF-SQD into the Qiskit software ecosystem: closer alignment with [`qiskit-addon-sqd`](https://github.com/qiskit/qiskit-addon-sqd), a stable and user-friendly interface, and a containerized deployment |
+
+Methods are explored here and hardened there. If you want a supported, packaged
+EWF-SQD implementation to *use*, start with **quantum-fragment-methods**. If you
+are interested in the research frontier of the method — gradients, geometry
+optimization, new ways of assembling the global density — this is the right
+place.
+
+---
+
 ## Repository layout
 
 | Path | Contents |
 |---|---|
-| [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, config, test geometry, Slurm script |
+| [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, cluster solvers, HPC-settings loader, interactive config generator |
 | [`Examples/`](Examples/) | Example outputs and config files |
 | [`Utilities/`](Utilities/) | Standalone analysis tools — Slurm job diagnostics, geometry comparison, fragmentation-effect analysis (each documented in [`Utilities/README.md`](Utilities/README.md)) |
 
@@ -25,6 +46,8 @@ The central contribution of this project is a pair of density-assembly routes �
 | `sqd_solver.py` | `SQD` solver: sample-based quantum diagonalization — quantum-sampled bitstrings drive an iterative SBD subspace-recovery loop (one Slurm job per parallel batch) followed by a final ext-SQD SBD job with PyCI single-excitation augmentation |
 | `sqd_quantum_sampling.py` | Quantum-sampling source for `SQD`: either reuses a pre-collected `count_dict.txt` or runs an LUCJ ansatz on an IBM Quantum backend via Qiskit IBM Runtime + ffsim |
 | `zigzag_layout.py` | Heavy-hex zigzag physical-qubit layout selector used by the LUCJ ansatz when `SQD` samples on the fly |
+| `sbd_wrapper.py` | Parser for the external SBD solver's output — energies, timings, Davidson iteration counts |
+| `hpc_settings.py` | HPC site definitions: loads and normalizes a `<name>_HPC_settings.yaml`, and renders the chosen settings into the `config.yaml` Slurm blocks and `submit_slurm_*` scripts |
 | `calculation_setup.py` | Interactive generator for a focused `config.yaml` (see *Usage → Generating a config*) |
 
 ---
@@ -146,7 +169,7 @@ $$
 \frac{\partial E_{\mathrm{global}}}{\partial T_x} \neq 0 \qquad \text{(for at least one cluster } x\text{)},
 $$
 
-so the density-response term contributes a real piece of `dE/dx` that must not be dropped.
+so the density-response term contributes a real piece of `dE/dx` inclusion of which helps the stability of the gradient.
 
 **The Λ (Z-vector) response — what `rdm_t_lambda` adds.** Computing the amplitude response head-on would mean re-solving the cluster amplitude equations for each of the 3N nuclear coordinates. The Z-vector / Lagrangian method avoids that: it augments the energy with the amplitude equations times Lagrange multipliers (the Λ / Z-vectors), fixes the multipliers by making the augmented functional stationary in the amplitudes, and then evaluates the response as an explicit integral derivative contracted with those multipliers,
 
@@ -156,7 +179,7 @@ $$
 
 from a fixed, small number of adjoint linear solves — independent of 3N. Here `Λ_x` are the per-cluster amplitude multipliers and `H_x` is the effective cluster Hamiltonian, whose explicit `x`-derivative is the only nuclear derivative on the right-hand side. This is what `embedding_lagrangian.py` deploys: `rdm_t_lambda` builds the amplitude (Λ-relaxed) response into the assembled density by solving the Λ equations on a global effective wavefunction (see its Stage-1 docstring).
 
-**Why it helps.** Because projection breaks cluster-level Hellmann–Feynman, ignoring the density response leaves a genuine piece of `dE/dx` uncomputed, which surfaces as spurious energy/gradient fluctuations along an optimization. Including the amplitude Λ-response (`rdm_t_lambda`) restores that piece — the first and largest correction to the fragmented gradient — sharpening the gradient and reducing those fluctuations relative to the plain `rdm_t` (`l = t`) density.
+**Why it helps.** Because projection breaks cluster-level Hellmann–Feynman, ignoring the density response leaves out a piece of `dE/dx`, which surfaces contributes to energy and gradient fluctuations along an optimization. Including the amplitude Λ-response (`rdm_t_lambda`) incorporates this piece sharpening the gradient and reducing those fluctuations relative to the plain `rdm_t` (`l = t`) density.
 
 ---
 
@@ -171,17 +194,18 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default 2-RDM route |
 | **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global RDM | **this project** |
 | **`rdm_t_lambda`** | `rdm_t` amplitudes + **Λ solve** → relaxed global RDMs | **this project** |
+| **`cluster_energy`** | Per-fragment energy sum — **no global density built** (energy-only) | **this project** |
 
 ### `ci`: the CI-coefficient assembly (baseline, revised ordering)
 
 Vayesta's global-wavefunction route converts each fragment's FCI/SCI CI vector to CISD coefficients (`RFCI_WaveFunction.as_cisd`), applies the occupied-fragment projector at the CISD level, converts to T-amplitudes (`as_ccsd`) **per fragment**, rotates and accumulates them into one global `(T1, T2)`, and feeds a single `ccsd_rdm` call.
 
-The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→ `T2 = C2 − T1⊗T1` conversion is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly (this is the same mechanism as Vayesta's projected amplitude-energy estimator, example `62-external-solver-amplitude-energy.py`). Performing the `T1⊗T1` subtraction once, after assembling the global `T1` — rather than per fragment before accumulation — has the benefit of retaining the full `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)` product, cross-fragment terms included, in a single global step, which suits the global-wavefunction density this route builds. (The two orderings coincide within a fragment and differ only in those cross-fragment `T1⊗T1` terms.)
+The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→ `T2 = C2 − T1⊗T1` conversion is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly. This is the same mechanism as Vayesta's projected amplitude-energy estimator, example [`62-external-solver-amplitude-energy.py`](https://github.com/BoothGroup/Vayesta/blob/master/examples/ewf/molecules/62-external-solver-amplitude-energy.py). Performing the `T1⊗T1` subtraction once, after assembling the global `T1` — rather than per fragment before accumulation — has the benefit of retaining the full `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)` product, cross-fragment terms included, in a single global step, which suits the global-wavefunction density this route builds. (The two orderings coincide within a fragment and differ only in those cross-fragment `T1⊗T1` terms.)
 
 Two approximations remain included:
 
 1. **CISD truncation of the cluster wavefunction.** `as_cisd` reads the single- and double-excitation rows of the CI vector, so triples and higher determinants of the FCI/SCI solution are not carried into the amplitudes.
-2. **The `l = t` linearization.** The `l = t` (TCCSD) shortcut sets `l1, l2 = t1, t2` instead of solving the Λ equations — an efficient, widely used approximation that omits the amplitude response. The `rdm_t_lambda` route below restores it with a proper Λ solve.
+2. **The `l = t` linearization.** The `l = t` (TCCSD) shortcut sets `l1, l2 = t1, t2` instead of solving the Λ equations — an efficient, widely used approximation that omits the amplitude response.
 
 ### `rdm_t`: amplitudes from the exact RDM cumulant
 
@@ -203,9 +227,25 @@ T2_eff = λ2_cumulant[occ, occ, vir, vir]
 
 is the new capability this project adds on top of Vayesta's assembly machinery. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This extends the `ci` route: `as_cisd` provides the singles-and-doubles content, while `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions also survives into the global density.
 
+### `cluster_energy`: the scalable energy-only route (default for `run_task: energy`)
+
+Every other route assembles a **global** two-particle cumulant, an `nmo⁴` tensor — and `ewf_energy_from_rdms` then builds the `nmo⁴` MO ERIs to contract against it. For a few hundred fragments that is fatal: at `nmo ≈ 380` each of those tensors is ~170 GB, so a single point needs ~340 GB of RAM before any arithmetic.
+
+`cluster_energy` avoids both. Because the energy is **linear** in the cumulant and the cluster→global rotation is orthogonal,
+
+$$
+\tfrac{1}{2}\sum_{pqrs}(pq|rs)\,\big[R\lambda_2^{x}R^{\top}\big]_{pqrs}
+\;=\;
+\tfrac{1}{2}\sum_{ijkl}(ij|kl)_{x}\,(\lambda_2^{x})_{ijkl},
+$$
+
+and `(ij|kl)_x` is exactly the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`. So the two-body energy can be accumulated as a **scalar, one fragment at a time, entirely in the cluster basis**; only the one-particle term needs a global object, and that is just `(nmo, nmo)`. The result is **numerically identical to the `democratic` route** (verified to 0 Ha on a test system), at `O(nfrag·norb⁴)` instead of `O(nmo⁴)` — minutes and a few MB rather than hours and hundreds of GB.
+
+Because it never forms a density, it **cannot produce a nuclear gradient**. It is therefore selected automatically for `run_task: energy` (unless you pin `ewf.assembly` yourself), and requesting it for `gradient` or `geomopt` raises a clear error. It applies to `run_mode: ewf` only. Since it reads the existing `rdm_<i>.h5` and `cluster_<i>.h5`, it can be used with `restart: true` to get the energy of a run whose solves already finished but whose global assembly was too expensive.
+
 ### `rdm_t_lambda`: the Λ-relaxed (Z-vector) density
 
-`embedding_lagrangian.py` upgrades the second baked-in approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the Λ equations** for it:
+`embedding_lagrangian.py` upgrades the second approximation of the standard route: the `l = t` linearization. It assembles the projected effective amplitudes into one global effective CCSD wavefunction on the HF reference and **solves the Λ equations** for it:
 
 | Function | Role |
 |---|---|
@@ -213,7 +253,7 @@ is the new capability this project adds on top of Vayesta's assembly machinery. 
 | `make_relaxed_global_rdms` | Builds `pyscf.cc.CCSD(mf)`, injects `(T1, T2)`, solves Λ (`solve_lambda`), returns the relaxed `(γ1, λ2)` — amplitudes are **not** re-optimized |
 | `assemble_global_rdms_rdm_t_lambda` | Driver-facing assembler, same signature as the other `assemble_global_rdms_*` |
 
-Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which is *not* the solution of that adjoint equation, and so captures the response only approximately. By replacing it with the true Λ solve, `rdm_t_lambda` builds the **cluster-amplitude response** `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density itself.
+Solving Λ is exactly the adjoint construction of the Lagrangian method for the amplitude variables: the standard result of coupled-cluster gradient theory is that the relaxed density `Γ(t, Λ)` built from `t` **and** `Λ` is precisely the object whose contraction with integral derivatives reproduces the amplitude-response part of `dE/dx`. Here `t = (T1, T2)` are the assembled global effective amplitudes (from `assemble_global_amplitudes`), `Λ = (l1, l2)` are the corresponding Lagrange multipliers obtained from PySCF's `solve_lambda`, and `Γ(t, Λ)` is the standard relaxed 1-/2-particle density built by `pyscf.cc.ccsd_rdm` from `(t, Λ)`. The `l = t` shortcut sets `Λ = t`, which captures the response only approximately. By replacing it with the Λ solve, `rdm_t_lambda` builds the **cluster-amplitude response** `Σ_x (∂𝒜/∂T_x)(dT_x/dx)` into the assembled density itself.
 
 ### Recovering the unfragmented correlation in the `rdm_t` / `rdm_t_lambda` routes
 
@@ -227,7 +267,7 @@ $$
 
 where $\Delta\gamma_1^{ov}$ is the occupied–virtual block of the correlated one-particle density and $\lambda_2^{oovv}$ is the occupied-occupied/virtual-virtual block of the two-particle cumulant. Because these RDMs carry the imprint of **every excitation class the cluster solver includes** — the higher determinants that `FCI` / `SCI` / `SQD` retain, not only singles and doubles — the effective doubles that enter the global density are dressed by that higher-order correlation. The assembled `rdm_t` density is therefore a closer approximation to the correlated (full-CI) density of the unfragmented system, recovering more of the correlation that a per-fragment treatment can otherwise dilute.
 
-On the assembly side the route is deliberately coupled-cluster-*structured*: the effective amplitudes are combined through the well-established CCSD RDM machinery, which yields a smooth, differentiable global density and — in `rdm_t_lambda` — a proper $\Lambda$ (Z-vector) amplitude-response density for consistent analytic gradients. The advantage is greatest where the cluster correlation is genuinely multi-determinantal (stretched bonds, near-degeneracies) and grows as the clusters enlarge and the `SCI` / `SQD` subspace approaches the full-CI limit; for small, weakly correlated clusters near equilibrium the effective amplitudes already sit close to their coupled-cluster counterparts.
+On the assembly side the route is deliberately coupled-cluster-*structured*: the effective amplitudes are combined through the well-established CCSD RDM machinery, which yields a smooth, differentiable global density and — in `rdm_t_lambda` — a $\Lambda$ (Z-vector) amplitude-response density for consistent analytic gradients. The advantage is greatest where the cluster correlation is genuinely multi-determinantal (stretched bonds, near-degeneracies) and grows as the clusters enlarge and the `SCI` / `SQD` subspace approaches the full-CI limit; for small, weakly correlated clusters near equilibrium the effective amplitudes already sit close to their coupled-cluster counterparts.
 
 ---
 
@@ -271,7 +311,7 @@ The task can be overridden per invocation with `--task {geomopt,gradient,energy,
 
 ### HPC settings (`hpc_settings_setup.py`)
 
-The Slurm/environment specifics of a cluster — SBD executable(s) and MPI launcher(s), whether the scheduler uses `--account` / `--time` / `--partition` (and the values per job type), one or more GPU models (each with its own SBD build, `cpus_per_gpu`, and `--gpus-per-node` qualifier), and the CPU/GPU module-load + PATH-export environment — live in a per-cluster **`<name>_HPC_settings.yaml`** file. Generate one interactively (once per cluster) with [`Utilities/hpc_settings_setup.py`](Utilities/hpc_settings_setup.py); it writes the settings file plus three matching submission scripts (`submit_slurm_<name>_cpu.sh`, `submit_slurm_<name>_gpu.sh` for GPU SBD, and `submit_slurm_<name>_gpu_hf.sh` for GPU SBD **and** GPU-accelerated HF). The time categories are `{main, dump, fci, parent, sbd}` and the partition categories are `{dump, fci, parent, gpu}`, where `parent` covers the SCI_SBD/SQD orchestrator jobs (and CPU-based child SBD jobs) and `gpu` covers all GPU work (GPU HF and GPU SBD). Two example definitions, [`Source/CCF_HPC_settings.yaml`](Source/CCF_HPC_settings.yaml) and [`Source/MSU_HPC_settings.yaml`](Source/MSU_HPC_settings.yaml), ship with the repo — usable as-is or as templates. `calculation_setup.py` and `bulk_calculations_setup.py` discover the `*_HPC_settings.yaml` files in the working directory (falling back to the shipped examples if the working directory has none) and ask which cluster to target; if none are found anywhere they print a message asking you to generate one first.
+The Slurm/environment specifics of a cluster — SBD executable(s) and MPI launcher(s), whether the scheduler uses `--account` / `--time` / `--partition` (and the values per job type), one or more GPU models (each with its own SBD build, `cpus_per_gpu`, and `--gpus-per-node` qualifier), and the CPU/GPU module-load + PATH-export environment — live in a per-cluster **`<name>_HPC_settings.yaml`** file. Generate one interactively (once per cluster) with [`Utilities/hpc_settings_setup.py`](Utilities/hpc_settings_setup.py); it writes the settings file plus three matching submission scripts (`submit_slurm_<name>_cpu.sh`, `submit_slurm_<name>_gpu.sh` for GPU SBD, and `submit_slurm_<name>_gpu_hf.sh` for GPU SBD **and** GPU-accelerated HF). The time categories are `{main, dump, fci, parent, sbd}` and the partition categories are `{dump, fci, parent, gpu}`, where `parent` covers the SCI_SBD/SQD orchestrator jobs (and CPU-based child SBD jobs) and `gpu` covers all GPU work (GPU HF and GPU SBD). Two example definitions, [`Examples/HPC_Settings/CCF_HPC_settings.yaml`](Examples/HPC_Settings/CCF_HPC_settings.yaml) and [`Examples/HPC_Settings/MSU_HPC_settings.yaml`](Examples/HPC_Settings/MSU_HPC_settings.yaml), ship with the repo — usable as-is or as templates. `calculation_setup.py` and `bulk_calculations_setup.py` discover the `*_HPC_settings.yaml` files in the working directory (falling back to the shipped examples if the working directory has none) and ask which cluster to target; if none are found anywhere they print a message asking you to generate one first.
 
 ### Generating a config (`calculation_setup.py`)
 
@@ -297,11 +337,11 @@ Each generated `config.yaml` is a template (fill in `basis`/charge/spin, Slurm r
 
 ### Configuration
 
-All settings live in [`Source/config.yaml`](Source/config.yaml):
+All settings live in the run's `config.yaml`, generated by `calculation_setup.py` — complete examples in [`Examples/Geometry_Optimization/`](Examples/Geometry_Optimization/):
 
 ```yaml
 ewf:
-  bath_threshold: 1.0e-5      # stable, non-full DMET bath
+  bath_threshold: 1.0e-5      # bath truncation threshold
   solver: SCI                 # FCI, SCI, SCI_SBD, or SQD cluster solver (single-solver mode)
   sci_select_cutoff: 1.0e-3   # determinant-selection cutoff for SCI / SCI_SBD (ignored by FCI / SQD)
   assembly: rdm_t_lambda      # density-assembly route (see table above)
@@ -315,7 +355,7 @@ ewf:
 calculation:
   run_task: geomopt           # geomopt | gradient | energy | circuits (see Run tasks)
   run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented (see Run modes)
-  geometry_file: propylene.txt
+  geometry_file: geometry.txt
   basis: sto-3g
   ...
 
@@ -364,7 +404,7 @@ norb <  norb_threshold   →   high_accuracy_solver   (default FCI)
 norb >= norb_threshold   →   approximate_solver     (default SCI)
 ```
 
-With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, `SCI_SBD`, or `SQD` (see below), and SCI / SCI_SBD clusters continue to use `sci_select_cutoff` (the `SQD` solver ignores it and is configured through the dedicated `sqd:` block). The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log (e.g. `[FCI, norb=18]`).
+With the defaults (`norb_threshold: 13`, `high_accuracy_solver: FCI`, `approximate_solver: SCI`), clusters with fewer than 13 active orbitals are small enough to be solved exactly with FCI, while clusters with 13 or more fall back to the cheaper truncated SCI solver. Each solver field accepts `FCI`, `SCI`, `SCI_SBD`, or `SQD` (see below), and SCI / SCI_SBD clusters continue to use `sci_select_cutoff` (the `SQD` solver ignores it and is configured through the dedicated `sqd:` block). The decision is made per cluster *after* its dimension is known (in the cluster-solve worker), and the solver actually used is recorded per fragment in the `rdm_<i>.h5` output and echoed in the driver's per-cluster energy log.
 
 Set `multi_solver.enabled: false` to disable size-based dispatch entirely; the driver then falls back to single-solver mode and applies `ewf.solver` to every fragment, exactly as before. Existing configs without a `multi_solver` block default to this behavior, so they are unaffected.
 

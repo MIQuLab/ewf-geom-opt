@@ -1,0 +1,92 @@
+ewf:
+  bath_threshold: 1.0e-05
+  solver: SCI
+  sci_select_cutoff: 0.001
+  multi_solver:
+    enabled: true
+    norb_threshold: 13
+    high_accuracy_solver: FCI
+    approximate_solver: SCI_SBD
+  assembly: rdm_t_lambda
+calculation:
+  run_task: geomopt
+  run_mode: ewf
+  geometry_file: /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SCI/jobs_EWF/step_003/geometry.txt
+  basis: sto-3g
+  charge: 0
+  spin: 0
+  symmetry: false
+  workdir: /mnt/beegfs/merzk/kaliakd/EWF_Geom_Opt_Development/release_code_showcase_acetone/EWF-FCI_SCI/jobs_EWF/step_003
+  fci_conv_tol: 1.0e-12
+  restart: false
+hf:
+  gpu: false
+  density_fit: false
+slurm:
+  python_executable: python
+  poll_interval: 15
+  max_concurrent_solve: 0
+  dump:
+    partition: defq
+    ntasks: 2
+    mem: 100G
+  FCI:
+    partition: defq
+    ntasks: 2
+    mem: 10G
+  SCI_SBD:
+    partition: defq
+    ntasks: 2
+    mem: 170G
+  SCI: {}
+  SQD: {}
+sbd:
+  sbd_exe_path_cpu: /mnt/beegfs/merzk/kaliakd/Software/SBD_Solver/executable/diag
+  sbd_exe_path_gpu: /home/liz7/isilon/Zhen/sbd-main/apps/test/diag
+  mpi_launcher: /home/liz7/isilon/Zhen/mpich/bin/mpirun
+  proc_type: 1
+  gpus_per_batch: 4
+  cpus_per_gpu: 16
+  sbd_omp_threads: 1
+  sbd_advanced_memory: false
+  sbd_block: 20
+  sbd_dav_iteration: 100
+  sbd_tolerance: 1.0e-08
+  sbd_init: 0
+  sbd_shuffle: 0
+  sbd_carryover_ratio: 0.5
+  rdm_from_sbd: true
+  rdm_warm_start: true
+  slurm:
+    poll_interval: 15
+    max_node_retries: 5
+    preamble: 'module load gcc/11.2.0 cuda12.3/toolkit/12.3.2 cudnn8.9-cuda12.3/8.9.7.29
+      boost/1.85.0
+
+      export PATH="/home/liz7/isilon/Zhen/mpich/bin:$PATH"
+
+      export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblasgpu/lib:$LD_LIBRARY_PATH"
+
+      export PATH="/home/liz7/beegfs/liz7/openblasgpu/bin:$PATH"
+
+      '
+    sbatch:
+      partition: merzk-a100
+      mem: 500G
+      extra:
+        exclude: m002
+geomopt:
+  enabled: true
+  optimizer: sella
+  prefix: ewf_geomopt
+  step_subdir_fmt: step_{step:03d}
+  sella:
+    fmax: 0.1
+    steps: 25
+    order: 0
+    internal: true
+  geometric:
+    maxiter: 100
+    coordsys: tric
+    convergence_set: GAU
+  berny: {}

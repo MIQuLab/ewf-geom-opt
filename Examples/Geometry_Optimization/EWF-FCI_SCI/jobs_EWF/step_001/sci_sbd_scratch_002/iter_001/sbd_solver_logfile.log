@@ -1,0 +1,36 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.073461 (sec) 
+ Elapsed time for init 0.00042 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.003211 (sec) 
+ Davidson iteration 0.0 (tol=0.6119829010293801): -92.02492086532871
+ Davidson iteration 0.1 (tol=0.2275649153272867): -92.19511505830701 -90.21268760548202
+ Davidson iteration 0.2 (tol=0.08259266165737753): -92.21352901027524 -90.53752760318726 -89.60795931871334
+ Davidson iteration 0.3 (tol=0.02225373114936684): -92.2158309440821 -90.60745624795587 -89.94788264033063 -89.58924250356527
+ Davidson iteration 0.4 (tol=0.006141160474500318): -92.21604115337719 -90.92514420208367 -90.22542864672938 -89.78048037376669
+ Davidson iteration 0.5 (tol=0.001821567522906983): -92.21605493887975 -91.04628376948274 -90.24397575541637 -90.06030392912838
+ Davidson iteration 0.6 (tol=0.0005889020004883666): -92.21605607921316 -91.13745377250368 -90.39145475757789 -90.10997437844425
+ Davidson iteration 0.7 (tol=0.0001759442683127626): -92.21605619878275 -91.23986458155062 -90.57642394687461 -90.12787691592422
+ Davidson iteration 0.8 (tol=5.800167721863574e-05): -92.21605621061593 -91.30455952251702 -90.71464495062176 -90.15517363083295
+ Davidson iteration 0.9 (tol=1.916942661008643e-05): -92.21605621195295 -91.43255863628829 -90.90174704284047 -90.27677572054553
+ Davidson iteration 0.10 (tol=5.841036470777117e-06): -92.21605621208933 -91.47592886290415 -90.99683328393149 -90.35619377334351
+ Davidson iteration 0.11 (tol=1.701507035630975e-06): -92.21605621210118 -91.51814386767835 -91.06562377411876 -90.48151678231154
+ Davidson iteration 0.12 (tol=5.604444802668789e-07): -92.21605621210222 -91.53014574897671 -91.10270065272664 -90.61203293085177
+ Davidson iteration 0.13 (tol=1.812652017042631e-07): -92.21605621210226 -91.53452372806861 -91.12533894718143 -90.75515256046758
+ Davidson iteration 0.14 (tol=5.670408341372399e-08): -92.21605621210225 -91.54185582540084 -91.15619415534323 -90.92786546434401
+ Davidson iteration 0.15 (tol=1.764042865151553e-08): -92.21605621210225 -91.54352202844149 -91.21141105664053 -91.02937895108842
+ Davidson iteration 0.16 (tol=5.800321784133673e-09): -92.21605621210229 -91.55044509569969 -91.2835376672117 -91.09422465982783
+ Elapsed time for davidson 5.14859 (sec) 
+ Elapsed time for diagonalization 5.1486 (sec) 
+ Elapsed time for mult 0.279683 (sec) 
+ Energy = -92.21605621210236
+ Elapsed time for measurement 0.003215 (sec) 
+ Sample-based diagonalization: Energy = -92.21605621210236
+ Sample-based diagonalization: density = [1.999971300735652,1.9881235412508,1.985892290806045,1.980297280682296,1.980952936595127,1.973405041491015,1.977598368873077,1.900516309337057,1.986781958093685,0.1041584245331912,0.02209170262995951,0.02397393499987765,0.02149848506244321,0.01808317924612618,0.01790333129986056,0.01875191436380767
+ Sample-based diagonalization: carryover bitstrings = [], size = 0

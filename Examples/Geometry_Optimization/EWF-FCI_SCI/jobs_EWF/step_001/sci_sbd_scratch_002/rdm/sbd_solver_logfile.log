@@ -1,0 +1,27 @@
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 0: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 1: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 2: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+"PluginInterface" error: Failure to initialize device 3: Error in cuDevicePrimaryCtxRetain: out of memory
+ Elapsed time for helper construction 0.090793 (sec) 
+ Elapsed time for init 1.378807 (sec) 
+ Elapsed time for makeQChamDiagTerms 0.019291 (sec) 
+ Davidson iteration 0.0 (tol=5.168380004557403e-09): -92.22209302902827
+ Elapsed time for davidson 0.9251539999999999 (sec) 
+ Elapsed time for diagonalization 0.9251729999999999 (sec) 
+ Elapsed time for mult 0.316597 (sec) 
+ Energy = -92.22209302902827
+ Elapsed time for measurement 1.250156 (sec) 
+ Sample-based diagonalization: Energy = -92.22209302902827
+ Sample-based diagonalization: density = [1.999965952241208,1.987586729644237,1.985139194120545,1.979329969442052,1.979571289451317,1.971409572191389,1.976066651741187,1.893413188872429,1.983716783598481,0.1117247075114465,0.02422640892411742,0.02601411222781937,0.02290594320845986,0.01955338900979529,0.01974742072513502,0.01962868709044194
+ Sample-based diagonalization: carryover bitstrings = [], size = 0
+ Elapse time for dumping one-particle rdm = 0.000629
+ Elapse time for dumping two-particle rdm = 0.058716
+ Zero-Body energy = 0
+ One-Body energy = -151.7326017449396
+ Two-Body energy = 59.51050871591173
+ One-Body + Two-Body energy = -92.22209302902792
+ Zero-Body + One-Body + Two-Body energy = -92.22209302902792

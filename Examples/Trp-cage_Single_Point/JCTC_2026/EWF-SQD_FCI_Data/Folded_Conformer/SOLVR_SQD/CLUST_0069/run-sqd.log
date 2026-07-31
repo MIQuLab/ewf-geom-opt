@@ -1,0 +1,237 @@
+Parsing /mnt/gs21/scratch/k0095864/SQD_63111538/Workflow/fci_dump.txt
+SLURM parallelizes solver run accross batches
+####################
+Job submitted successfully! Job ID: Submitted batch job 63111543
+Job submitted successfully! Job ID: Submitted batch job 63111545
+Job submitted successfully! Job ID: Submitted batch job 63111547
+Job submitted successfully! Job ID: Submitted batch job 63111549
+Job submitted successfully! Job ID: Submitted batch job 63111551
+Job submitted successfully! Job ID: Submitted batch job 63111553
+Job submitted successfully! Job ID: Submitted batch job 63111556
+Job submitted successfully! Job ID: Submitted batch job 63111558
+Job submitted successfully! Job ID: Submitted batch job 63111559
+Job submitted successfully! Job ID: Submitted batch job 63111561
+####################
+Completed SLURM step
+####################
+Iteration 1
+	Subsample 0
+		Energy: -89.04025583425747
+		Subspace dimension: 14295961
+	Subsample 1
+		Energy: -89.04058215330903
+		Subspace dimension: 14776336
+	Subsample 2
+		Energy: -89.04045389715449
+		Subspace dimension: 15171025
+	Subsample 3
+		Energy: -89.04018577290381
+		Subspace dimension: 14447601
+	Subsample 4
+		Energy: -89.04081548948828
+		Subspace dimension: 14478025
+	Subsample 5
+		Energy: -89.04003346759966
+		Subspace dimension: 14364100
+	Subsample 6
+		Energy: -89.04019732873589
+		Subspace dimension: 14462809
+	Subsample 7
+		Energy: -89.04104619460608
+		Subspace dimension: 14447601
+	Subsample 8
+		Energy: -89.04056807317147
+		Subspace dimension: 14884164
+	Subsample 9
+		Energy: -89.04044914218665
+		Subspace dimension: 14243076
+Lowest total energy value: -89.04104619460608
+SLURM parallelizes solver run accross batches
+####################
+Job submitted successfully! Job ID: Submitted batch job 63112657
+Job submitted successfully! Job ID: Submitted batch job 63112658
+Job submitted successfully! Job ID: Submitted batch job 63112659
+Job submitted successfully! Job ID: Submitted batch job 63112660
+Job submitted successfully! Job ID: Submitted batch job 63112661
+Job submitted successfully! Job ID: Submitted batch job 63112662
+Job submitted successfully! Job ID: Submitted batch job 63112663
+Job submitted successfully! Job ID: Submitted batch job 63112664
+Job submitted successfully! Job ID: Submitted batch job 63112665
+Job submitted successfully! Job ID: Submitted batch job 63112666
+####################
+Completed SLURM step
+####################
+Iteration 2
+	Subsample 0
+		Energy: -89.0437552358445
+		Subspace dimension: 8567329
+	Subsample 1
+		Energy: -89.04387514092633
+		Subspace dimension: 8916196
+	Subsample 2
+		Energy: -89.04380140431421
+		Subspace dimension: 8667136
+	Subsample 3
+		Energy: -89.04386237463544
+		Subspace dimension: 9006001
+	Subsample 4
+		Energy: -89.04386213664785
+		Subspace dimension: 8886361
+	Subsample 5
+		Energy: -89.04372986641548
+		Subspace dimension: 8832784
+	Subsample 6
+		Energy: -89.04373758272746
+		Subspace dimension: 8797156
+	Subsample 7
+		Energy: -89.04373064775126
+		Subspace dimension: 8749764
+	Subsample 8
+		Energy: -89.04375637785506
+		Subspace dimension: 8561476
+	Subsample 9
+		Energy: -89.04379128580865
+		Subspace dimension: 8590761
+Lowest total energy value: -89.04387514092633
+SLURM parallelizes solver run accross batches
+####################
+Job submitted successfully! Job ID: Submitted batch job 63113412
+Job submitted successfully! Job ID: Submitted batch job 63113413
+Job submitted successfully! Job ID: Submitted batch job 63113414
+Job submitted successfully! Job ID: Submitted batch job 63113415
+Job submitted successfully! Job ID: Submitted batch job 63113416
+Job submitted successfully! Job ID: Submitted batch job 63113417
+Job submitted successfully! Job ID: Submitted batch job 63113418
+Job submitted successfully! Job ID: Submitted batch job 63113419
+Job submitted successfully! Job ID: Submitted batch job 63113420
+Job submitted successfully! Job ID: Submitted batch job 63113421
+####################
+Completed SLURM step
+####################
+Iteration 3
+	Subsample 0
+		Energy: -89.0442708662822
+		Subspace dimension: 9000000
+	Subsample 1
+		Energy: -89.04425579158556
+		Subspace dimension: 9012004
+	Subsample 2
+		Energy: -89.04423416347325
+		Subspace dimension: 9060100
+	Subsample 3
+		Energy: -89.04409691005228
+		Subspace dimension: 9108324
+	Subsample 4
+		Energy: -89.04418454176724
+		Subspace dimension: 8838729
+	Subsample 5
+		Energy: -89.04421968046431
+		Subspace dimension: 9259849
+	Subsample 6
+		Energy: -89.04425538788743
+		Subspace dimension: 8970025
+	Subsample 7
+		Energy: -89.04426727594645
+		Subspace dimension: 8803089
+	Subsample 8
+		Energy: -89.0442156961472
+		Subspace dimension: 8946081
+	Subsample 9
+		Energy: -89.04417687358759
+		Subspace dimension: 8940100
+Lowest total energy value: -89.0442708662822
+SLURM parallelizes solver run accross batches
+####################
+Job submitted successfully! Job ID: Submitted batch job 63132125
+Job submitted successfully! Job ID: Submitted batch job 63132127
+Job submitted successfully! Job ID: Submitted batch job 63132128
+Job submitted successfully! Job ID: Submitted batch job 63132130
+Job submitted successfully! Job ID: Submitted batch job 63132131
+Job submitted successfully! Job ID: Submitted batch job 63132133
+Job submitted successfully! Job ID: Submitted batch job 63132135
+Job submitted successfully! Job ID: Submitted batch job 63132136
+Job submitted successfully! Job ID: Submitted batch job 63132139
+Job submitted successfully! Job ID: Submitted batch job 63132140
+####################
+Completed SLURM step
+####################
+Iteration 4
+	Subsample 0
+		Energy: -89.04427288717876
+		Subspace dimension: 9102289
+	Subsample 1
+		Energy: -89.04427249913907
+		Subspace dimension: 8625969
+	Subsample 2
+		Energy: -89.0443035472328
+		Subspace dimension: 9090225
+	Subsample 3
+		Energy: -89.04429031391552
+		Subspace dimension: 8958049
+	Subsample 4
+		Energy: -89.04429365745456
+		Subspace dimension: 8982009
+	Subsample 5
+		Energy: -89.0442770094784
+		Subspace dimension: 9096256
+	Subsample 6
+		Energy: -89.04428469220424
+		Subspace dimension: 9253764
+	Subsample 7
+		Energy: -89.04427448473307
+		Subspace dimension: 8714304
+	Subsample 8
+		Energy: -89.04428865868113
+		Subspace dimension: 9199089
+	Subsample 9
+		Energy: -89.04428623839604
+		Subspace dimension: 8940100
+Lowest total energy value: -89.0443035472328
+SLURM parallelizes solver run accross batches
+####################
+Job submitted successfully! Job ID: Submitted batch job 63137697
+Job submitted successfully! Job ID: Submitted batch job 63137699
+Job submitted successfully! Job ID: Submitted batch job 63137702
+Job submitted successfully! Job ID: Submitted batch job 63137707
+Job submitted successfully! Job ID: Submitted batch job 63137710
+Job submitted successfully! Job ID: Submitted batch job 63137713
+Job submitted successfully! Job ID: Submitted batch job 63137716
+Job submitted successfully! Job ID: Submitted batch job 63137719
+Job submitted successfully! Job ID: Submitted batch job 63137722
+Job submitted successfully! Job ID: Submitted batch job 63137724
+####################
+Completed SLURM step
+####################
+Iteration 5
+	Subsample 0
+		Energy: -89.04428939085267
+		Subspace dimension: 8940100
+	Subsample 1
+		Energy: -89.0443089936438
+		Subspace dimension: 9394225
+	Subsample 2
+		Energy: -89.04430899996663
+		Subspace dimension: 9498724
+	Subsample 3
+		Energy: -89.04429084713328
+		Subspace dimension: 8910225
+	Subsample 4
+		Energy: -89.04431094284215
+		Subspace dimension: 9156676
+	Subsample 5
+		Energy: -89.04430898790329
+		Subspace dimension: 9247681
+	Subsample 6
+		Energy: -89.04429717960598
+		Subspace dimension: 9180900
+	Subsample 7
+		Energy: -89.04429648399179
+		Subspace dimension: 9199089
+	Subsample 8
+		Energy: -89.04431275311445
+		Subspace dimension: 9162729
+	Subsample 9
+		Energy: -89.0443025929028
+		Subspace dimension: 9120400
+Lowest total energy value: -89.04431275311445
+Full workflow takes: 41983.86522912979 seconds
