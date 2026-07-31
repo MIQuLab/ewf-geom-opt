@@ -50,11 +50,41 @@ SHIPPED_HPC_SETTINGS_DIR = os.path.join(
     "Examples", "HPC_Settings")
 
 
+def _warn_shipped_fallback(found):
+    """Tell the user we are about to configure their run from someone else's
+    cluster definition, because they did not supply one of their own.
+
+    Worth being loud about: the presets carry CCF/MSU executable paths,
+    partitions, accounts and module loads, so a config generated from them will
+    look complete yet fail on submission at a different site.
+    """
+    labels = ", ".join(lbl for lbl, _ in found)
+    print("\nWARNING: no '*_HPC_settings.yaml' found in the current directory "
+          f"({os.getcwd()}).\n"
+          f"         Falling back to the example presets shipped in\n"
+          f"         {SHIPPED_HPC_SETTINGS_DIR}  ({labels}).\n"
+          "         These describe other clusters -- their SBD executable "
+          "paths, MPI\n"
+          "         launchers, partitions, accounts and module loads will "
+          "almost certainly\n"
+          "         not match your site, so review every '<-- UPDATE' line "
+          "in the\n"
+          "         generated config.yaml before submitting.\n"
+          "         To define your own cluster instead:\n"
+          "             python Utilities/hpc_settings_setup.py\n"
+          "         or copy one of the presets above here and edit it.",
+          file=sys.stderr)
+
+
 def select_hpc_settings(question="Which HPC settings to use?"):
-    """Discover ``*_HPC_settings.yaml`` in the CWD (falling back to the shipped
-    CCF/MSU presets in ``Examples/HPC_Settings/``, so they are always available)
-    and return a loaded settings dict, prompting when more than one is found.
-    Exits with a helpful message when none exist."""
+    """Discover ``*_HPC_settings.yaml`` in the CWD and return a loaded settings
+    dict, prompting when more than one is found.
+
+    When the working directory has none, fall back to the shipped CCF/MSU
+    presets in ``Examples/HPC_Settings/`` so the script still works out of the
+    box -- but warn first, since those describe other people's clusters.  Exits
+    with a helpful message when no settings exist anywhere.
+    """
     # Prefer settings files in the working directory; only if there are none
     # fall back to the CCF/MSU presets shipped under Examples/HPC_Settings/.
     # This keeps a user's own definitions un-cluttered while still working out
@@ -62,6 +92,8 @@ def select_hpc_settings(question="Which HPC settings to use?"):
     found = hpc_settings.discover([os.getcwd()])
     if not found:
         found = hpc_settings.discover([SHIPPED_HPC_SETTINGS_DIR])
+        if found:
+            _warn_shipped_fallback(found)
     if not found:
         print("\nERROR: no '*_HPC_settings.yaml' file found in the current "
               "directory.\nGenerate one first with:\n"
