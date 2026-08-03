@@ -235,7 +235,7 @@ Every other route assembles a **global** two-particle cumulant, an `nmo⁴` tens
 
 $$
 \tfrac{1}{2}\sum_{pqrs}(pq|rs)\,\big[R\lambda_2^{x}R^{\top}\big]_{pqrs}
-\;=\;
+\=\
 \tfrac{1}{2}\sum_{ijkl}(ij|kl)_{x}\,(\lambda_2^{x})_{ijkl},
 $$
 
