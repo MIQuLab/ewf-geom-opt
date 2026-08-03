@@ -34,26 +34,27 @@ Thank you for your interest in contributing to this project. This repository is 
 
 ## Reporting Bugs
 
-If you find a bug, please open a [GitHub Issue](https://github.com/MIQuLab/ewf-geom-opt/issues) and include:
+If you find a bug, please open a [Bug Report](https://github.com/MIQuLab/ewf-geom-opt/issues/new?template=bug_report.yml)
+using our structured issue form. The form will guide you through providing
+all the information we need — run task, solver, environment versions,
+config.yaml, and error output.
 
-- A clear, descriptive title
-- What you expected to happen vs. what actually happened
-- Steps to reproduce the problem
-- Your environment: OS, Python version, PySCF version, Vayesta version
-- Relevant config.yaml settings (remove any sensitive HPC credentials)
-- Any error messages or stack traces from the output log
+> **Note:** Remove any API keys, HPC credentials, or sensitive account
+> details from your config before submitting.
 
 ---
 
 ## Suggesting Enhancements
 
-For new features or improvements, open a [GitHub Issue](https://github.com/MIQuLab/ewf-geom-opt/issues) with:
+For new features or improvements, open a
+[Feature Request](https://github.com/MIQuLab/ewf-geom-opt/issues/new?template=feature_request.yml)
+using our structured issue form. The form will guide you through describing
+the motivation, proposed approach, and relevant references.
 
-- A clear description of the proposed feature
-- Why it would be useful for EWF-based geometry optimization
-- Any relevant references (papers, related implementations)
-
-For larger changes (new density-assembly routes, new solver integrations, new optimizer backends), please open an issue to discuss the approach **before** starting implementation — this avoids duplicated effort and ensures alignment with the project's direction.
+> **Note:** For larger changes (new density-assembly routes, new solver
+> integrations, new optimizer backends), please open an issue to discuss
+> the approach **before** starting implementation — this avoids duplicated
+> effort and ensures alignment with the project's direction.
 
 ---
 
