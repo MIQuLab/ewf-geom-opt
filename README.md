@@ -123,7 +123,7 @@ $$
 \gamma = (\gamma_1,\lambda_2) = \mathcal{A}\big(\{T_x\}, \{C_x\}, \{P_x\}, C\big)
 $$
 
-Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
+Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci_vayesta` / `ci_revised` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
 
 ### The density-response term
 
@@ -190,17 +190,26 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `ewf.assembly` | Construction | Origin |
 |---|---|---|
 | `democratic` | Cluster RDMs, democratically partitioned (4-index split) | mirrors Vayesta `make_rdm{1,2}_demo_rhf` |
-| `ci` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→cluster amplitudes conversion → global RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
+| `ci_vayesta` | CI vector → CISD `(c1, c2)` → projected, converted to amplitudes **per fragment**, then tiled → global RDM | mirrors Vayesta `make_rdm{1,2}_ccsd_global_wf` (`get_global_t*_rhf` + `as_ccsd`) |
+| `ci_revised` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→cluster amplitudes conversion → global RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
 | `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default 2-RDM route |
 | **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global RDM | **this project** |
 | **`rdm_t_lambda`** | `rdm_t` amplitudes + **Λ solve** → relaxed global RDMs | **this project** |
 | **`cluster_energy`** | Per-fragment energy sum — **no global density built** (energy-only) | **this project** |
 
-### `ci`: the CI-coefficient assembly (baseline, revised ordering)
+### `ci_vayesta` / `ci_revised`: the CI-coefficient assembly
 
-Vayesta's global-wavefunction route converts each fragment's FCI/SCI CI vector to CISD coefficients (`RFCI_WaveFunction.as_cisd`), applies the occupied-fragment projector at the CISD level, converts to T-amplitudes (`as_ccsd`) **per fragment**, rotates and accumulates them into one global `(T1, T2)`, and feeds a single `ccsd_rdm` call.
+These two routes are the **same pipeline differing in one step**, provided as a matched pair so the effect of that step can be measured rather than argued. Both read the per-fragment CI vector, convert it to CISD coefficients (`RFCI_WaveFunction.as_cisd`), apply the occupied-fragment projector at the CISD level, symmetrize, rotate to the global MO basis, accumulate, and feed a single `ccsd_rdm` call. They differ **only in where the disconnected `T1⊗T1` is subtracted**.
 
-The `ci` mode keeps this pipeline but reorders the conversion: the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) are projected, rotated, and tiled into one **global C1/C2 first**, and the CISD→ `T2 = C2 − T1⊗T1` conversion is performed **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly. This is the same mechanism as Vayesta's projected amplitude-energy estimator, example [`62-external-solver-amplitude-energy.py`](https://github.com/BoothGroup/Vayesta/blob/master/examples/ewf/molecules/62-external-solver-amplitude-energy.py). Performing the `T1⊗T1` subtraction once, after assembling the global `T1` — rather than per fragment before accumulation — has the benefit of retaining the full `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)` product, cross-fragment terms included, in a single global step, which suits the global-wavefunction density this route builds. (The two orderings coincide within a fragment and differ only in those cross-fragment `T1⊗T1` terms.)
+**`ci_vayesta` — the faithful reference.** Converts CISD→CCSD **per fragment**, before rotation (`t1x = C1_x`, `t2x = C2_x − t1x⊗t1x`), then tiles the resulting amplitudes. This reproduces unmodified Vayesta, whose [`get_global_t1_rhf` / `get_global_t2_rhf`](https://github.com/BoothGroup/Vayesta/blob/master/vayesta/ewf/amplitudes.py) call `pwf.restore().as_ccsd()` on each fragment, with the conversion itself in [`RCISD_WaveFunction.as_ccsd`](https://github.com/BoothGroup/Vayesta/blob/master/vayesta/core/types/wf/cisd.py). Use this route when comparing against Vayesta.
+
+**`ci_revised` — the reordered variant.** Projects, rotates and tiles the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) into one **global C1/C2 first**, and performs the `T2 = C2 − T1⊗T1` conversion **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly — the same mechanism as Vayesta's projected amplitude-energy estimator, example [`62-external-solver-amplitude-energy.py`](https://github.com/BoothGroup/Vayesta/blob/master/examples/ewf/molecules/62-external-solver-amplitude-energy.py). Subtracting once, after assembling the global `T1`, retains the full `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)` product including cross-fragment terms, which suits the global-wavefunction density this route builds.
+
+**The exact difference.** The two are identical for a single fragment, and for many fragments differ by precisely
+
+$$\sum_{x \neq y} (P_x\!\cdot\!T_1) \otimes (P_y\!\cdot\!T_1)$$
+
+the cross-fragment products that the per-fragment ordering drops. Both are implemented by one function under an `ordering` switch, so no step other than the conversion point can differ between them.
 
 Two approximations remain included:
 
@@ -209,7 +218,7 @@ Two approximations remain included:
 
 ### `rdm_t`: amplitudes from the exact RDM cumulant
 
-`rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci` mode uses):
+`rdm_t` is a project-specific hybrid with no single Vayesta analog. It takes the **input** of the democratic route (the full per-fragment FCI/SCI density matrices) and feeds it through the **back-end** of the global-wavefunction route (the same projection → accumulation → `ccsd_rdm` machinery the `ci_*` modes use):
 
 ```
 CI-coefficient (ci):  civec → CISD c1,c2 → global C1,C2 → T1,T2 → global RDM
@@ -225,7 +234,7 @@ T1_eff = dm1_corr[occ, vir]
 T2_eff = λ2_cumulant[occ, occ, vir, vir]
 ```
 
-is the new capability this project adds on top of Vayesta's assembly machinery. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This extends the `ci` route: `as_cisd` provides the singles-and-doubles content, while `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions also survives into the global density.
+is the new capability this project adds on top of Vayesta's assembly machinery. The identity `λ2_oovv = T2` is exact at CCSD order, and beyond it the extraction **carries the triples/quadruples renormalization of the exact cluster cumulant** into the effective amplitudes. This extends the `ci_*` routes: `as_cisd` provides the singles-and-doubles content, while `rdm_t` sources its amplitudes from the exact cumulant (`make_rdm2(with_dm1=False, approx_cumulant=False)` in Vayesta terms), so the higher-excitation content of the FCI/SCI cluster solutions also survives into the global density.
 
 ### `cluster_energy`: the scalable energy-only route (default for `run_task: energy`)
 
@@ -423,7 +432,7 @@ Any solver role (`ewf.solver`, or either `multi_solver` role) may also be set to
 The driver implementation lives in [`Source/sqd_solver.py`](Source/sqd_solver.py) (orchestration), [`Source/sqd_quantum_sampling.py`](Source/sqd_quantum_sampling.py) (sample source), and [`Source/zigzag_layout.py`](Source/zigzag_layout.py) (heavy-hex qubit placement). For each `SQD` cluster the solver runs a two-stage workflow:
 
 1. **SQD configuration-recovery loop** — over `sqd.iterations` cycles, sub-sample the bitstring counts into `sqd.n_batches` independent batches (Hamming-symmetric post-selection + electron-number recovery), submit **one SBD Slurm sub-job per batch in parallel** to diagonalize each batch's subspace, then carry the high-weight determinants across all batches forward to the next iteration. The loop terminates on energy / orbital-occupancy convergence (`sqd.energy_tol`, `sqd.occupancies_tol`) or after `sqd.iterations` cycles.
-2. **ext-SQD finalization** — the recovered subspace is augmented with PyCI single excitations from each surviving determinant (`sqd.ext_sqd_dprime_cutoff` filters by amplitude), and a final SBD Slurm job runs with `--rdm 1` to produce the per-fragment 1- and 2-RDMs consumed by the assembly routes (`rdm_t`, `rdm_t_lambda`, `ci`, `democratic`, `projected_lambda`) — i.e. `SQD` is supported by every density-assembly route.
+2. **ext-SQD finalization** — the recovered subspace is augmented with PyCI single excitations from each surviving determinant (`sqd.ext_sqd_dprime_cutoff` filters by amplitude), and a final SBD Slurm job runs with `--rdm 1` to produce the per-fragment 1- and 2-RDMs consumed by the assembly routes (`rdm_t`, `rdm_t_lambda`, `ci_vayesta`, `ci_revised`, `democratic`, `projected_lambda`) — i.e. `SQD` is supported by every density-assembly route.
 
 Like `SCI_SBD`, the SBD sub-jobs run on either **CPU or GPU** (`sqd.proc_type`, with the same `gpus_per_batch` / `cpus_per_gpu` / `cpus_per_batch` knobs and per-cycle `sqd.slurm.sbatch` resources), and the per-cycle MPI launch layout is derived automatically from the chosen backend.
 
