@@ -2,7 +2,14 @@
 
 Deployment of **geometry optimization driven by Embedded Wave Function (EWF) analytic nuclear gradients**, built on [Vayesta](https://github.com/BoothGroup/Vayesta)-style quantum embedding with FCI / Selected-CI / SCI-SBD / **SQD** (Sample-based Quantum Diagonalization) cluster solvers, [PySCF](https://pyscf.org/) integrals, and a choice of geometry optimizer — [geomeTRIC](https://geometric.readthedocs.io/), [PyBerny](https://github.com/jhrmnn/pyberny), or [Sella](https://github.com/zadorlab/sella). The workflow distributes per-fragment cluster solves over Slurm on an HPC cluster and assembles a global density-matrix whose analytic gradient feeds each optimization step.
 
-The central contribution of this project is a pair of density-assembly routes — **`rdm_t`** and its Λ-relaxed extension **`rdm_t_lambda`** (`embedding_lagrangian.py`) — that make it possible to further reduce the energy and gradient fluctuations associated with the approximations introduced by fragmentation. These gradient fluctuations limit the gradient accuracy, but this project is dedicated to the gradual improvement of the methodology of EWF-based geometry optimization.
+The same machinery also drives **large-scale single-point energy calculations**. This is demonstrated here on the **Trp-cage protein**, in both its folded and unfolded conformers, fragmented into 303 clusters with the largest treated by sample-based quantum diagonalization — see [`Examples/Trp-cage_Single_Point/`](Examples/Trp-cage_Single_Point/).
+
+![Applications of the EWF workflow: fragmentation, analytic nuclear gradients, and a protein-scale single-point calculation](docs/img/applications_representation.png)
+
+*Left — a benzidine molecule with translucent colored spheres marking the EWF fragments. Center — the same molecule with red arrows showing nuclear gradients driving the optimization. Right — the Trp-cage protein used for the large-scale single-point demonstration.*
+
+- **This work** — Kaliakin, D.; Shajan, A.; Liang, F.; Li, Z.; Merz, K. M., Jr. *Quantum-Centric Geometry Optimization with Wave-Function-Based Embedding*. [arXiv:2607.16410](https://arxiv.org/abs/2607.16410)
+- **Trp-cage single-point simulations** — *Molecular Quantum Computations on a Protein*. [*J. Chem. Theory Comput.* **2026**, *22* (12), 6041–6056](https://pubs.acs.org/jctcce/article/22/12/6041/5166449/Molecular-Quantum-Computations-on-a-Protein)
 
 ---
 
@@ -34,6 +41,7 @@ place.
 | [`Source/`](Source/) | Driver, gradient code, Λ-relaxation module, cluster solvers, HPC-settings loader, interactive config generator |
 | [`Examples/`](Examples/) | Example outputs and config files |
 | [`Utilities/`](Utilities/) | Standalone analysis tools — Slurm job diagnostics, geometry comparison, fragmentation-effect analysis (each documented in [`Utilities/README.md`](Utilities/README.md)) |
+| [`docs/img/`](docs/img/) | Centralized image folder — every figure referenced from any README in this repository lives here |
 
 ### Source files
 
@@ -207,7 +215,7 @@ These two routes are the **same pipeline differing in one step**, provided as a 
 
 **The exact difference.** The two are identical for a single fragment, and for many fragments differ by precisely
 
-$$\sum_{x \neq y} (P_x\!\cdot\!T_1) \otimes (P_y\!\cdot\!T_1)$$
+$$\sum_{x \neq y} (P_x \cdot T_1) \otimes (P_y \cdot T_1)$$
 
 the cross-fragment products that the per-fragment ordering drops. Both are implemented by one function under an `ordering` switch, so no step other than the conversion point can differ between them.
 

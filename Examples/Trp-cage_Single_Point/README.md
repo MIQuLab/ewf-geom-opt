@@ -62,9 +62,9 @@ reference, so the comparison isolates the eigensolver change.
 
 ### Folded conformer — the more stable one
 
-![Folded Trp-cage: ΔE vs molecular orbitals](figures/folded_deltaE_vs_MO_avg.png)
+![Folded Trp-cage: ΔE vs molecular orbitals](../../docs/img/trpcage_folded_deltaE_vs_MO_avg.png)
 
-*(vector version: [`folded_deltaE_vs_MO_avg.pdf`](figures/folded_deltaE_vs_MO_avg.pdf))*
+*(vector version: [`trpcage_folded_deltaE_vs_MO_avg.pdf`](../../docs/img/trpcage_folded_deltaE_vs_MO_avg.pdf))*
 
 | Cluster size (MO) | 26 | 27 | 28 | 29 | **30** | **31** | **32** | **33** |
 |---|---|---|---|---|---|---|---|---|
@@ -73,9 +73,9 @@ reference, so the comparison isolates the eigensolver change.
 
 ### Unfolded conformer — the less stable one
 
-![Unfolded Trp-cage: ΔE vs molecular orbitals](figures/unfolded_deltaE_vs_MO_avg.png)
+![Unfolded Trp-cage: ΔE vs molecular orbitals](../../docs/img/trpcage_unfolded_deltaE_vs_MO_avg.png)
 
-*(vector version: [`unfolded_deltaE_vs_MO_avg.pdf`](figures/unfolded_deltaE_vs_MO_avg.pdf))*
+*(vector version: [`trpcage_unfolded_deltaE_vs_MO_avg.pdf`](../../docs/img/trpcage_unfolded_deltaE_vs_MO_avg.pdf))*
 
 | Cluster size (MO) | 23 | 25 | 27 | 28 | 29 | **30** | **31** | **32** | **33** |
 |---|---|---|---|---|---|---|---|---|---|
