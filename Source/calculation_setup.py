@@ -512,7 +512,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  # extra SBD '--rdm 1' job on the distributed allocation (true) instead")
         a("  # of PySCF's single-node make_rdm12 (false).  Recommended for the large")
         a("  # clusters SCI_SBD targets, where the norb^4 2-RDM build dominates.")
-        a("  # Ignored by the 'ci' assembly route (needs no RDMs).")
+        a("  # Ignored by the CI-coefficient assembly routes (need no RDMs).")
         a("  rdm_from_sbd: true")
         a("  # Warm-start that final '--rdm 1' job from the converged SCI")
         a("  # wavefunction (saved each cycle via --savename), so Davidson starts")

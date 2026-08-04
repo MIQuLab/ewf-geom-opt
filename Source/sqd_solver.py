@@ -1295,7 +1295,7 @@ def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
     by ``dprime_cutoff``, augment by single excitations via PyCI, and submit
     a SINGLE SBD job to produce the final energy + CI vector (and, when
     ``with_rdm`` is set, the 1-/2-RDMs via ``--rdm 1``).  ``with_rdm=False``
-    (the 'ci' assembly route) runs ``--rdm 0`` and returns no RDMs.
+    (the CI-coefficient assembly routes) runs ``--rdm 0`` and returns no RDMs.
 
     When ``restart`` is true and the ext-SQD SBD job from a previous run
     is complete on disk (``ext_sqd_iter/sbd_job.status == DONE`` together
@@ -1373,7 +1373,7 @@ def _run_ext_sqd(sqd_cfg: dict, sqd_workdir: str, norb: int, nelec,
 
     # Single SBD job (mirrors the single-batch ext-SQD submission).  RDM=1
     # hands 1- and 2-RDMs back to the RDM-derived assembly routes; RDM=0 (the
-    # 'ci' route) still dumps the energy + CI vector but skips the RDMs.
+    # CI-coefficient routes) still dumps the energy + CI vector but skips the RDMs.
     os.makedirs(ext_dir, exist_ok=True)
     _submit_one_sbd_job(
         sqd_cfg, ext_dir, addresses_alpha_aug, addresses_beta_aug, norb,
@@ -1405,7 +1405,7 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
                    frag_idx: int = 0, verbose=None, need_rdm: bool = True):
     """Solve one cluster via SQD + ext-SQD.  Returns ``(E, dm1, dm2, civec)``.
 
-    When ``need_rdm`` is False (the 'ci' assembly route, which reads only the
+    When ``need_rdm`` is False (the CI-coefficient assembly routes, which read only the
     CI amplitudes) the final ext-SQD SBD job runs with ``--rdm 0`` -- it still
     dumps the energy and CI vector but skips the 1-/2-RDMs -- and this function
     returns ``dm1 = dm2 = None``.

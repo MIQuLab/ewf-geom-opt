@@ -205,21 +205,35 @@ def load_config(path):
     #                   symmetrisation are applied before rotation to the global
     #                   MO basis.  Global 1-/2-RDMs via CCSD rdm with l = t.
     #
-    #   "ci"          : CI-coefficient route — assembles the GLOBAL C1/C2
-    #                   first, converts once.  Each fragment's
-    #                   intermediate-normalised CI coefficients
+    #   "ci_vayesta"  : CI-coefficient route, faithful to Vayesta.  Each
+    #   "ci_revised"    fragment's intermediate-normalised CI coefficients
     #                   (C1 = c1/c0, C2 = c2/c0) are projected on the first
-    #                   occupied index, symmetrised, rotated, and tiled
-    #                   into global C1/C2 (a purely LINEAR operation, so
-    #                   the single-index fragment projection avoids double
-    #                   counting exactly).  Only then is the CISD→CCSD
-    #                   conversion performed, once, globally:
-    #                     T1 = C1_glob,  T2 = C2_glob − T1⊗T1,
-    #                   so the disconnected T1⊗T1 subtraction uses the
-    #                   global T1 and keeps all cross-fragment products.
-    #                   For SCI the CISD extraction still discards
-    #                   triples/quadruples, so 'rdm_t' remains more accurate
-    #                   for aggressive SCI thresholds.
+    #                   occupied index and symmetrised; then rotated to the
+    #                   global MO basis and accumulated.  The two differ in
+    #                   ONE place -- where the disconnected T1⊗T1 is
+    #                   subtracted -- and are otherwise the same code path
+    #                   (see assemble_global_rdms_from_civec's ``ordering``):
+    #
+    #                     "ci_vayesta"  converts PER FRAGMENT, before
+    #                       rotation:  t1x = C1_x,  t2x = C2_x − t1x⊗t1x,
+    #                       then tiles the T-amplitudes.  This reproduces
+    #                       Vayesta's get_global_t{1,2}_rhf, which call
+    #                       pwf.restore().as_ccsd() on each fragment.
+    #
+    #                     "ci_revised"  accumulates the (LINEAR) C1/C2 into
+    #                       one global pair and converts ONCE, globally:
+    #                         T1 = C1_glob,  T2 = C2_glob − T1⊗T1.
+    #                       The subtraction then uses the global T1 and so
+    #                       retains the cross-fragment (x≠y) products that
+    #                       the per-fragment ordering drops.
+    #
+    #                   Both are exact and identical for a single fragment;
+    #                   they differ only by Σ_{x≠y} (P_x·T1)⊗(P_y·T1).  Use
+    #                   "ci_vayesta" as the reference point when comparing
+    #                   against unmodified Vayesta.  For SCI the CISD
+    #                   extraction still discards triples/quadruples in both,
+    #                   so 'rdm_t' remains more accurate for aggressive SCI
+    #                   thresholds.
     #
     #   "democratic"  : Original four-index democratic projection of the
     #                   per-fragment 2-RDM cumulant.  Kept as a fall-back /
@@ -256,12 +270,29 @@ def load_config(path):
                                  and ewf.get("assembly") is not None)
     ewf.setdefault("assembly", "rdm_t")
     asm = str(ewf["assembly"]).lower()
-    if asm not in ("ci", "democratic", "rdm_t", "rdm_t_lambda",
-                   "projected_lambda", "cluster_energy"):
+    # The bare 'ci' token was split into two explicit routes so that a run's
+    # provenance is unambiguous: 'ci_vayesta' reproduces Vayesta's ordering,
+    # 'ci_revised' is this project's global-conversion variant.  Refuse the old
+    # name rather than aliasing it -- these routes exist to be compared against
+    # each other, and a silently mapped token would make a recorded comparison
+    # impossible to interpret after the fact.
+    if asm == "ci":
+        raise ValueError(
+            "ewf.assembly='ci' is no longer accepted: it was split into two "
+            "explicit routes that differ in where the disconnected T1xT1 is "
+            "subtracted.\n"
+            "  ewf.assembly: ci_vayesta   -- per-fragment conversion, "
+            "faithful to Vayesta (use this to compare against unmodified "
+            "Vayesta)\n"
+            "  ewf.assembly: ci_revised   -- single global conversion, "
+            "retains cross-fragment T1xT1 terms (the previous 'ci' behaviour)\n"
+            "Pick one explicitly.")
+    if asm not in ("ci_vayesta", "ci_revised", "democratic", "rdm_t",
+                   "rdm_t_lambda", "projected_lambda", "cluster_energy"):
         raise ValueError(
             f"Unsupported ewf.assembly={ewf['assembly']!r}; expected "
-            f"'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'ci', "
-            f"'democratic', or 'cluster_energy'.")
+            f"'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'ci_vayesta', "
+            f"'ci_revised', 'democratic', or 'cluster_energy'.")
     ewf["assembly"] = asm
     solver = str(ewf["solver"]).upper()
     if solver not in _VALID_SOLVERS:
@@ -853,7 +884,7 @@ def solve_cluster_fci(cluster, conv_tol=1e-12, need_rdm=True):
     assembly route in :func:`assemble_global_rdms_from_civec` -- we keep
     a single solve and let both the democratic and CI assembly paths
     consume the same eigenvector.  ``need_rdm=False`` skips the RDM build
-    (the 'ci' route uses only the CI amplitudes) and returns
+    (the CI-coefficient routes use only the CI amplitudes) and returns
     ``dm1 = dm2 = None``.
     """
     nelec = (cluster.nocc, cluster.nocc)
@@ -937,7 +968,7 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
         Determinant-selection / CI-coefficient cutoff for PySCF's
         ``enlarge_space`` (the SBD-specific options live in ``cfg['sbd']``).
     need_rdm : bool
-        When ``False`` (the 'ci' assembly route) no RDMs are built and
+        When ``False`` (the CI-coefficient assembly routes) no RDMs are built and
         ``dm1 = dm2 = None`` is returned.  When ``True`` the RDM source is
         chosen by ``cfg['sbd']['rdm_from_sbd']`` (default ``True``): if set,
         one extra SBD job with ``--rdm 1`` emits the RDMs on the distributed
@@ -973,7 +1004,7 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     e, civec = cisolver.kernel(
         cluster.heff, cluster.eris, cluster.norb, nelec, ecore=0.0)
     if not need_rdm:
-        # 'ci' route: RDMs are never read -- skip both the SBD RDM job and
+        # CI-coefficient routes: RDMs are never read -- skip both the SBD RDM job and
         # PySCF's make_rdm12 entirely.
         return e, None, None, civec
     if bool(sbd_cfg.get("rdm_from_sbd", True)):
@@ -1005,7 +1036,7 @@ def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
        ``sqd.ext_sqd_dprime_cutoff`` (square-weight cutoff), augments with
        all single excitations via PyCI, and submits ONE SBD Slurm job to
        deliver the final energy and CI vector -- with ``--rdm 1`` (1-/2-RDM)
-       when ``need_rdm`` is set, or ``--rdm 0`` for the 'ci' assembly route
+       when ``need_rdm`` is set, or ``--rdm 0`` for the CI-coefficient routes
        (which reads only the CI amplitudes, so ``dm1 = dm2 = None``).
 
     Each SBD invocation is a separate Slurm sub-job whose resources come
@@ -1085,7 +1116,7 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
     the Vayesta cluster dump.
 
     ``need_rdm`` controls whether the cluster 1-/2-RDMs are built at all.
-    The 'ci' assembly route works purely from the CI amplitudes and never
+    The CI-coefficient assembly routes work purely from the CI amplitudes and never
     reads dm1/dm2, so the driver passes ``need_rdm=False`` there to skip the
     (norb**4) 2-RDM construction and its disk write.  When ``False`` the
     solvers return ``dm1 = dm2 = None``.
@@ -1798,12 +1829,14 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
               f"n_batches={sqd_cfg.get('n_batches', '?')}; submits one Slurm "
               f"job per SBD batch and a final ext-SQD job)")
     # The assembly route decides which per-fragment quantities are actually
-    # consumed downstream, so we resolve it up front: the 'ci' route reads only
-    # the CI amplitudes (c0/c1/c2), every other route reads only the RDMs
-    # (dm1/dm2).  We therefore build exactly one of the two and skip the other's
-    # construction *and* its disk write.
+    # consumed downstream, so we resolve it up front: the CI-coefficient routes
+    # read only the CI amplitudes (c0/c1/c2), every other route reads only the
+    # RDMs (dm1/dm2).  We therefore build exactly one of the two and skip the
+    # other's construction *and* its disk write.  'ci_vayesta' and 'ci_revised'
+    # consume identical per-fragment inputs -- they diverge only in the driver's
+    # conversion ordering -- so one solve stage serves either route.
     assembly = str(cfg["ewf"].get("assembly", "rdm_t")).lower()
-    need_ci_amplitudes = (assembly == "ci")
+    need_ci_amplitudes = assembly in ("ci_vayesta", "ci_revised")
     need_rdm = not need_ci_amplitudes
 
     e_cls, dm1x, dm2x, civec = solve_cluster(
@@ -1817,11 +1850,11 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     # README.  We reuse the civec from the single FCI/SCI solve above
     # (no redundant re-solve).
     #
-    # This CISD->CCSD conversion feeds ONLY the 'ci' assembly route (it is the
+    # This CISD->CCSD conversion feeds ONLY the CI-coefficient routes (it is the
     # sole consumer of the c0/c1/c2 datasets written below).  Every other route
     # -- 'rdm_t', 'rdm_t_lambda', 'projected_lambda', 'democratic' -- derives
     # its effective amplitudes from the full-vector RDMs (dm1/dm2) instead, so
-    # we skip the extraction entirely unless the 'ci' route was requested.
+    # we skip the extraction entirely unless a CI-coefficient route was requested.
     #
     # FCI returns a dense (na x nb) vector, so we read the CISD amplitudes
     # straight off it with PySCF's helper.  The SCI / SCI_SBD / SQD solvers
@@ -1860,7 +1893,7 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     # Save everything the driver needs to assemble global RDMs.  We keep
     # the cluster RDMs (dm1, dm2) plus the split occupied/virtual cluster MOs
     # for every route.  The CI-amplitude datasets (t1/t2/c0/c1/c2) are written
-    # only when the 'ci' assembly route was requested -- they are its exclusive
+    # only when a CI-coefficient route was requested -- they are its exclusive
     # inputs; the RDM-derived routes never read them.
     with h5py.File(rdm_h5, "w") as h5:
         h5.attrs["frag_idx"] = frag_idx
@@ -1880,19 +1913,19 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         h5.create_dataset("c_cluster_vir", data=cluster.c_cluster[:, cluster.nocc:])
         h5.create_dataset("c_frag",        data=cluster.c_frag)
         if need_rdm:
-            # Cluster RDMs -- consumed by every route EXCEPT 'ci'
+            # Cluster RDMs -- consumed by every route EXCEPT the CI-coefficient ones
             # (democratic / rdm_t / rdm_t_lambda / projected_lambda).  dm2 is
-            # the (norb**4) tensor, so skipping it for 'ci' is the main saving.
+            # the (norb**4) tensor, so skipping it for those is the main saving.
             h5.create_dataset("dm1", data=dm1x)
             h5.create_dataset("dm2", data=dm2x)
         if need_ci_amplitudes:
-            # CI-amplitude assembly inputs (consumed only by the 'ci' route,
+            # CI-amplitude assembly inputs (consumed only by the CI-coefficient routes,
             # via assemble_global_rdms_from_civec).
             h5.create_dataset("t1", data=t1x)
             h5.create_dataset("t2", data=t2x)
             h5.attrs["c0"] = float(c0)
             # Raw CISD coefficients (before the T1⊗T1 disconnected part is
-            # removed): the 'ci' route projects and tiles the intermediate-
+            # removed): those routes project and tile the intermediate-
             # normalised C1/C2 into a global C1/C2 and only then performs a
             # single global CISD->CCSD conversion.
             h5.create_dataset("c1", data=c1)
@@ -1977,47 +2010,74 @@ class _MockCC:
         self.max_memory = max_memory
 
 
-def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
-    """CI-coefficient assembly route (``ci``): assemble the GLOBAL C1/C2
-    first, convert to T-amplitudes once.
+def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global,
+                                    ordering="global"):
+    """CI-coefficient assembly routes (``ci_vayesta`` / ``ci_revised``).
 
-    This mirrors the double-counting avoidance of Vayesta's projected
-    amplitude-energy example (``62-external-solver-amplitude-energy.py``):
-    the fragment projector is applied to the intermediate-normalised CI
-    coefficients (C1 = c1/c0, C2 = c2/c0), and the per-fragment
-    contributions are tiled into one global C1/C2.  Projection +
-    rotation + summation are all LINEAR in the CI coefficients, so the
-    single-occupied-index fragment projection counts every excitation
-    exactly once (Σ_x P_x = 1 over the occupied space for a complete
-    atomic fragmentation) — no double counting, by construction.
+    Both routes read the per-fragment CISD coefficients, project them onto
+    the fragment, rotate them to the global MO basis, accumulate, and hand
+    the result to ``pyscf.cc.ccsd_rdm``.  They differ in exactly ONE place:
+    where the disconnected ``T1⊗T1`` is subtracted.  Keeping them in a single
+    function with one switch is deliberate — these two routes exist to be
+    compared against each other, so every step other than the conversion
+    ordering must be provably the same code.
 
-    Only after the global C1/C2 are assembled is the CISD→CCSD
-    conversion performed, once, with the GLOBAL amplitudes::
+    Per fragment x, common to both:
+       1. Read the raw CISD coefficients c0, c1, c2 from the rdm_h5 file
+          and intermediate-normalise: C1 = c1/c0, C2 = c2/c0.
+          (Vayesta: ``RCISD_WaveFunction.as_cisd(c0=1.0)``.)
+       2. Build the occupied-only fragment projector
+          P^x_oo = (c_oo_x.T S c_frag)(c_frag.T S c_oo_x).
+       3. Project C1 and C2 on the first occupied index via P^x_oo.
+          (Vayesta: ``project_c1`` / ``project_c2`` in
+          ``vayesta/core/types/wf/project.py``.)
+       4. Symmetrise projected C2: C2_sym = (P·C2 + (P·C2)^T)/2.
+          (Vayesta: ``symmetrize_c2``, applied inside ``restore()``.)
+       5. Rotate cluster → global MO basis and accumulate.
+
+    ``ordering='per_fragment'`` — the ``ci_vayesta`` route
+    -----------------------------------------------------
+    Converts CISD→CCSD inside the loop, before rotation::
+
+        t1x = C1_x
+        t2x = C2_x − t1x⊗t1x
+
+    and accumulates the T-amplitudes.  This reproduces unmodified Vayesta,
+    whose ``get_global_t1_rhf`` / ``get_global_t2_rhf`` call
+    ``pwf.restore().as_ccsd()`` on each fragment and then tile the resulting
+    amplitudes (``vayesta/ewf/amplitudes.py``, with the conversion itself in
+    ``RCISD_WaveFunction.as_ccsd`` in ``vayesta/core/types/wf/cisd.py``).
+    See https://github.com/BoothGroup/Vayesta.
+
+    Use this route as the reference point when comparing against Vayesta.
+
+    ``ordering='global'`` — the ``ci_revised`` route
+    -----------------------------------------------
+    Accumulates the (LINEAR) C1/C2 into one global pair and converts once,
+    afterwards, with the GLOBAL amplitudes::
 
         T1 = C1_glob
         T2 = C2_glob − T1⊗T1
 
     Why the ordering matters
     ------------------------
-    A per-fragment conversion ordering — converting each fragment
-    (``t2x = P_x·C2/c0 − (P_x·T1)⊗(P_x·T1)``) and then tiling the T2 —
-    would be wrong: the C2 part tiles exactly, but the disconnected part
-    sums to Σ_x (P_x·T1)⊗(P_x·T1), which misses every cross-fragment
-    (x≠y) product of the exact (Σ_x P_x·T1)⊗(Σ_y P_y·T1).  Converting
-    once, globally, uses the full global T1 in the disconnected
-    subtraction, so those cross terms are included.  The quadratic term
-    never meets
-    the projector, and the linear tiling stays exact.
+    Projection, rotation and summation are all linear in the CI
+    coefficients, so the single-occupied-index fragment projection counts
+    every excitation exactly once (Σ_x P_x = 1 over the occupied space for a
+    complete atomic fragmentation) and the C2 part tiles exactly under
+    either ordering.  The disconnected part does not: converting per
+    fragment sums Σ_x (P_x·T1)⊗(P_x·T1), which omits every cross-fragment
+    (x≠y) product present in the exact (Σ_x P_x·T1)⊗(Σ_y P_y·T1).
+    Converting once, globally, uses the full global T1 and so retains them.
 
-    For each fragment x:
-       1. Read the raw CISD coefficients c0, c1, c2 from the rdm_h5 file
-          and intermediate-normalise: C1 = c1/c0, C2 = c2/c0.
-       2. Build the occupied-only fragment projector
-          P^x_oo = (c_oo_x.T S c_frag)(c_frag.T S c_oo_x).
-       3. Project C1 and C2 on the first occupied index via P^x_oo.
-       4. Symmetrise projected C2: C2_sym = (P·C2 + (P·C2)^T)/2.
-       5. Rotate to the global MO basis and accumulate into C1/C2_glob.
-    Then once, globally: T1 = C1_glob, T2 = C2_glob − T1⊗T1.
+    The two therefore differ by exactly Σ_{x≠y} (P_x·T1)⊗(P_y·T1), and are
+    identical for a single fragment, where no such term exists.
+
+    Parameters
+    ----------
+    ordering : {'global', 'per_fragment'}
+        Where the disconnected T1⊗T1 subtraction happens.  ``'global'`` is
+        ``ci_revised``; ``'per_fragment'`` is ``ci_vayesta``.
 
     Returns
     -------
@@ -2028,11 +2088,22 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
     energies : list[float]
     names : list[str]
     """
+    if ordering not in ("global", "per_fragment"):
+        raise ValueError(
+            f"assemble_global_rdms_from_civec: ordering={ordering!r}; "
+            "expected 'global' (ci_revised) or 'per_fragment' (ci_vayesta).")
+    per_fragment = (ordering == "per_fragment")
+    route = "ci_vayesta" if per_fragment else "ci_revised"
     mo_coeff = mf.mo_coeff
     mo_coeff_occ = mo_coeff[:, :nocc_global]
     mo_coeff_vir = mo_coeff[:, nocc_global:]
     nvir_global = mo_coeff.shape[1] - nocc_global
 
+    # Accumulators.  Under 'global' these hold CI coefficients and are
+    # converted to amplitudes after the loop; under 'per_fragment' they hold
+    # T-amplitudes already, because each fragment was converted before being
+    # rotated in.  The 1-index quantity is identical either way (T1 = C1 with
+    # no quadratic term), so only the 2-index accumulator changes meaning.
     c1_global = np.zeros((nocc_global, nvir_global))
     c2_global = np.zeros(
         (nocc_global, nocc_global, nvir_global, nvir_global))
@@ -2043,14 +2114,15 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
         with h5py.File(path, "r") as h5:
             if "c1" not in h5:
                 raise RuntimeError(
-                    f"{path} does not contain the 'c1'/'c2' datasets the 'ci' "
-                    "assembly route needs.  These are written by the solve "
-                    "stage only when ewf.assembly is 'ci'; this file was "
-                    f"produced under assembly "
+                    f"{path} does not contain the 'c1'/'c2' datasets the "
+                    f"{route!r} assembly route needs.  These are written by "
+                    "the solve stage only when ewf.assembly is 'ci_vayesta' "
+                    "or 'ci_revised'; this file was produced under assembly "
                     f"{str(h5.attrs.get('assembly', 'unknown'))!r}.  Re-run the "
-                    "solve stage with ewf.assembly: ci, or pick an RDM-derived "
-                    "route (rdm_t / rdm_t_lambda / projected_lambda / "
-                    "democratic) that reuses the existing files.")
+                    f"solve stage with ewf.assembly: {route}, or pick an "
+                    "RDM-derived route (rdm_t / rdm_t_lambda / "
+                    "projected_lambda / democratic) that reuses the existing "
+                    "files.")
             c0     = float(h5.attrs["c0"])
             c1     = np.array(h5["c1"])             # (nocc_x, nvir_x)
             c2     = np.array(h5["c2"])             # (nocc_x, nocc_x, nvir_x, nvir_x)
@@ -2061,7 +2133,7 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
             names.append(str(h5.attrs["name"]))
 
         if abs(c0) < 1.0e-2:
-            print(f"[assembly/ci] WARNING: |c0|={abs(c0):.4e} for "
+            print(f"[assembly/{route}] WARNING: |c0|={abs(c0):.4e} for "
                   f"'{names[-1]}' — intermediate normalisation (division by "
                   f"c0) may be unreliable.")
 
@@ -2083,8 +2155,21 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
         # calls symmetrize_c2 = (c2 + c2.transpose(1,0,3,2))/2.
         c2_p = 0.5 * (c2_p + c2_p.transpose(1, 0, 3, 2))
 
-        # Step 5: rotate cluster → global MO basis and accumulate the
-        # (linear) CI coefficients — NOT yet T-amplitudes.
+        # ci_vayesta only: convert CISD → CCSD HERE, per fragment, on the
+        # projected+symmetrised cluster quantities and before any rotation.
+        # This is Vayesta's ordering: get_global_t{1,2}_rhf call
+        # pwf.restore().as_ccsd() per fragment, and as_ccsd does
+        #     t1 = c1/c0 ; t2 = c2/c0 - einsum('ia,jb->ijab', t1, t1)
+        # so the disconnected term is built from the FRAGMENT's own T1.
+        # (vayesta/ewf/amplitudes.py, vayesta/core/types/wf/cisd.py --
+        #  https://github.com/BoothGroup/Vayesta)
+        if per_fragment:
+            c2_p = c2_p - np.einsum("ia,jb->ijab", c1_p, c1_p)
+
+        # Step 5: rotate cluster → global MO basis and accumulate.  Under
+        # 'global' these are still (linear) CI coefficients; under
+        # 'per_fragment' they are already T-amplitudes.  The rotation itself
+        # is identical, which is the point of sharing this code.
         ro = mo_coeff_occ.T @ ovlp @ c_oo_x
         rv = mo_coeff_vir.T @ ovlp @ c_vv_x
 
@@ -2092,20 +2177,39 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global):
         c2_global += np.einsum("Ii,Jj,Aa,Bb,ijab->IJAB",  ro, ro, rv, rv, c2_p,
                                  optimize=True)
 
-    # Final C2 symmetrisation (restores (i,j,a,b)<->(j,i,b,a) after sum).
-    c2_global = 0.5 * (c2_global + c2_global.transpose(1, 0, 3, 2))
-
-    # Single global CISD → CCSD conversion (global wavefunction in
-    # intermediate normalisation, C0 = 1).  The disconnected T1⊗T1 is
-    # subtracted with the GLOBAL T1, so cross-fragment products are
-    # included — the fix over the per-fragment conversion of the old
-    # 'ci' route.
-    t1_global = c1_global
-    t2_global = c2_global - np.einsum("ia,jb->ijab", t1_global, t1_global)
+    if per_fragment:
+        # ci_vayesta: the accumulators already hold global T-amplitudes.  No
+        # symmetrisation of the summed T2 here -- Vayesta's get_global_t2_rhf
+        # declares a `symmetrize` argument but never applies it in the RHF
+        # path; it symmetrises only the final DM2 (which we still do below).
+        # It is a numerical no-op anyway: each fragment tensor is already
+        # symmetric under (i,j,a,b)<->(j,i,b,a) -- including the t1⊗t1 term --
+        # and the rotation applies the same ro/rv to both index pairs.
+        t1_global = c1_global
+        t2_global = c2_global
+    else:
+        # ci_revised: final C2 symmetrisation (restores (i,j,a,b)<->(j,i,b,a)
+        # after the sum), then a SINGLE global CISD → CCSD conversion of the
+        # global wave function in intermediate normalisation (C0 = 1).  The
+        # disconnected T1⊗T1 is subtracted with the GLOBAL T1, so the
+        # cross-fragment products that the per-fragment ordering drops are
+        # retained.
+        c2_global = 0.5 * (c2_global + c2_global.transpose(1, 0, 3, 2))
+        t1_global = c1_global
+        t2_global = c2_global - np.einsum("ia,jb->ijab", t1_global, t1_global)
 
     mock_cc = _MockCC(mo_coeff, mo_occ=mf.mo_occ, mol=mol,
                       max_memory=getattr(mf, "max_memory", 4000))
 
+    # l = t for both routes (Vayesta's as_ccsd likewise sets l1, l2 = t1, t2).
+    #
+    # NOTE on ``with_mf=True``: Vayesta's own make_rdm1_ccsd_global_wf calls
+    # make_rdm1 with with_mf=False and adds the mean-field part inside its own
+    # framework.  Here the callers (ewf_energy_from_rdms, build_ewf_grad)
+    # expect a full HF+correlation 1-RDM, so with_mf=True is required for BOTH
+    # routes.  This is a plumbing convention of this project, not part of the
+    # algorithm under comparison -- do not "align" it with Vayesta, or the
+    # assembled energy will be wrong.
     dm1_global = _cc_ccsd_rdm.make_rdm1(
         mock_cc, t1_global, t2_global, t1_global, t2_global,
         with_mf=True, with_frozen=False, ao_repr=False)
@@ -2125,7 +2229,7 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
     """RDM-derived T-amplitude assembly — recommended for SCI.
 
     Root cause of the larger SCI deviation in the CI-coefficient
-    ('ci') route
+    ('ci_vayesta' / 'ci_revised') route
     -------------------------------------------------------------------
     ``assemble_global_rdms_from_civec`` extracts amplitudes from the FCI/SCI
     CI vector via the chain::
@@ -2156,7 +2260,7 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
       triples/quadruples retained in SCI)
 
     The fragment projection (first occupied index only, same projector as the
-    'ci' route) and c2-level symmetrisation are then applied to these
+    CI-coefficient routes) and c2-level symmetrisation are then applied to these
     effective amplitudes before they are rotated to the global MO basis and
     assembled into the global T1 / T2.  Global 1-/2-RDMs are built from the assembled
     (T1_eff, T2_eff) via PySCF's CCSD RDM machinery with l = t.
@@ -2229,7 +2333,7 @@ def assemble_global_rdms_from_rdm_t(rdm_files, mol, mf, ovlp, nocc_global):
 
         t1x_p = np.dot(px_oo, t1x_eff)                          # (nocc_x, nvir_x)
         t2x_p = np.einsum("xi,ijab->xjab", px_oo, t2x_eff)     # (nocc_x, nocc_x, nvir_x, nvir_x)
-        # Symmetrise: mirrors the c2-level symmetrisation in the 'ci' route.
+        # Symmetrise: mirrors the c2-level symmetrisation in the CI-coefficient routes.
         t2x_p = 0.5 * (t2x_p + t2x_p.transpose(1, 0, 3, 2))
 
         # --- Rotate to global MO basis and accumulate.
@@ -2266,7 +2370,7 @@ def assemble_global_rdms_projected_lambda(rdm_files, mol, mf, ovlp,
 
     Mirrors ``vayesta.ewf.rdm.make_rdm{1,2}_ccsd_proj_lambda``: the global
     density matrices are built as a sum of **single-cluster** contributions,
-    *not* by forming one global wave function (the 'ci' / 'rdm_t' routes) and
+    *not* by forming one global wave function (the 'ci_*' / 'rdm_t' routes) and
     *not* by the four-index democratic projection (the 'democratic' route).
 
     For each fragment x::
@@ -2802,13 +2906,22 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_projected_lambda(
                 rdm_files, mol, mf, ovlp, nocc_global))
-    elif assembly == "ci":
-        print(f"[{tag}] Assembly route: CI-coefficient global wave function "
-              f"(global C1/C2 assembled first; single global CISD→CCSD "
-              f"conversion)")
+    elif assembly == "ci_vayesta":
+        print(f"[{tag}] Assembly route: CI-coefficient global wave function, "
+              f"Vayesta ordering (per-fragment CISD→CCSD conversion before "
+              f"rotation; mirrors Vayesta get_global_t*_rhf + as_ccsd)")
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_from_civec(
-                rdm_files, mol, mf, ovlp, nocc_global))
+                rdm_files, mol, mf, ovlp, nocc_global,
+                ordering="per_fragment"))
+    elif assembly == "ci_revised":
+        print(f"[{tag}] Assembly route: CI-coefficient global wave function, "
+              f"revised ordering (global C1/C2 assembled first; single global "
+              f"CISD→CCSD conversion, cross-fragment T1⊗T1 retained)")
+        dm1, dm2_cumulant, cluster_energies, cluster_names = (
+            assemble_global_rdms_from_civec(
+                rdm_files, mol, mf, ovlp, nocc_global,
+                ordering="global"))
     elif assembly == "democratic":
         print(f"[{tag}] Assembly route: democratic 4-index projection "
               f"(legacy; mirrors Vayesta's make_rdm*_demo_rhf)")
@@ -2818,8 +2931,8 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     else:
         raise ValueError(
             f"Unknown ewf.assembly mode: {assembly!r} (expected 'rdm_t', "
-            "'rdm_t_lambda', 'projected_lambda', 'ci', or "
-            "'democratic')")
+            "'rdm_t_lambda', 'projected_lambda', 'ci_vayesta', 'ci_revised', "
+            "or 'democratic')")
 
     method_label = method_label_for_cfg(cfg)
     multi_solver = cfg["ewf"].get("multi_solver", {}).get("enabled", False)
