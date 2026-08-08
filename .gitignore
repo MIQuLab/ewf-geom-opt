@@ -66,3 +66,6 @@ Trp-Cage_Comparison/
 
 # Unused artifacts in old version of code
 .snakemake/
+
+# Folder for creating the drafts of GitHub images
+Drafts_of_images/
