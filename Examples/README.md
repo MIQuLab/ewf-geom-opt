@@ -62,7 +62,7 @@ declared once and reused by every calculation.
 | [`submit_slurm_CCF_gpu_hf.sh`](HPC_Settings/submit_slurm_CCF_gpu_hf.sh) | GPU job sized for the GPU-accelerated Hartree–Fock stage |
 
 Each example directory also ships the site YAML and submit script it was
-actually run with, so a run can be inspected end to end without reconstructing
+run with, so a run can be inspected end to end without reconstructing
 its environment.
 
 ---
@@ -179,7 +179,7 @@ output format can be read and parsed without downloading gigabytes.
 ### Quantum data is always included
 
 Everything obtained from the quantum computer is kept, since it is the part
-that cannot simply be recomputed:
+that cannot be recomputed:
 
 | File | Contents |
 |---|---|

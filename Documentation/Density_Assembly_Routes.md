@@ -72,7 +72,7 @@ $$
 \tfrac{1}{2}\sum_{ijkl}(ij|kl)_{x}\,(\lambda_2^{x})_{ijkl},
 $$
 
-and `(ij|kl)_x` is exactly the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`. So the two-body energy can be accumulated as a **scalar, one fragment at a time, entirely in the cluster basis**; only the one-particle term needs a global object, and that is just `(nmo, nmo)`. The result is **numerically identical to the `democratic` route** (verified to 0 Ha on a test system), at `O(nfrag·norb⁴)` instead of `O(nmo⁴)` — minutes and a few MB rather than hours and hundreds of GB.
+and `(ij|kl)_x` is exactly the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`. So the two-body energy can be accumulated as a **scalar, one fragment at a time, entirely in the cluster basis**; only the one-particle term needs a global object, and that is only `(nmo, nmo)`. The result is **numerically identical to the `democratic` route** (verified to 0 Ha on a test system), at `O(nfrag·norb⁴)` instead of `O(nmo⁴)` — minutes and a few MB rather than hours and hundreds of GB.
 
 Both sides of that identity are the two-body energy contribution of a **single fragment** $x$; the total two-body energy is the sum over fragments. Term by term:
 
@@ -80,7 +80,7 @@ Both sides of that identity are the two-body energy contribution of a **single f
 - **$p,q,r,s$** — *global* MO indices, each running over all `nmo` molecular orbitals of the whole molecule.
 - **$i,j,k,l$** — *cluster* orbital indices, running only over fragment $x$'s own active space (`norb`: its occupied fragment orbitals plus bath).
 - **$(pq \mid rs)$** — global MO two-electron integrals in chemist notation: the `nmo⁴` tensor that `ao2mo` would otherwise have to build.
-- **$(ij \mid kl)_x$** — fragment $x$'s *cluster* two-electron integrals. This is literally the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`, which is why the right-hand side costs nothing extra.
+- **$(ij \mid kl)_x$** — fragment $x$'s *cluster* two-electron integrals. This is the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`, which is why the right-hand side costs nothing extra.
 - **$\lambda_2^{x}$** — fragment $x$'s two-particle cumulant in its own cluster basis, after the fragment projector has been applied to the first index (the same projector and cumulant convention the `democratic` route uses, which is why the two energies agree to machine precision).
 - **$R$** — the cluster→global rotation $R = C_{\mathrm{global}}^{\top} S\, C_x^{\mathrm{cluster}}$, of shape `(nmo, norb)`. Its columns are orthonormal, $R^{\top}R = 1$, because both bases are orthonormal with respect to the AO overlap $S$.
 - **$R\lambda_2^{x}R^{\top}$** — shorthand for rotating **all four** indices of the cumulant from the cluster basis up into the global MO basis.
@@ -114,7 +114,7 @@ $$
 
 where $\Delta\gamma_1^{ov}$ is the occupied–virtual block of the correlated one-particle density and $\lambda_2^{oovv}$ is the occupied-occupied/virtual-virtual block of the two-particle cumulant. Because these RDMs carry the imprint of **every excitation class the cluster solver includes** — the higher determinants that `FCI` / `SCI` / `SQD` retain, not only singles and doubles — the effective doubles that enter the global density are dressed by that higher-order correlation. The assembled `rdm_t` density is therefore a closer approximation to the correlated (full-CI) density of the unfragmented system, recovering more of the correlation that a per-fragment treatment can otherwise dilute.
 
-On the assembly side the route is deliberately coupled-cluster-*structured*: the effective amplitudes are combined through the well-established CCSD RDM machinery, which yields a smooth, differentiable global density and — in `rdm_t_lambda` — a $\Lambda$ (Z-vector) amplitude-response density for consistent analytic gradients. The advantage is greatest where the cluster correlation is genuinely multi-determinantal (stretched bonds, near-degeneracies) and grows as the clusters enlarge and the `SCI` / `SQD` subspace approaches the full-CI limit; for small, weakly correlated clusters near equilibrium the effective amplitudes already sit close to their coupled-cluster counterparts.
+On the assembly side the route is deliberately coupled-cluster-*structured*: the effective amplitudes are combined through the well-established CCSD RDM machinery, which yields a smooth, differentiable global density and — in `rdm_t_lambda` — a $\Lambda$ (Z-vector) amplitude-response density for consistent analytic gradients. The advantage is greatest where the cluster correlation is multi-determinantal (stretched bonds, near-degeneracies) and grows as the clusters enlarge and the `SCI` / `SQD` subspace approaches the full-CI limit; for small, weakly correlated clusters near equilibrium the effective amplitudes already sit close to their coupled-cluster counterparts.
 
 ---
 

@@ -80,7 +80,7 @@ subfolders:
 The `.xyz` files are optimization **trajectories** (many stacked geometries);
 only the **last frame** — the converged / optimized geometry — is compared.
 
-Only molecules present in **both** trees are compared; molecules present in just
+Only molecules present in **both** trees are compared; molecules present in only
 one tree are listed separately in the summary.
 
 ---
@@ -228,7 +228,7 @@ is absent, the first `*.log` in the molecule folder is used).
 ## Standalone geometry comparison (`geom_compare.py`)
 
 `geom_compare.py` can also be used directly to compare one or more geometry files
-against a single reference (xyz or plain-text coordinates). Note that on
+against a single reference (xyz or plain-text coordinates). On
 multi-frame `.xyz` files it reads only the **first** frame — use
 `fragmentation_effect_analysis.py` when you need the last (optimized) frame.
 

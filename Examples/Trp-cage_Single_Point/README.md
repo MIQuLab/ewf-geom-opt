@@ -91,7 +91,7 @@ sharply, and the blue curve sits well below the red one throughout: at 30
 orbitals the deviation from CCSD drops from 7.60 to 3.85 kcal/mol (folded) and
 from 10.33 to 3.31 kcal/mol (unfolded).
 
-The **spread narrows** as well, not just the mean — the folded MO=33 group goes
+The **spread narrows** as well, not only the mean — the folded MO=33 group goes
 from 23.37 ± 14.17 to 20.33 ± 11.07 kcal/mol. A tighter Davidson threshold makes
 the large-cluster results more reproducible, which is the practical meaning of
 "more robust".

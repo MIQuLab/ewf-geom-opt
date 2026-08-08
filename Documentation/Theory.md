@@ -15,7 +15,7 @@ $$
 \gamma = (\gamma_1,\lambda_2) = \mathcal{A}\big(\{T_x\}, \{C_x\}, \{P_x\}, C\big)
 $$
 
-Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — literally the code in the assembly routes (`democratic` / `ci_vayesta` / `ci_revised` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
+Here `x` runs over fragments (one cluster per fragment); `𝒜` is the projection/rotation/accumulation map that turns per-fragment solutions into the global `(γ1, λ2)` — the code in the assembly routes (`democratic` / `ci_vayesta` / `ci_revised` / `projected_lambda` / `rdm_t` / `rdm_t_lambda`); `T_x` are the per-cluster amplitudes (or the effective `(T1, T2)` in the `rdm_t*` routes); `C_x` are the per-fragment cluster MO coefficients (occupied fragment + bath + virtual bath); `P_x` is the fragment projector that partitions the correlation onto fragment `x` (e.g. the occupied-index projector used to avoid double counting); and `C` are the global HF MO coefficients (the same set for all fragments).
 
 ### The density-response term
 

@@ -1,6 +1,6 @@
 # Requirements
 
-The driver has a small **core** that is always needed, plus **optional** components you install only for the features you actually use — most notably, **you only need the geometry optimizer you intend to run, not all three**.
+The driver has a small **core** that is always needed, plus **optional** components you install only for the features you use — most notably, **you only need the geometry optimizer you intend to run, not all three**.
 
 ### Core (always required)
 
