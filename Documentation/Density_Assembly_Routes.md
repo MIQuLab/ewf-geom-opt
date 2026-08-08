@@ -26,6 +26,15 @@ $$\sum_{x \neq y} (P_x \cdot T_1) \otimes (P_y \cdot T_1)$$
 
 the cross-fragment products that the per-fragment ordering drops. Both are implemented by one function under an `ordering` switch, so no step other than the conversion point can differ between them.
 
+Every symbol in that expression refers to the global $(T_1, T_2)$ being assembled:
+
+- **$x$ and $y$ both run over fragments**, and $P_x$ and $P_y$ are the *same* operator evaluated on two *different* fragments — the occupied-index fragment projector $P_x = \big(C_x^{\mathrm{occ}\top} S\, C_x^{\mathrm{frag}}\big)\big(C_x^{\mathrm{frag}\top} S\, C_x^{\mathrm{occ}}\big)$, which selects the part of a cluster quantity belonging to fragment $x$ and is what prevents double counting. There is no distinction between $P_x$ and $P_y$ beyond the fragment they belong to.
+- **$P_x \cdot T_1$** is therefore fragment $x$'s own projected singles contribution, rotated into the global MO basis — one term of the sum $T_1 = \sum_x P_x \cdot T_1$.
+- **$\otimes$** is the outer product that builds a doubles-shaped tensor: $\big[(P_x \cdot T_1) \otimes (P_y \cdot T_1)\big]_{ijab} = (P_x \cdot T_1)_{ia}\,(P_y \cdot T_1)_{jb}$.
+- **The restriction $x \neq y$ is the whole point.** The diagonal terms ($x = y$) are the per-fragment products that *both* orderings produce; the off-diagonal terms pair the singles of one fragment with those of another. Only the global conversion — which subtracts $T_1 \otimes T_1$ *after* summing, using the full global $T_1$ — contains them.
+
+With a single fragment no pair $x \neq y$ exists, the sum is empty, and the two routes coincide exactly.
+
 Two approximations remain included:
 
 1. **CISD truncation of the cluster wavefunction.** `as_cisd` reads the single- and double-excitation rows of the CI vector, so triples and higher determinants of the FCI/SCI solution are not carried into the amplitudes.
@@ -64,6 +73,20 @@ $$
 $$
 
 and `(ij|kl)_x` is exactly the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`. So the two-body energy can be accumulated as a **scalar, one fragment at a time, entirely in the cluster basis**; only the one-particle term needs a global object, and that is just `(nmo, nmo)`. The result is **numerically identical to the `democratic` route** (verified to 0 Ha on a test system), at `O(nfrag·norb⁴)` instead of `O(nmo⁴)` — minutes and a few MB rather than hours and hundreds of GB.
+
+Both sides of that identity are the two-body energy contribution of a **single fragment** $x$; the total two-body energy is the sum over fragments. Term by term:
+
+- **$x$** — fragment index. The identity holds separately for each fragment.
+- **$p,q,r,s$** — *global* MO indices, each running over all `nmo` molecular orbitals of the whole molecule.
+- **$i,j,k,l$** — *cluster* orbital indices, running only over fragment $x$'s own active space (`norb`: its occupied fragment orbitals plus bath).
+- **$(pq \mid rs)$** — global MO two-electron integrals in chemist notation: the `nmo⁴` tensor that `ao2mo` would otherwise have to build.
+- **$(ij \mid kl)_x$** — fragment $x$'s *cluster* two-electron integrals. This is literally the `eris` dataset the DUMP stage already wrote into `cluster_<i>.h5`, which is why the right-hand side costs nothing extra.
+- **$\lambda_2^{x}$** — fragment $x$'s two-particle cumulant in its own cluster basis, after the fragment projector has been applied to the first index (the same projector and cumulant convention the `democratic` route uses, which is why the two energies agree to machine precision).
+- **$R$** — the cluster→global rotation $R = C_{\mathrm{global}}^{\top} S\, C_x^{\mathrm{cluster}}$, of shape `(nmo, norb)`. Its columns are orthonormal, $R^{\top}R = 1$, because both bases are orthonormal with respect to the AO overlap $S$.
+- **$R\lambda_2^{x}R^{\top}$** — shorthand for rotating **all four** indices of the cumulant from the cluster basis up into the global MO basis.
+- **$\tfrac{1}{2}$** — the usual two-body prefactor, which avoids double counting electron pairs.
+
+**Why the two sides are equal.** $\lambda_2^{x}$ lives entirely inside fragment $x$'s cluster space, and the cluster orbitals are an orthonormal subset of the global MO space. Rotating the cumulant up and contracting it against the global integrals therefore samples those integrals only on that subspace — and the global integrals restricted to the cluster subspace *are* the cluster integrals, $(ij \mid kl)_x = \sum_{pqrs} R_{pi}R_{qj}R_{rk}R_{sl}\,(pq \mid rs)$. Because the energy is linear in the cumulant, the rotation can be moved off the cumulant and onto the integrals, where it cancels. The left-hand side needs two `nmo⁴` tensors; the right-hand side needs neither.
 
 Because it never forms a density, it **cannot produce a nuclear gradient**. It is therefore selected automatically for `run_task: energy` (unless you pin `ewf.assembly` yourself), and requesting it for `gradient` or `geomopt` raises a clear error. It applies to `run_mode: ewf` only. Since it reads the existing `rdm_<i>.h5` and `cluster_<i>.h5`, it can be used with `restart: true` to get the energy of a run whose solves already finished but whose global assembly was too expensive.
 
