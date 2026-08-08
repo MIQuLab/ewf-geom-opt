@@ -78,7 +78,7 @@ Full documentation lives in [`Documentation/`](Documentation/):
 
 ## Examples
 
-**[`Examples/`](Examples/)** — example outputs driver logs, per-step energies/gradients, optimized geometries as well as configuration files.
+**[`Examples/`](Examples/)** — HPC site configurations, a geometry optimization worked end to end on acetone under three solver strategies, the optimized geometries for all 12 molecules of the geometry-optimization paper, and the Trp-cage single-point study. Each area is described in [`Examples/README.md`](Examples/README.md).
 
 ---
 

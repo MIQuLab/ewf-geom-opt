@@ -2,14 +2,16 @@
 
 Worked examples for the EWF-based geometry-optimization workflow: HPC site
 configurations you can adapt to your own cluster, geometry optimizations on a
-small molecule with three different solver strategies, and a large-scale
-single-point study on the Trp-cage protein that reproduces and extends
-published results.
+small molecule with three different solver strategies, the resulting optimized
+geometries for every molecule in the geometry-optimization paper, and a
+large-scale single-point study on the Trp-cage protein that reproduces and
+extends published results.
 
 | Path | Contents |
 |---|---|
 | [`HPC_Settings/`](HPC_Settings/) | Site definitions for two real clusters + Slurm submission templates |
-| [`Geometry_Optimization/`](Geometry_Optimization/) | Acetone geometry optimization: EWF-(FCI,SCI), EWF-(FCI,SQD), unfragmented SCI |
+| [`Geometry_Optimization_Runs/`](Geometry_Optimization_Runs/) | Acetone geometry optimization, worked end to end: EWF-(FCI,SCI), EWF-(FCI,SQD), unfragmented SCI |
+| [`Geometry_Optimization_Results/`](Geometry_Optimization_Results/) | Optimized geometries for all 12 molecules of the geometry-optimization paper, under the same three methods |
 | [`Trp-cage_Single_Point/`](Trp-cage_Single_Point/) | Large-scale single-point energies on folded / unfolded Trp-cage, with reference data from [*JCTC* **2026**, *22* (12), 6041–6056](https://pubs.acs.org/jctcce/article/22/12/6041/5166449/Molecular-Quantum-Computations-on-a-Protein) |
 
 ---
@@ -67,18 +69,18 @@ its environment.
 
 ---
 
-## 2. Geometry optimization on acetone
+## 2. Geometry optimization: a worked run on acetone
 
-[`Geometry_Optimization/`](Geometry_Optimization/) contains three complete
-optimizations of the **same** acetone molecule ([`acetone.txt`](Geometry_Optimization/EWF-FCI_SCI/acetone.txt),
+[`Geometry_Optimization_Runs/`](Geometry_Optimization_Runs/) contains three complete
+optimizations of the **same** acetone molecule ([`acetone.txt`](Geometry_Optimization_Runs/EWF-FCI_SCI/acetone.txt),
 `sto-3g`, four steps `step_000`–`step_003`). Holding the system fixed makes the
 three solver strategies directly comparable:
 
 | Example | `run_mode` | Cluster solver strategy |
 |---|---|---|
-| [`EWF-FCI_SCI/`](Geometry_Optimization/EWF-FCI_SCI/) | `ewf` | **Multi-solver**: FCI for clusters with `norb < 13`, `SCI_SBD` above that |
-| [`EWF-FCI_SQD/`](Geometry_Optimization/EWF-FCI_SQD/) | `ewf` | **Multi-solver**: FCI for small clusters, **`SQD`** above that |
-| [`Unfragmented_SCI/`](Geometry_Optimization/Unfragmented_SCI/) | `true_unfragmented` | Single `SCI_SBD` solve on the **whole system** — no fragmentation |
+| [`EWF-FCI_SCI/`](Geometry_Optimization_Runs/EWF-FCI_SCI/) | `ewf` | **Multi-solver**: FCI for clusters with `norb < 13`, `SCI_SBD` above that |
+| [`EWF-FCI_SQD/`](Geometry_Optimization_Runs/EWF-FCI_SQD/) | `ewf` | **Multi-solver**: FCI for small clusters, **`SQD`** above that |
+| [`Unfragmented_SCI/`](Geometry_Optimization_Runs/Unfragmented_SCI/) | `true_unfragmented` | Single `SCI_SBD` solve on the **whole system** — no fragmentation |
 
 The multi-solver threshold (`multi_solver.norb_threshold`) is the key knob in
 the first two: small clusters are solved exactly, and only the clusters too
@@ -98,7 +100,31 @@ solver output.
 
 ---
 
-## 3. Large-scale single point: Trp-cage
+## 3. Geometry optimization: optimized geometries
+
+[`Geometry_Optimization_Results/`](Geometry_Optimization_Results/) holds the optimized
+geometries for every molecule reported in the geometry-optimization paper
+([arXiv:2607.16410](https://arxiv.org/abs/2607.16410)) — 12 systems spanning water (3
+atoms) to menthone (29 atoms). Each molecule has its own folder holding one file per
+method: `ewf_geomopt_optim_SCI-SBD.xyz` for EWF-(FCI,SCI), `ewf_geomopt_optim_SQD.xyz` for
+EWF-(FCI,SQD), and `ewf_geomopt_optim_SCI-SBD_unfragmented.xyz` for the unfragmented SCI
+reference — the same three methods demonstrated end to end in
+`Geometry_Optimization_Runs/`.
+
+Each file is the full optimization trajectory rather than the final structure alone, and
+every frame carries its energy on the comment line (`Energy -75.0099131978 Ha`), so the
+converged geometry and energy are those of the last frame.
+
+All 12 molecules have an EWF-(FCI,SCI) optimization. Nine also have EWF-(FCI,SQD): water,
+acetylene and ammonia are absent because all of their fragments fall below the 13-orbital
+`multi_solver.norb_threshold` at which the SQD solver takes over, so none of their
+fragments is treated with SQD. Ten have an unfragmented SCI reference; benzidine and
+menthone do not, because unfragmented simulations at that size are too computationally
+expensive.
+
+---
+
+## 4. Large-scale single point: Trp-cage
 
 [`Trp-cage_Single_Point/`](Trp-cage_Single_Point/) demonstrates the workflow at
 production scale — a full protein, fragmented into hundreds of clusters, with
@@ -172,7 +198,7 @@ Binary and checkpoint artifacts are excluded on the same grounds — `*.h5`,
 (`slurm-*.out`). The authoritative list is [`../.gitignore`](../.gitignore).
 
 **Formats are still demonstrated.** `2pRDM.txt` is omitted, but
-[`1pRDM.txt`](Geometry_Optimization/EWF-FCI_SCI/jobs_EWF/step_000/sci_sbd_scratch_000/rdm/1pRDM.txt)
+[`1pRDM.txt`](Geometry_Optimization_Runs/EWF-FCI_SCI/jobs_EWF/step_000/sci_sbd_scratch_000/rdm/1pRDM.txt)
 **is included** throughout — same writer, same layout — so the density-matrix
 output format can be read and parsed without downloading gigabytes.
 
