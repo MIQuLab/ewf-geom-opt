@@ -96,3 +96,13 @@ Standalone helper tools live in [`Utilities/`](Utilities/); each is documented i
 | [`bulk_calculations_setup.py`](Utilities/bulk_calculations_setup.py) | Interactive **bulk** setup: one ready-to-run folder (code template + geometry + `config.yaml`) per geometry in an input folder, from a single set of answers (reuses `Source/calculation_setup.py`). |
 
 See **[`Utilities/README.md`](Utilities/README.md)** for requirements, usage, options, and output formats.
+
+## Citing this project
+If you use the `ewf-geom-opt` in your research, please use the following to cite the appropriate references:
+```bibtex
+@software{ewf-geom-opt,
+  author    = {Kaliakin, Danil and Shajan, Akhil and Liang, Fangchun and Merz, Kenneth M.},
+  title     = {{ewf-geom-opt}},
+  howpublished = {\url{[https://github.com/MIQuLab/ewf-geom-opt]}},
+  year      = {2026}
+}
