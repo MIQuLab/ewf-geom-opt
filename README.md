@@ -104,10 +104,12 @@ If you use the `ewf-geom-opt` in your research, please use the following to cite
 
 ```bibtex
 @software{ewf-geom-opt,
-  author    = {Kaliakin, Danil and Shajan, Akhil and Liang, Fangchun and Merz, Kenneth M.},
-  title     = {{ewf-geom-opt}},
-  howpublished = {\url{[https://github.com/MIQuLab/ewf-geom-opt]}},
-  year      = {2026}
+  author    = {Kaliakin, Danil and Shajan, Akhil and Liang, Fangchun and
+               Li, Zhen and Merz, Jr., Kenneth M.},
+  title     = {{ewf-geom-opt}: {EWF}-Based Geometry Optimization with {SQD} Solver},
+  version   = {1.0.0},
+  year      = {2026},
+  url       = {https://github.com/MIQuLab/ewf-geom-opt}
 }
 ```
 
@@ -117,10 +119,11 @@ This software is based on the methodology described by the developers in:
 
 ```bibtex
 @article{kaliakin2026ewf-geom-opt,
-  title = {Quantum-Centric Geometry Optimization with Wave-Function-Based Embedding},
-  author = {Danil Kaliakin, Akhil Shajan, Fangchun Liang, Zhen Li, and Kenneth M. Merz Jr},
+  title   = {{Quantum-Centric Geometry Optimization with Wave-Function-Based Embedding}},
+  author  = {Kaliakin, Danil and Shajan, Akhil and Liang, Fangchun and
+             Li, Zhen and Merz, Jr., Kenneth M.},
   journal = {arXiv preprint arXiv:2607.16410},
-  year = {2026},
-  url = {https://arxiv.org/abs/2607.16410}
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2607.16410}
 }
 ```
