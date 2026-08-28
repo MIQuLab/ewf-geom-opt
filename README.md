@@ -99,6 +99,9 @@ See **[`Utilities/README.md`](Utilities/README.md)** for requirements, usage, op
 
 ## Citing this project
 If you use the `ewf-geom-opt` in your research, please use the following to cite the appropriate references:
+
+### Software Citation
+
 ```bibtex
 @software{ewf-geom-opt,
   author    = {Kaliakin, Danil and Shajan, Akhil and Liang, Fangchun and Merz, Kenneth M.},
@@ -106,3 +109,18 @@ If you use the `ewf-geom-opt` in your research, please use the following to cite
   howpublished = {\url{[https://github.com/MIQuLab/ewf-geom-opt]}},
   year      = {2026}
 }
+```
+
+### Paper Citation
+
+This software is based on the methodology described by the developers in:
+
+```bibtex
+@article{kaliakin2026ewf-geom-opt,
+  title = {Quantum-Centric Geometry Optimization with Wave-Function-Based Embedding},
+  author = {Danil Kaliakin, Akhil Shajan, Fangchun Liang, Zhen Li, and Kenneth M. Merz Jr},
+  journal = {arXiv preprint arXiv:2607.16410},
+  year = {2026},
+  url = {https://arxiv.org/abs/2607.16410}
+}
+```
