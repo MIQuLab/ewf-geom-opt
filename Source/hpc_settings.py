@@ -347,8 +347,8 @@ CCF_PRESET = {
             "modules": [],
             "paths": [
                 'export PATH="/home/kaliakd/beegfs/kaliakd/Software/openmpi-4.1.5/bin:$PATH"',
-                'export PATH="/home/liz7/beegfs/liz7/openblas/lib/:$PATH"',
-                'export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblas/lib/:$LD_LIBRARY_PATH"',
+                'export PATH="/home/liz7/isilon/Zhen/openblas/bin:$PATH"',
+                'export LD_LIBRARY_PATH="/home/liz7/isilon/Zhen/openblas/lib/:$LD_LIBRARY_PATH"',
             ],
         },
         "gpu": {
@@ -357,8 +357,8 @@ CCF_PRESET = {
             ],
             "paths": [
                 'export PATH="/home/liz7/isilon/Zhen/mpich/bin:$PATH"',
-                'export LD_LIBRARY_PATH="/home/liz7/beegfs/liz7/openblasgpu/lib:$LD_LIBRARY_PATH"',
-                'export PATH="/home/liz7/beegfs/liz7/openblasgpu/bin:$PATH"',
+                'export LD_LIBRARY_PATH="/home/liz7/isilon/Zhen/openblasgpu/lib/:$LD_LIBRARY_PATH"',
+                'export PATH="/home/liz7/isilon/Zhen/openblasgpu/bin:$PATH"',
             ],
         },
     },
