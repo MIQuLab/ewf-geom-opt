@@ -40,6 +40,7 @@ import re
 import sys
 import glob
 import math
+import time
 import shutil
 import tempfile
 import argparse
@@ -133,6 +134,14 @@ _FULL_NORB_RE = re.compile(r"Full active space:\s*norb=(\d+)")
 _PERCLUSTER_RE = re.compile(r"Per-cluster energies")
 _SCI_CLUSTER_RE = re.compile(r"E_cluster\s*=.*\[SCI")
 
+# Directory name of a geometry-optimisation step (distinct from _STEP_RE above,
+# which matches the log's "geomopt step=N" marker).
+_STEP_DIR_RE = re.compile(r"^step_(\d+)$")
+
+# Cluster files that could not be read even after retries.  Reported at the end
+# of the run: a silently skipped file would understate the largest cluster.
+_H5_READ_FAILURES = []
+
 
 def find_log(molecule_dir):
     """Locate the run log inside a molecule folder (default name, else any *.log)."""
@@ -164,24 +173,44 @@ def parse_largest_fragment_norb(logpath):
     return max(norbs) if norbs else None
 
 
-def _norbs_in_h5(path):
+def _norbs_in_h5(path, tries=4):
     """Every per-fragment ``norb`` recorded in one cluster_*.h5 file (stored as
     a group attr on ``fragment_<i>``).
 
     Metadata-only: reads just the scalar ``norb`` attribute, never the cluster
     tensors (c_cluster / heff / fock / eris), so the cost is independent of the
     file size -- a multi-GB cluster file is read as fast as a tiny one.
+
+    The read is retried a few times: these artefacts normally live on a
+    networked filesystem (BeeGFS, SMB-mounted storage), where a transient open()
+    failure is common.  Silently skipping such a file would quietly LOWER the
+    reported maximum, so an unrecoverable failure is recorded in
+    ``_H5_READ_FAILURES`` and reported to the user instead of being swallowed.
     """
-    out = []
-    try:
-        with h5py.File(path, "r") as h5:
-            for key in h5.keys():                     # fragment_<i> group
-                grp = h5[key]
-                if hasattr(grp, "attrs") and "norb" in grp.attrs:
-                    out.append(int(grp.attrs["norb"]))
-    except (OSError, KeyError, ValueError):
-        pass
-    return out
+    last = None
+    for attempt in range(tries):
+        out = []
+        try:
+            with h5py.File(path, "r") as h5:
+                for key in h5.keys():                 # fragment_<i> group
+                    grp = h5[key]
+                    if hasattr(grp, "attrs") and "norb" in grp.attrs:
+                        out.append(int(grp.attrs["norb"]))
+            return out
+        except (OSError, KeyError, ValueError) as exc:
+            last = exc
+            time.sleep(0.4 * (attempt + 1))
+    _H5_READ_FAILURES.append((path, repr(last)))
+    return []
+
+
+def _under_nonzero_step(path):
+    """True if ``path`` lies under a ``step_<NNN>`` folder with NNN != 000."""
+    for comp in os.path.normpath(path).split(os.sep):
+        m = _STEP_DIR_RE.match(comp)
+        if m and int(m.group(1)) != 0:
+            return True
+    return False
 
 
 def _find_cluster_files(molecule_dir):
@@ -196,22 +225,28 @@ def _find_cluster_files(molecule_dir):
     is orders of magnitude slower than globbing the handful of cluster files we
     actually want.  Bounded globs only list the few directories at each fixed
     depth and never descend into the scratch subtrees.
+
+    For geometry-optimization runs only ``step_000`` is kept.  The EWF
+    fragmentation is rebuilt at every step, so cluster sizes drift as the
+    structure relaxes; pinning the reported orbital counts to the common
+    starting geometry is what makes this table comparable with the SQD and
+    circuit-size tables.
     """
     seen, out = set(), []
     for depth in ("cluster_*.h5",
                   os.path.join("*", "cluster_*.h5"),
                   os.path.join("*", "*", "cluster_*.h5")):
         for path in glob.glob(os.path.join(molecule_dir, depth)):
-            if path not in seen:
+            if path not in seen and not _under_nonzero_step(path):
                 seen.add(path)
                 out.append(path)
     return out
 
 
 def h5_largest_fragment_norb(molecule_dir):
-    """Largest EWF cluster ``norb`` from cluster_*.h5 under ``molecule_dir``
-    (across every geomopt step), or ``None`` when h5py is unavailable or no
-    cluster files exist.
+    """Largest EWF cluster ``norb`` from the ``step_000`` cluster_*.h5 files
+    under ``molecule_dir``, or ``None`` when h5py is unavailable or no cluster
+    files exist.
 
     ONLY the DUMP cluster_*.h5 files are read -- never the rdm_*.h5 files.  The
     rdm files carry the same per-fragment norb but also hold the (potentially
@@ -315,7 +350,7 @@ def build_latex_table(results, ref_root, cmp_root, figure_relpath=None):
         "unfragmented SCI calculations, "
         "\\textbf{Max $\\Delta$} is largest single-atom displacement, "
         "\\textbf{Max EWF MOs} is number of molecular orbitals in the largest "
-        "EWF cluster, "
+        "EWF cluster at the initial geometry (step 000), "
         "\\textbf{N SCI solver} is the number of fragments treated with the SCI "
         "solver, "
         "\\textbf{Full MOs} is the total number of MOs in the unfragmented molecule, "
@@ -995,8 +1030,9 @@ def main():
         print(f"Max RMSD                     : {DIST_FMT.format(worst_rmsd['rmsd'])} Å  ({worst_rmsd['molecule']})")
         print(f"Largest max-deviation        : {DIST_FMT.format(worst_maxdev['max_dev'])} Å  ({worst_maxdev['molecule']})")
         print("\nNotes:")
-        print("  * Max EWF MOs = largest EWF cluster norb, read from "
-              "cluster_*.h5 when present (else the log).")
+        print("  * Max EWF MOs = largest EWF cluster norb at the initial "
+              "geometry (step_000), read from cluster_*.h5 when present "
+              "(else the log).")
         print("  * Full MOs    = unfragmented full active-space norb.")
         print("  * *steps           = number of geometry-optimisation cycles "
               "('Cycles evaluated', else max step index + 1).")
@@ -1011,6 +1047,12 @@ def main():
         print("\nSkipped / errors:")
         for msg in errors:
             print(msg)
+    if _H5_READ_FAILURES:
+        print(f"\n!! WARNING: {len(_H5_READ_FAILURES)} cluster file(s) could not be "
+              "read even after retries.  The reported 'Max EWF MOs' may be too "
+              "LOW.  Re-run once the storage is responsive.")
+        for path, exc in _H5_READ_FAILURES:
+            print(f"    {path}  ({exc})")
     print("=" * 96)
 
     if not results:

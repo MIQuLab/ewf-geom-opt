@@ -49,12 +49,20 @@ Code_for_SQD_incorporation/
 # Folder for reference output files
 Example_Output_Files/
 
-# LaTeX / tectonic build artifacts from the Utilities analysis tools
-# (achemso regenerates the acs-*.bib control file on demand; the .aux/.bbl are
-# transient.  Generated .tex/.pdf/.png outputs are left tracked on purpose.)
+# LaTeX / tectonic build artifacts and generated reports from the Utilities
+# analysis tools.  The .tex/.pdf/.png/.bib outputs are regenerated on demand
+# from the production data for the manuscript revision and are intentionally
+# NOT tracked -- only the scripts that produce them live in this repository.
 Utilities/*.aux
 Utilities/*.bbl
-Utilities/acs-*.bib
+Utilities/*.bib
+Utilities/*.tex
+Utilities/*.pdf
+Utilities/*.png
+Utilities/*.csv
+
+# Working notes on the cross-table discrepancy analysis (local reference only).
+Utilities/Discrepancy_Notes.md
 
 # Folder that hosts helper scripts. 
 # These scripts are not robust enough to be utilities, but useful
