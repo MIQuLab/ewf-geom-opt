@@ -413,100 +413,129 @@ def _scell(value):
     return "{--}" if value is None else str(int(value))
 
 
-def _trajectory_tex(series_values):
-    """Compact ``17$\\to$18`` style summary of one cluster's size trajectory.
+#: Production-tree folder name -> the method name used in the manuscript.
+#: The folder names are historical ("SCI-SBD", "SQD") and name the *solver*;
+#: the paper names the whole embedding scheme, so the table has to say
+#: EWF-(FCI,SCI) and EWF-(FCI,SQD).  Keyed case-insensitively and with the
+#: separator normalised, so SCI-SBD / SCI_SBD / scisbd all map.
+METHOD_LABELS = {
+    "scisbd": "EWF-(FCI,SCI)",
+    "sqd": "EWF-(FCI,SQD)",
+}
 
-    Consecutive repeats are collapsed, so a 6-step run that goes
-    30,31,31,31,31,31 renders as ``30$\\to$31`` rather than six numbers.
+
+def method_label(tree_label):
+    """The manuscript method name for a production-tree label.
+
+    Unknown labels pass through unchanged rather than being dropped or guessed
+    at: a new tree should show up in the table under its own name so it is
+    noticed, not silently renamed to one of the two known methods.
     """
-    collapsed = []
-    for v in series_values:
-        token = "--" if v is None else str(v)
-        if not collapsed or collapsed[-1] != token:
-            collapsed.append(token)
-    return r"$\to$".join(collapsed)
+    key = re.sub(r"[^a-z0-9]", "", str(tree_label).lower())
+    return METHOD_LABELS.get(key, str(tree_label))
+
+
+def varying_signature(run):
+    """What the detail table actually *shows* for one run.
+
+    ``((cluster_index, min_norb, max_norb), ...)`` over the size-changing
+    clusters.  Two runs with the same signature produce byte-identical table
+    rows, which is the only sound basis for merging them: keying on anything
+    the table does not display would split rows that look the same, or merge
+    rows that do not.
+    """
+    out = []
+    for cid in run["varying"]:
+        vals = [v for v in run["series"][cid] if v is not None]
+        out.append((int(cid), min(vals), max(vals)))
+    return tuple(out)
+
+
+def consolidate_by_molecule(changed):
+    """Group the size-changing runs into table blocks, merging methods that
+    agree.
+
+    Most molecules fluctuate identically under both production methods -- the
+    fragmentation is a property of the geometry, not of the cluster solver --
+    so listing each twice doubles the table for no information.  Returns
+    ``[(molecule, method_text, [(cid, lo, hi), ...]), ...]``.
+
+    A block is labelled for *all* the methods only when every method that ran
+    that molecule shares the signature, so a molecule run under one method
+    alone is never described as agreeing with another.
+    """
+    by_mol = OrderedDict()
+    for r in changed:
+        by_mol.setdefault(r["molecule"], []).append(r)
+
+    blocks = []
+    for mol, runs in by_mol.items():
+        all_methods = {method_label(r["label"]) for r in runs}
+        groups = OrderedDict()
+        for r in runs:
+            groups.setdefault(varying_signature(r), []).append(r)
+        for sig, members in groups.items():
+            here = {method_label(m["label"]) for m in members}
+            if len(all_methods) > 1 and here == all_methods:
+                text = "both methods" if len(all_methods) == 2 else "all methods"
+            else:
+                text = " / ".join(sorted(here))
+            blocks.append((mol, text, list(sig)))
+    return blocks
 
 
 def build_latex_table(rows, input_dirs):
-    """Two-part SI document: a summary table over every run, plus a detail
-    table listing each size-changing cluster's trajectory."""
+    """Single-table SI document: the opening discussion, then one block per
+    molecule whose cluster sizes change.
+
+    The per-run summary table this document used to carry was dropped -- it
+    said of most runs only that nothing changed.  The h5-vs-FCIDUMP
+    cross-check it used to state in prose still runs on every invocation and
+    is reported on the console (``print_molecule_report``), so the agreement
+    is still verified; it is simply no longer asserted in the caption.
+
+    Rows are consolidated across methods by :func:`consolidate_by_molecule`,
+    which is what keeps the table to the molecules that actually distinguish
+    the two methods.
+    """
     changed = [r for r in rows if r["varying"]]
 
-    # ---- Table 1: one row per run -----------------------------------------
-    summary_rows = []
-    for r in rows:
-        first = r["step_max"].get(0, r["step_max"].get(SINGLE_STEP))
-        verdict = r"\textbf{yes}" if r["varying"] else "no"
-        summary_rows.append(
-            "{mol} & {tree} & {steps} & {clus} & {first} & {gmax} & {nvary} & {verdict} \\\\".format(
-                mol=escape_latex(r["molecule"]), tree=escape_latex(r["label"]),
-                steps=_scell(r["n_steps"]), clus=_scell(r["n_clusters"]),
-                first=_scell(first), gmax=_scell(r["global_max"]),
-                nvary=_scell(len(r["varying"])), verdict=verdict,
-            )
-        )
-
-    caption1 = (
-        "Stability of the EWF cluster (fragment) sizes along the "
-        "geometry optimization, for every production run.  The EWF "
-        "fragmentation is regenerated at every optimization step, so the "
-        "number of orbitals in a cluster is not constrained to stay fixed as "
-        "the nuclear geometry relaxes.  "
-        "\\textbf{Steps} is the number of geometry-optimization steps, "
-        "\\textbf{Clusters} the number of EWF clusters, "
-        "\\textbf{Max MOs (step 000)} the size of the largest cluster at the "
-        "initial geometry, "
-        "\\textbf{Max MOs (any step)} the largest cluster encountered over the "
-        "whole trajectory, "
-        "\\textbf{N varying} the number of clusters whose size changes at least "
-        "once, and \\textbf{Changes?} summarizes whether any change occurs.  "
-        "Orbital counts were read from the \\texttt{norb} attribute of the "
-        "per-cluster HDF5 dumps and independently confirmed against the "
-        "\\texttt{NORB} field of the FCIDUMP headers written for every "
-        "SQD-treated cluster; the two sources agree for every entry."
-    )
-
-    colspec1 = ("l l S[table-format=1.0] S[table-format=2.0] "
-                "S[table-format=2.0] S[table-format=2.0] S[table-format=2.0] c")
-    header1 = ("{Molecule} & {Tree} & {Steps} & {Clusters} & "
-               "{Max MOs} & {Max MOs} & {N varying} & {Changes?} \\\\\n"
-               "     & & & & {(step 000)} & {(any step)} & & \\\\")
-
-    # ---- Table 2: one row per size-changing cluster ------------------------
+    # ---- one block per (molecule, agreeing-method-set) ---------------------
+    blocks = consolidate_by_molecule(changed)
     detail_rows = []
-    for r in changed:
-        for n, cid in enumerate(r["varying"]):
-            vals = [v for v in r["series"][cid] if v is not None]
+    for b, (mol, method, entries) in enumerate(blocks):
+        for n, (cid, lo, hi) in enumerate(entries):
             detail_rows.append(
-                "{mol} & {tree} & {cid} & {lo} & {hi} & {traj} \\\\".format(
-                    mol=escape_latex(r["molecule"]) if n == 0 else "",
-                    tree=escape_latex(r["label"]) if n == 0 else "",
-                    cid=_scell(cid), lo=_scell(min(vals)), hi=_scell(max(vals)),
-                    traj=_trajectory_tex(r["series"][cid]),
+                "{mol} & {method} & {cid} & {lo} & {hi} \\\\".format(
+                    mol=escape_latex(mol) if n == 0 else "",
+                    method=escape_latex(method) if n == 0 else "",
+                    cid=_scell(cid), lo=_scell(lo), hi=_scell(hi),
                 )
             )
-        if r is not changed[-1]:
+        if b != len(blocks) - 1:
             detail_rows.append("\\addlinespace")
 
-    caption2 = (
+    caption = (
         "Per-cluster detail for the runs in which at least one EWF cluster "
         "changes size during the geometry optimization.  "
-        "\\textbf{Cluster} is the cluster index, "
+        "\\textbf{Index} is the index of EWF cluster, "
         "\\textbf{Min MOs} / \\textbf{Max MOs} the smallest and largest orbital "
-        "count that cluster takes over the trajectory, and "
-        "\\textbf{Trajectory} the sequence of sizes with consecutive repeats "
-        "collapsed (so $30\\to31$ denotes a cluster that grows once after the "
-        "first step and is then stable).  Clusters that keep a constant size "
-        "throughout are omitted."
+        "count that EWF cluster takes over the geometry optimization steps.  "
+        "Where both methods give the same set of size-changing clusters with "
+        "the same orbital ranges for a molecule, the two are reported once as "
+        "\\emph{both methods}; a molecule is listed under the individual "
+        "method names only where the methods differ."
     )
 
-    colspec2 = ("l l S[table-format=2.0] S[table-format=2.0] "
-                "S[table-format=2.0] l")
-    header2 = ("{Molecule} & {Tree} & {Cluster} & {Min MOs} & {Max MOs} & "
-               "{Trajectory} \\\\")
+    colspec = "l l S[table-format=2.0] S[table-format=2.0] S[table-format=2.0]"
+    header = ("{Molecule} & {Method} & {Index} & {Min MOs} & {Max MOs} \\\\")
 
     n_runs = len(rows)
     n_changed = len(changed)
+    # Distinct molecules behind those runs: the table consolidates agreeing
+    # methods, so the block count tracks molecules, not runs, and quoting the
+    # run count alone would not match what a reader can see in the table.
+    n_changed_mols = len({r["molecule"] for r in changed})
     n_maxchanged = sum(1 for r in rows if r["min_step_max"] != r["global_max"])
     roots = ", ".join(escape_latex(d) for d in input_dirs)
 
@@ -524,13 +553,20 @@ def build_latex_table(rows, input_dirs):
         "as bond lengths relax.  Because the cluster sizes are therefore a "
         "property of the geometry rather than a fixed input, all orbital "
         "counts quoted in the main text are reported at the common initial "
-        "geometry (step 000), which is identical for every method compared."
+        "geometry, which is identical for every method compared.  "
+        f"The table below shows the {n_changed} instances "
+        f"({n_changed_mols} molecule{'' if n_changed_mols == 1 else 's'}) "
+        "where the orbital count is changing."
     )
 
     return f"""\\documentclass[journal=jacsat,manuscript=article,layout=twocolumn]{{achemso}}
 \\usepackage{{booktabs}}
 \\usepackage{{siunitx}}
 \\usepackage{{amsmath}}
+% stfloats lets a double-column float sit at the BOTTOM of a page, so the
+% table can follow the paragraph that refers to it as "the table below"
+% instead of being pushed to the top of the page by the twocolumn layout.
+\\usepackage{{stfloats}}
 \\sisetup{{detect-weight=true, detect-family=true}}
 
 % Suppress the achemso corresponding-author "E-mail:" line in the title block.
@@ -546,37 +582,21 @@ def build_latex_table(rows, input_dirs):
 
 \\begin{{document}}
 
-\\begin{{table*}}
-  \\centering
-  \\small
-  \\caption{{{caption1}}}
-  \\label{{tab:cluster-size-stability}}
-  \\begin{{tabular}}{{{colspec1}}}
-    \\toprule
-    {header1}
-    \\midrule
-{_indent(chr(10).join(summary_rows), 4)}
-    \\bottomrule
-  \\end{{tabular}}
-\\end{{table*}}
+{discussion}
 
-\\begin{{table*}}
+\\begin{{table*}}[b]
   \\centering
   \\small
-  \\caption{{{caption2}}}
+  \\caption{{{caption}}}
   \\label{{tab:cluster-size-detail}}
-  \\begin{{tabular}}{{{colspec2}}}
+  \\begin{{tabular}}{{{colspec}}}
     \\toprule
-    {header2}
+    {header}
     \\midrule
 {_indent(chr(10).join(detail_rows), 4)}
     \\bottomrule
   \\end{{tabular}}
 \\end{{table*}}
-
-\\section*{{Discussion}}
-
-{discussion}
 
 \\end{{document}}
 """
