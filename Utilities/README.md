@@ -11,7 +11,7 @@ lists them and points here.
 | [`fragmentation_effect_analysis.py`](fragmentation_effect_analysis.py) | Batch driver: compares **EWF SCI** optimized geometries against the **unfragmented SCI** reference across molecules; emits an ACS-style LaTeX table + PDF and a structure-overlay figure (unfragmented CPK, EWF SCI magenta). |
 | [`quantum_sampling_effect_analysis.py`](quantum_sampling_effect_analysis.py) | Same framework, SQD counterpart: compares **EWF SQD** optimized geometries against the **EWF SCI** reference; same table + overlay figure (EWF SCI CPK, EWF SQD magenta), with an `N SQD solver` column. |
 | [`circuit_data_analysis.py`](circuit_data_analysis.py) | Collects LUCJ circuit sizes (qubits / 2-qubit depth / CNOT count) for the smallest and largest SQD-treated EWF cluster per molecule, across one or more folders of molecule subfolders; emits a LaTeX table + PDF. |
-| [`fragment_size_evolution.py`](fragment_size_evolution.py) | Audits how EWF cluster sizes (`norb`) change from one geometry-optimization step to the next, per molecule; cross-checks `cluster_<i>.h5` against the SQD `fci_dump.txt` headers. Explains why "largest cluster" numbers differ between tables. |
+| [`fragment_size_evolution.py`](fragment_size_evolution.py) | Audits how EWF cluster sizes (`norb`) change from one geometry-optimization step to the next, per molecule; cross-checks `cluster_<i>.h5` against the SQD `fci_dump.txt` headers. Emits publication-quality LaTeX/PDF tables for the Supporting Information. |
 | [`bulk_calculations_setup.py`](bulk_calculations_setup.py) | Interactive **bulk** setup: builds one ready-to-run folder (code template + geometry + `config.yaml`) per geometry in an input folder, from a single set of answers. |
 | [`hpc_settings_setup.py`](hpc_settings_setup.py) | Interactive generator for a custom **HPC-site definition** (`<name>_HPC_settings.yaml`) plus its three `submit_slurm_<name>_*.sh` scripts; the setup tools discover these to target a particular cluster. |
 
@@ -285,7 +285,7 @@ python circuit_data_analysis.py <folder1> [<folder2> ...]
 
 Options: `--tex <path>` (default `sqd_circuit_sizes.tex`), `--no-pdf`. Molecule folders that contain no `circuit_metadata.json` (e.g. runs without an SQD solver) are listed as skipped. Requires only the Python standard library, plus `tectonic` on `PATH` for the PDF.
 
-> **Note on step selection.** For geometry-optimization runs this tool deliberately reads **only `step_000`**, so that its numbers line up with the single-geometry runtypes. Because the EWF bath is rebuilt at every step, the largest SQD cluster at `step_000` can be *smaller* than the largest cluster over the whole trajectory — which is what the geometry-comparison tables report. See [Cluster-size evolution](#cluster-size-evolution).
+> **Note on the data source.** Point this tool at a `run_task: circuits` dataset (the folder holding `jobs_EWF/circuit_frag_<i>/circuit_metadata.json`), not at an SQD geometry-optimization tree — production SQD runs may predate the `circuit_metadata.json` sidecar, in which case the tool correctly reports that no circuit metadata was found. For geometry-optimization runs only `step_000` is read, matching the other tables.
 
 ---
 
@@ -323,6 +323,9 @@ Each positional argument is a top-level folder whose subfolders are molecules (t
 | `--no-matrix` | Print only the summary table, skipping the per-molecule step × cluster matrices. |
 | `--sqd-only` | Use the FCIDUMP headers (SQD-solved clusters only) instead of every `cluster_<i>.h5`. Removes the `h5py` requirement. |
 | `--csv PATH` | Also write the raw long-format records (`tree, molecule, step, cluster, norb_h5, norb_fcidump`). |
+| `--tex PATH` | Path for the generated ACS-style LaTeX tables (default `cluster_size_stability.tex`; PDF written alongside). |
+| `--no-tex` | Skip the LaTeX/PDF output entirely. |
+| `--no-pdf` | Write the `.tex` but skip compiling it to PDF. |
 
 ## Output
 
@@ -353,12 +356,22 @@ Then a summary table with one row per molecule (and tree):
 
 Any disagreement between the `cluster_<i>.h5` `norb` and the corresponding FCIDUMP `NORB` is reported as an explicit mismatch line — on the current production data there are none, so the two sources corroborate each other.
 
-## Interpreting cross-table discrepancies
+## LaTeX / PDF output
 
-This tool exists to explain why the same molecule can carry different "max MOs" in different tables. Two distinct effects are at play, and both are physical rather than bugs:
+Besides the stdout report the tool writes a two-table ACS-style document intended for the Supporting Information:
 
-1. **Step selection.** `circuit_data_analysis.py` reports `step_000` only; the geometry-comparison tools report the maximum over the whole trajectory. For *menthone* the largest cluster is 30 MOs at `step_000` and grows to 31 MOs from `step_001` onward — hence 30 vs 31.
-2. **Run-to-run bath differences.** The SCI-SBD and SQD trees are independent optimizations that follow slightly different paths. For *allene*, cluster `c0` grows 17 → 18 after the first step in the SCI-SBD run but stays at 17 for all four steps of the SQD run — hence 18 vs 17.
+1. **Summary table** — one row per run: number of steps and clusters, the largest cluster at step 000 and over the whole trajectory, how many clusters vary, and a yes/no verdict.
+2. **Detail table** — one row per size-changing cluster: its index, the min/max orbital count it takes, and a collapsed trajectory such as `30 -> 31`.
+
+A short discussion paragraph underneath explains the physical origin of the changes. The PDF is compiled with `tectonic` if it is on `PATH`.
+
+## Why all the tables agree
+
+The EWF fragmentation is rebuilt at every optimization step, so cluster sizes are a property of the *geometry*, not a fixed input. Taking the maximum over a whole trajectory therefore produces a number that depends on how far — and along which path — that particular run relaxed, which is not comparable between methods.
+
+All the tools are consequently pinned to the **common initial geometry (`step_000`)**, which is identical for every method compared. With that convention the orbital counts agree across `fragmentation_effect_analysis.py`, `quantum_sampling_effect_analysis.py` and `circuit_data_analysis.py`, and `fragment_size_evolution.py` documents the step-to-step variation that the single-number tables necessarily omit.
+
+> **Reliability.** These tools read HDF5 artefacts that normally live on networked storage, where transient `open()` failures occur. A silently skipped cluster file would quietly *lower* a reported maximum, so reads are retried and any unrecoverable failure is printed as a prominent warning. **Treat any run that prints such a warning as invalid and re-run it.**
 
 ---
 

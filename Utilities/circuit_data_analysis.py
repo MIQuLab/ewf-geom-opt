@@ -47,6 +47,15 @@ import subprocess
 CIRCUIT_META = "circuit_metadata.json"
 _STEP_RE = re.compile(r"^step_(\d+)$")
 
+# Subtrees that can never hold circuit metadata.  Skipping them keeps the walk
+# cheap on networked storage, where the SQD scratch trees contain many
+# thousands of tiny per-batch files.
+_PRUNE_DIRS = {
+    "jobs_ci_calculations", "jobs_fragments_production", "ext_sqd_iter",
+    "__pycache__", ".git",
+}
+_PRUNE_PREFIX_RE = re.compile(r"^(iter|batch)_\d+$")
+
 # Names of native/entangling 2-qubit gates across IBM backends (Eagle: ecr,
 # Heron: cz / rzz).  Their total is reported as the "CNOT gate count" when the
 # metadata predates the explicit ``two_qubit_gate_count`` field.
@@ -68,9 +77,22 @@ def _under_nonzero_step(path):
 
 def find_circuit_files(molecule_dir):
     """All ``circuit_metadata.json`` under ``molecule_dir``, excluding the ones
-    that live under a geomopt step other than ``step_000``."""
+    that live under a geomopt step other than ``step_000``.
+
+    The walk is pruned aggressively.  An SQD run's scratch tree holds many
+    thousands of tiny per-batch determinant files (``sqd_scratch_*/iter_*/
+    batch_*``), none of which can contain circuit metadata; descending into
+    them on a networked filesystem dominates the runtime.  We therefore skip
+    those subtrees, the per-fragment Slurm job folders, and any ``step_<NNN>``
+    with ``NNN != 000`` outright.
+    """
     out = []
-    for root, _dirs, files in os.walk(molecule_dir):
+    for root, dirs, files in os.walk(molecule_dir):
+        # Prune before descending.
+        dirs[:] = [d for d in dirs
+                   if d not in _PRUNE_DIRS
+                   and not _PRUNE_PREFIX_RE.match(d)
+                   and not (_STEP_RE.match(d) and int(_STEP_RE.match(d).group(1)) != 0)]
         if CIRCUIT_META in files and not _under_nonzero_step(root):
             out.append(os.path.join(root, CIRCUIT_META))
     return sorted(out)
