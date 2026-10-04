@@ -83,14 +83,27 @@ def kabsch_rmsd(P, Q):
 
     Returns (rmsd, Q_rotated) where Q_rotated is the optimally-aligned Q.
     Both P and Q must already be centered (centroid at origin).
+
+    With the covariance ``H = P^T Q = U S V^T``, the rotation that maximises
+    ``tr(H W)`` -- equivalently minimises ``||P - Q W||`` -- is ``W = V U^T``,
+    applied as ``Q @ W``.  ``diag(1, 1, det(V U^T))`` forces a proper rotation,
+    so a mirror image is never superimposed on its enantiomer.
+
+    The rotation was previously applied as ``Q @ W.T``, which is the INVERSE
+    rotation and so leaves a residual the minimisation was meant to remove.
+    It went unnoticed because both structures compared here descend from the
+    same input geometry and the optimiser barely reorients them, making
+    ``W`` nearly the identity, for which ``W`` and ``W.T`` agree.  It is
+    checked now against a rotated copy (RMSD must vanish) and against
+    ``scipy.spatial.transform.Rotation.align_vectors``.
     """
     H = P.T @ Q
     U, S, Vt = np.linalg.svd(H)
-    # Correct for reflection
+    # Correct for reflection: exclude improper rotations (det = -1).
     d = np.linalg.det(Vt.T @ U.T)
     D = np.diag([1.0, 1.0, d])
     R = Vt.T @ D @ U.T
-    Q_rot = Q @ R.T
+    Q_rot = Q @ R
     diff = P - Q_rot
     rmsd = np.sqrt(np.mean(np.sum(diff ** 2, axis=1)))
     return rmsd, Q_rot
