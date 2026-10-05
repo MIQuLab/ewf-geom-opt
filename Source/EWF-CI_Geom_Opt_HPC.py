@@ -161,6 +161,11 @@ def load_config(path):
     # Sensible defaults
     ewf = cfg.setdefault("ewf", {})
     ewf.setdefault("bath_threshold", 1.0e-8)
+    # Optional [[n_occ, n_vir], ...] per atomic fragment.  When set, the MP2
+    # bath is truncated to a FIXED count per side instead of by occupation,
+    # which keeps the cluster sizes constant along a geometry optimization.
+    # Absent (the default) leaves the threshold behaviour untouched.
+    ewf.setdefault("pinned_bath", None)
     ewf.setdefault("solver", "FCI")
     ewf.setdefault("sci_select_cutoff", 1.0e-3)
     # ------------------------------------------------------------------
@@ -826,7 +831,7 @@ def build_mol_and_mf(cfg, write_chk=True):
     return mol, mf
 
 
-def make_emb_with_fragments(mf, threshold, dumpfile):
+def make_emb_with_fragments(mf, threshold, dumpfile, pinned_bath=None):
     """Construct an EWF object AND populate its fragment list.
 
     Important: ``vayesta.ewf.EWF(...)`` itself does NOT create any
@@ -836,6 +841,27 @@ def make_emb_with_fragments(mf, threshold, dumpfile):
     fragment), so we must perform the IAO atomic fragmentation explicitly.
     Doing so here also guarantees that the driver and every worker see
     EXACTLY the same ordered list of fragments.
+
+    ``pinned_bath`` is an optional ``[[n_occ, n_vir], ...]``, one pair per
+    fragment, which replaces the occupation threshold by a FIXED number of
+    MP2 bath natural orbitals on each side.  The default (None) leaves the
+    long-standing threshold behaviour untouched.
+
+    Why this exists.  With an occupation threshold the bath is rebuilt at
+    every geometry and a natural orbital sitting near the threshold crosses
+    it as bonds relax, so the cluster -- and hence the model Hamiltonian --
+    changes size mid-optimization.  On allene every assembly mode gains one
+    orbital in each H cluster between step 0 and step 1, and the raw cluster
+    energy jumps by about 6 Ha when it does.  The assembled total is smooth
+    only through a near-cancellation of such jumps.  Pinning the counts makes
+    the cluster definition a fixed function of the fragment rather than of
+    the geometry, which is what a geometry optimization needs; the price is
+    that at a displaced geometry the retained set is no longer exactly the
+    one the threshold would have chosen.
+
+    The counts are per side because they have to be: on allene the threshold
+    keeps 3 occupied and 4 virtual BNOs for each H fragment, an odd total that
+    a single symmetric count cannot reproduce.
     """
     emb = vayesta.ewf.EWF(
         mf,
@@ -844,7 +870,21 @@ def make_emb_with_fragments(mf, threshold, dumpfile):
         solver_options=dict(dumpfile=dumpfile),
     )
     with emb.iao_fragmentation() as f:
-        f.add_all_atomic_fragments()
+        if not pinned_bath:
+            f.add_all_atomic_fragments()
+        else:
+            natm = mf.mol.natm
+            if len(pinned_bath) != natm:
+                raise ValueError(
+                    "ewf.pinned_bath has %d entries but the molecule has %d "
+                    "atoms; one [n_occ, n_vir] pair per atomic fragment is "
+                    "required." % (len(pinned_bath), natm))
+            for iatom, pair in enumerate(pinned_bath):
+                n_occ, n_vir = (int(x) for x in pair)
+                f.add_atomic_fragment([iatom], bath_options=dict(
+                    bathtype="mp2",
+                    truncation_occ="number", threshold_occ=n_occ,
+                    truncation_vir="number", threshold_vir=n_vir))
     return emb
 
 
@@ -1610,7 +1650,8 @@ def run_dump_worker(frag_idx, cfg):
 
     print(f"[dump frag={frag_idx}] vayesta.ewf.EWF(solver=DUMP, "
           f"bath_options=dict(threshold={threshold}))")
-    emb = make_emb_with_fragments(mf, threshold, cluster_h5)
+    emb = make_emb_with_fragments(mf, threshold, cluster_h5,
+                                  pinned_bath=cfg["ewf"].get("pinned_bath"))
 
     fragments = list(emb.fragments)
     if frag_idx >= len(fragments):
@@ -2615,14 +2656,15 @@ def assemble_cluster_energy(rdm_files, cluster_files, mol, mf, ovlp):
 # Driver
 # ---------------------------------------------------------------------------
 
-def discover_n_fragments(mf, threshold):
+def discover_n_fragments(mf, threshold, pinned_bath=None):
     """Build a transient EWF object (no kernel call) just to count fragments.
 
     The fragmentation must be performed explicitly here -- otherwise the
     fragment list is empty (Vayesta only auto-fragments inside ``kernel()``
     and we deliberately never call ``emb.kernel()`` in this workflow).
     """
-    emb = make_emb_with_fragments(mf, threshold, dumpfile="/dev/null")
+    emb = make_emb_with_fragments(mf, threshold, dumpfile="/dev/null",
+                                  pinned_bath=pinned_bath)
     return len(list(emb.fragments))
 
 
@@ -2733,7 +2775,8 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
     mol, mf = build_mol_and_mf(cfg)
     print(f"[{tag}] HF energy: {mf.e_tot:.10f}")
 
-    nfrag = discover_n_fragments(mf, threshold)
+    nfrag = discover_n_fragments(mf, threshold,
+                                 cfg["ewf"].get("pinned_bath"))
     print(f"[{tag}] Discovered {nfrag} fragment(s) at threshold={threshold}")
 
     # Gradient helpers (same hcore_generator + grad_nuc in both branches)
@@ -3215,7 +3258,8 @@ def run_circuit_analysis(cfg, config_path, script_path, no_slurm=False):
     mol, mf = build_mol_and_mf(cfg)
     print(f"[circuits] HF energy: {mf.e_tot:.10f}")
 
-    nfrag = discover_n_fragments(mf, threshold)
+    nfrag = discover_n_fragments(mf, threshold,
+                                 cfg["ewf"].get("pinned_bath"))
     print(f"[circuits] Discovered {nfrag} fragment(s) at threshold={threshold}")
 
     # DUMP every fragment (inline) so we know each cluster's norb and have the
