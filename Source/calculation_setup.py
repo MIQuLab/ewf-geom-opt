@@ -399,6 +399,13 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         else:
             a("  assembly: rdm_t_lambda      # density-assembly route"
               " (rdm_t_lambda / rdm_t / ci / projected_lambda / democratic)")
+            a("  # Convergence of the global Λ (Z-vector) solve of the")
+            a("  # 'rdm_t_lambda' route.  Commented out -> PySCF defaults")
+            a("  # (conv_tol_normt = 1.0e-5, max_cycle = 50).  A loosely")
+            a("  # converged Λ feeds the relaxed density, the energy and the")
+            a("  # gradient alike.  Ignored by every other assembly route.")
+            a("  # lambda_conv_tol_normt: 1.0e-9")
+            a("  # lambda_max_cycle: 200")
     else:
         a(f"  solver: {single_solver}"
           f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / SQD")

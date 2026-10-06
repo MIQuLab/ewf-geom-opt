@@ -168,6 +168,15 @@ def load_config(path):
     ewf.setdefault("pinned_bath", None)
     ewf.setdefault("solver", "FCI")
     ewf.setdefault("sci_select_cutoff", 1.0e-3)
+    # Convergence of the global Λ (Z-vector) solve used by the
+    # ``rdm_t_lambda`` assembly route.  ``solve_lambda`` is iterative and
+    # PySCF stops it at ``conv_tol_normt`` (default 1.0e-5) or after
+    # ``max_cycle`` iterations (default 50); a loosely converged Λ feeds the
+    # relaxed density that feeds both the energy and the gradient.  None (the
+    # default) keeps PySCF's own defaults, so absent these keys behaviour is
+    # unchanged.  Ignored by every other assembly route.
+    ewf.setdefault("lambda_conv_tol_normt", None)
+    ewf.setdefault("lambda_max_cycle", None)
     # ------------------------------------------------------------------
     # Per-fragment ("multi-solver") solver selection.
     #
@@ -2934,9 +2943,15 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
                     "name":          str(h5.attrs["name"]),
                 }
 
+        _lam_tol = cfg["ewf"].get("lambda_conv_tol_normt")
+        _lam_cyc = cfg["ewf"].get("lambda_max_cycle")
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_rdm_t_lambda(
-                rdm_files, mol, mf, ovlp, nocc_global, _read_rdm_file))
+                rdm_files, mol, mf, ovlp, nocc_global, _read_rdm_file,
+                lambda_conv_tol_normt=(None if _lam_tol is None
+                                       else float(_lam_tol)),
+                lambda_max_cycle=(None if _lam_cyc is None
+                                  else int(_lam_cyc))))
     elif assembly == "rdm_t":
         print(f"[{tag}] Assembly route: RDM-derived T-amplitudes "
               f"(T1_eff=dm1_ov, T2_eff=λ₂_oovv; recommended for SCI)")

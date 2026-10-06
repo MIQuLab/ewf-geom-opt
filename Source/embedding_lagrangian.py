@@ -137,7 +137,8 @@ def assemble_global_amplitudes(rdm_files, mf, ovlp, nocc_global,
     return t1_global, t2_global, energies, names
 
 
-def make_relaxed_global_rdms(mf, t1_global, t2_global, verbose=0):
+def make_relaxed_global_rdms(mf, t1_global, t2_global, verbose=0,
+                             conv_tol_normt=None, max_cycle=None):
     """Λ-relaxed (Z-vector) global density from assembled CCSD amplitudes.
 
     Treats ``(t1_global, t2_global)`` as the amplitudes of a single global
@@ -157,6 +158,12 @@ def make_relaxed_global_rdms(mf, t1_global, t2_global, verbose=0):
     * The returned ``dm2_cumulant`` excludes the separable (γ1⊗γ1) part
       (``with_dm1=False``), matching the convention expected by
       ``ewf_energy_from_rdms`` and ``build_ewf_grad``.
+    * ``solve_lambda`` is iterative: PySCF stops it when the Λ-residual norm
+      falls below ``mycc.conv_tol_normt`` (default ``1e-5``) or after
+      ``mycc.max_cycle`` iterations (default 50).  A loosely converged Λ feeds
+      the relaxed density that feeds the energy *and* the gradient, so both
+      are exposed here and the achieved convergence flag is logged rather than
+      silently discarded.
 
     Returns
     -------
@@ -174,6 +181,10 @@ def make_relaxed_global_rdms(mf, t1_global, t2_global, verbose=0):
     """
     mycc = cc.CCSD(mf)
     mycc.verbose = verbose
+    if conv_tol_normt is not None:
+        mycc.conv_tol_normt = float(conv_tol_normt)
+    if max_cycle is not None:
+        mycc.max_cycle = int(max_cycle)
     eris = mycc.ao2mo(mf.mo_coeff)
 
     t1 = np.asarray(t1_global)
@@ -185,6 +196,13 @@ def make_relaxed_global_rdms(mf, t1_global, t2_global, verbose=0):
 
     # Amplitude-response multipliers: solve Λ for the (fixed) amplitudes.
     l1, l2 = mycc.solve_lambda(t1, t2, eris=eris)
+    print(f"[lagrangian] Λ solve: conv_tol_normt={mycc.conv_tol_normt:.3e} "
+          f"max_cycle={mycc.max_cycle} converged={bool(mycc.converged_lambda)} "
+          f"|Λ1|={np.linalg.norm(l1):.10f} |Λ2|={np.linalg.norm(l2):.10f}")
+    if not mycc.converged_lambda:
+        print("[lagrangian] WARNING: the Λ equations did NOT converge; the "
+              "relaxed density, the energy and the gradient are all affected. "
+              "Raise ewf.lambda_max_cycle or loosen ewf.lambda_conv_tol_normt.")
 
     dm1 = _cc_ccsd_rdm.make_rdm1(
         mycc, t1, t2, l1, l2, with_frozen=False, ao_repr=False)
@@ -199,7 +217,9 @@ def make_relaxed_global_rdms(mf, t1_global, t2_global, verbose=0):
 
 
 def assemble_global_rdms_rdm_t_lambda(rdm_files, mol, mf, ovlp, nocc_global,
-                                      read_fn, verbose=0):
+                                      read_fn, verbose=0,
+                                      lambda_conv_tol_normt=None,
+                                      lambda_max_cycle=None):
     """Stage-1 Lagrangian assembly: ``rdm_t`` amplitudes + Λ-relaxed density.
 
     Drop-in replacement for ``assemble_global_rdms_from_rdm_t`` that returns
@@ -217,7 +237,9 @@ def assemble_global_rdms_rdm_t_lambda(rdm_files, mol, mf, ovlp, nocc_global,
         rdm_files, mf, ovlp, nocc_global, read_fn)
 
     dm1, dm2_cumulant, e_corr, _l1, _l2 = make_relaxed_global_rdms(
-        mf, t1_global, t2_global, verbose=verbose)
+        mf, t1_global, t2_global, verbose=verbose,
+        conv_tol_normt=lambda_conv_tol_normt,
+        max_cycle=lambda_max_cycle)
 
     print(f"[lagrangian] global effective correlation energy "
           f"(diagnostic): {e_corr:.10f} Ha")
