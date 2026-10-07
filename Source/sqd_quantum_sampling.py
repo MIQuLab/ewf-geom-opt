@@ -170,10 +170,118 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
         if verbose:
             verbose.info("  SQD: wrote circuit metadata (job %s) -> %s",
                          circuit_meta.get("job_id", "?"), meta_path)
+        # The QPU usage also goes in its own small file next to the sample.
+        # circuit_metadata.json carries the full ISA gate histogram and is
+        # awkward to harvest across hundreds of fragment-steps; this one holds
+        # the job id and the billed quantum seconds and nothing else, so a
+        # resource audit can glob for it directly.
+        usage = circuit_meta.get("qpu_usage")
+        if usage:
+            usage = dict(usage)
+            usage.setdefault("frag_idx", int(frag_idx))
+            usage.setdefault("backend", circuit_meta.get("backend"))
+            usage.setdefault("shots", circuit_meta.get("default_shots"))
+            usage.setdefault("norb", circuit_meta.get("norb"))
+            usage.setdefault("nelec", circuit_meta.get("nelec"))
+            with open(os.path.join(os.path.dirname(count_path),
+                                   "qpu_usage.json"), "w") as fh:
+                json.dump(usage, fh, indent=2, sort_keys=True)
     except OSError as exc:
         if verbose:
             verbose.info("  SQD: could not write circuit metadata: %s", exc)
     return count_path
+
+
+def collect_job_usage(job) -> dict:
+    """QPU usage and timing of a finished IBM Runtime job.
+
+    The quantity a referee means by "QPU time" is the billed *quantum*
+    seconds, which is the time the circuit occupied the processor; it is much
+    smaller than the wall time the job takes, most of which is queueing.  Both
+    are collected here, plus the job's timestamps, so queue time and execution
+    time can be separated afterwards.
+
+    ``qiskit-ibm-runtime`` has moved this between APIs across releases
+    (``job.usage()``, ``job.metrics()['usage']['quantum_seconds']``,
+    ``job.metrics()['usage']['seconds']``), so every known spelling is tried
+    and whatever is found is recorded.  A failure here must never sink a
+    sample that has already succeeded, so everything is best-effort and the
+    reason is recorded rather than raised.
+
+    Returns a dict that is always JSON-serialisable and always contains
+    ``job_id``; ``quantum_seconds`` is ``None`` when the installed client does
+    not expose it.
+    """
+    out = {"job_id": None, "quantum_seconds": None, "usage_seconds": None,
+           "timestamps": None, "wall_seconds": None, "queue_seconds": None}
+    try:
+        out["job_id"] = job.job_id()
+    except Exception as exc:                       # pragma: no cover
+        out["job_id_error"] = repr(exc)
+
+    # 1) the modern dedicated accessor
+    try:
+        u = job.usage()
+        if isinstance(u, dict):
+            out["usage_seconds"] = u.get("seconds")
+            out["quantum_seconds"] = u.get("quantum_seconds", u.get("seconds"))
+        elif u is not None:
+            out["usage_seconds"] = float(u)
+            out["quantum_seconds"] = float(u)
+    except Exception:
+        pass
+
+    # 2) metrics(), which also carries the timestamps
+    try:
+        m = job.metrics() or {}
+        out["metrics_raw"] = _jsonable(m)
+        usage = m.get("usage") or {}
+        if out["quantum_seconds"] is None:
+            out["quantum_seconds"] = usage.get("quantum_seconds",
+                                               usage.get("seconds"))
+        if out["usage_seconds"] is None:
+            out["usage_seconds"] = usage.get("seconds")
+        ts = m.get("timestamps") or {}
+        if ts:
+            out["timestamps"] = _jsonable(ts)
+            out["wall_seconds"] = _delta_seconds(ts.get("running"),
+                                                 ts.get("finished"))
+            out["queue_seconds"] = _delta_seconds(ts.get("created"),
+                                                  ts.get("running"))
+    except Exception as exc:                       # pragma: no cover
+        out["metrics_error"] = repr(exc)
+
+    for key in ("backend", "session_id", "tags"):
+        try:
+            val = getattr(job, key)
+            out[key] = _jsonable(val() if callable(val) else val)
+        except Exception:
+            pass
+    return out
+
+
+def _delta_seconds(t0, t1):
+    """Seconds between two ISO-8601 timestamps, or None if either is absent."""
+    if not t0 or not t1:
+        return None
+    import datetime as _dt
+    try:
+        a = _dt.datetime.fromisoformat(str(t0).replace("Z", "+00:00"))
+        b = _dt.datetime.fromisoformat(str(t1).replace("Z", "+00:00"))
+        return (b - a).total_seconds()
+    except (ValueError, TypeError):
+        return None
+
+
+def _jsonable(obj):
+    """Best-effort conversion of a runtime object into something json can dump."""
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_jsonable(v) for v in obj]
+    return str(obj)
 
 
 def run_qiskit_sampling(fcidump_path: str, backend_name: str,
@@ -417,6 +525,20 @@ def run_qiskit_sampling(fcidump_path: str, backend_name: str,
     result = job.result()
     pub_result = result[0]
     counts = pub_result.data.meas.get_counts()
+
+    # QPU usage.  Collected AFTER the result is in hand, because the usage and
+    # the completion timestamp are only final once the job has finished.
+    usage = collect_job_usage(job)
+    circuit_metadata["qpu_usage"] = usage
+    _qpu = usage.get("quantum_seconds")
+    _umsg = ("  SQD: job %s used %s s of QPU time (%s shots)"
+             % (job.job_id(),
+                ("%.3f" % _qpu) if _qpu is not None else "unrecorded",
+                default_shots))
+    if verbose:
+        verbose.info(_umsg)
+    else:
+        print(_umsg, flush=True)
     return dict(counts), circuit_metadata
 
 
