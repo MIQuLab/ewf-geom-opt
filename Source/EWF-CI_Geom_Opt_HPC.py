@@ -138,7 +138,7 @@ BOHR = _lib_param.BOHR  # Angstrom per Bohr
 #              SCI_SBD; needs the 'sqd:' config block + Slurm + the compiled
 #              SBD binary (plus optional Qiskit IBM Runtime credentials for
 #              on-the-fly sampling).
-_VALID_SOLVERS = ("FCI", "SCI", "SCI_SBD", "SQD")
+_VALID_SOLVERS = ("FCI", "SCI", "SCI_SBD", "FCI_SBD", "SQD")
 
 # Supported geometry-optimisation backends (``geomopt.optimizer``).
 _VALID_OPTIMIZERS = frozenset({"geometric", "berny", "sella"})
@@ -428,9 +428,11 @@ def load_config(path):
     else:
         used_solvers = ({ms["high_accuracy_solver"], ms["approximate_solver"]}
                         if ms["enabled"] else {solver})
-    if "SCI_SBD" in used_solvers and not cfg.get("sbd"):
+    _sbd_solvers = {"SCI_SBD", "FCI_SBD"} & set(used_solvers)
+    if _sbd_solvers and not cfg.get("sbd"):
         raise ValueError(
-            "a cluster solver is set to 'SCI_SBD' but config.yaml has no "
+            "a cluster solver is set to '%s' but config.yaml has no "
+            % "/".join(sorted(_sbd_solvers)) +
             "'sbd:' block.  Add the SBD executable paths, proc_type, "
             "performance options, and the per-cycle 'sbd.slurm' resources "
             "(see the config.yaml template / "
@@ -1065,6 +1067,57 @@ def solve_cluster_sci_sbd(cluster, cfg, sbd_workdir, conv_tol=1e-9,
     return e, np.asarray(dm1), np.asarray(dm2), civec
 
 
+def solve_cluster_fci_sbd(cluster, cfg, sbd_workdir, need_rdm=True,
+                          need_civec=False):
+    """Solve the cluster Hamiltonian with the ``FCI_SBD`` solver: the COMPLETE
+    determinant space, diagonalized by the external **SBD** binary.
+
+    FCI_SBD is to FCI what SCI_SBD is to SCI -- same space, different
+    eigensolver.  The space here is every determinant of the right electron
+    count, so there is no selection step and no growth loop: one SBD Slurm job
+    delivers the energy and, with ``--rdm 1``, the 1-/2-RDMs.
+
+    Two reasons to prefer it over :func:`solve_cluster_fci` on large clusters:
+
+    * **Memory.**  PySCF's Davidson holds its whole subspace on one node.  A
+      17-orbital, 9+9-electron cluster is ≈ 5.9e8 determinants at 4.4 GB per
+      vector, so a ``max_space=12`` Davidson needs of order 100 GB on a single
+      machine.  SBD spreads the vectors over MPI ranks and a GPU.
+    * **Smoothness.**  The space is complete, so there is no
+      determinant-selection error and none of the step-to-step reselection
+      discontinuity that SCI and SQD carry.  That is what makes a
+      finite-difference gradient check meaningful.
+
+    It is not automatically *faster* than PySCF FCI -- at these dimensions the
+    two are within a small factor on comparable hardware -- so the choice is
+    driven by cluster size and by whether a selection-free energy is required.
+
+    Returns ``(E, dm1, dm2, civec)`` matching :func:`solve_cluster_fci`.
+    ``civec`` is ``None`` unless ``need_civec``: SBD writes the CI vector as
+    text, which is tens of GB at full-CI dimensions, and only the
+    CI-coefficient assembly routes ever read it.
+    """
+    _here = os.path.dirname(os.path.abspath(__file__))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    from external_sci import fci_sbd_solve
+
+    sbd_cfg = cfg.get("sbd")
+    if not sbd_cfg:
+        raise ValueError(
+            "cluster solver 'FCI_SBD' was requested but config.yaml has no "
+            "'sbd:' block (SBD executable paths, proc_type, and the "
+            "'sbd.slurm' resources).  Add one (see config.yaml template).")
+
+    nelec = (cluster.nocc, cluster.nocc)
+    # ecore=0: as in solve_cluster_fci, the EWF cluster energy is the bare
+    # eigenvalue of (heff, eris); no core energy is added downstream.
+    return fci_sbd_solve(
+        cluster.heff, cluster.eris, cluster.norb, nelec,
+        sbd_cfg, sbd_workdir, ecore=0.0,
+        need_rdm=need_rdm, need_civec=need_civec)
+
+
 def solve_cluster_sqd(cluster, cfg, sqd_workdir, cluster_h5_path=None,
                       frag_idx=0, need_rdm=True):
     """Solve the cluster Hamiltonian with the ``SQD`` solver: quantum
@@ -1153,8 +1206,14 @@ def method_label_for_cfg(cfg):
 
 
 def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
-                  cluster_h5_path=None, need_rdm=True):
-    """Dispatch to FCI, SCI, SCI_SBD or SQD for one cluster.
+                  cluster_h5_path=None, need_rdm=True, need_civec=None):
+    """Dispatch to FCI, SCI, SCI_SBD, FCI_SBD or SQD for one cluster.
+
+    ``need_civec`` controls whether the CI vector is produced.  ``None`` (the
+    default) means "whatever ``need_rdm`` does not cover", i.e. the
+    CI-coefficient assembly routes.  Only FCI_SBD acts on it: the other
+    solvers return their CI vector as a by-product, whereas SBD would have to
+    dump a full-CI vector as text to supply one.
 
     ``solver`` selects the cluster solver explicitly; when ``None`` it is
     resolved from the cluster size via :func:`choose_solver_for_cluster`
@@ -1197,6 +1256,16 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
             conv_tol=float(cfg["calculation"]["fci_conv_tol"]),
             select_cutoff=float(cfg["ewf"]["sci_select_cutoff"]),
             need_rdm=need_rdm,
+        )
+    elif solver == "FCI_SBD":
+        if workdir is None:
+            workdir = cfg["calculation"]["workdir"]
+        sbd_workdir = os.path.join(
+            workdir, f"fci_sbd_scratch_{(frag_idx if frag_idx is not None else 0):03d}")
+        return solve_cluster_fci_sbd(
+            cluster, cfg, sbd_workdir,
+            need_rdm=need_rdm,
+            need_civec=(not need_rdm) if need_civec is None else need_civec,
         )
     elif solver == "SQD":
         if workdir is None:
@@ -1871,6 +1940,10 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
               f"with SCI_SBD (PySCF SCI growth + external SBD eigensolver; "
               f"select_cutoff={sci_cutoff}; submits per-cycle Slurm jobs)")
+    elif solver == "FCI_SBD":
+        print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
+              f"with FCI_SBD (complete determinant space, external SBD "
+              f"eigensolver; no determinant selection; one Slurm job)")
     else:  # SQD
         sqd_cfg = cfg.get("sqd", {}) or {}
         print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
@@ -3108,6 +3181,9 @@ def _solve_full_system(cfg, tag):
         print(f"[{tag}] Solving full system with SCI_SBD (PySCF SCI growth + "
               f"external SBD eigensolver; select_cutoff={sci_cutoff}; submits "
               f"per-cycle Slurm jobs)")
+    elif solver == "FCI_SBD":
+        print(f"[{tag}] Solving full system with FCI_SBD (complete determinant "
+              f"space, external SBD eigensolver; no determinant selection)")
     else:  # SQD
         sqd_cfg = cfg.get("sqd", {}) or {}
         print(f"[{tag}] Solving full system with SQD (quantum sampling + SBD "

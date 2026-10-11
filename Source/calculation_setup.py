@@ -301,9 +301,13 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     and no ``sbd:`` block / processor choice is needed.
 
     ``external`` is one of ``'NONE'`` (no external eigensolver -- pure
-    FCI/SCI), ``'SCI_SBD'`` (PySCF SCI growth + external SBD eigensolver), or
+    FCI/SCI), ``'SCI_SBD'`` (PySCF SCI growth + external SBD eigensolver),
+    ``'FCI_SBD'`` (the COMPLETE determinant space, diagonalized by SBD: no
+    determinant selection, so no selection error and no step-to-step
+    reselection -- use it when the energy must be a smooth function of the
+    geometry, e.g. for finite-difference gradient checks), or
     ``'SQD'`` (sample-based quantum diagonalization built on top of SBD).
-    Both ``'SCI_SBD'`` and ``'SQD'`` emit an SBD-style sub-job block
+    ``'SCI_SBD'``, ``'FCI_SBD'`` and ``'SQD'`` all emit an SBD-style sub-job block
     (``sbd:`` or ``sqd:`` respectively) sharing the same processor / GPU /
     Slurm machinery.
 
@@ -320,20 +324,20 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     gpu = (proc == "GPU")
     # Circuit-size analysis never runs SBD, so suppress the sbd:/proc machinery
     # even though 'circuits' rides on the SQD (LUCJ) sampling code.
-    sbd = (external == "SCI_SBD") and not circuits
+    sbd = (external in ("SCI_SBD", "FCI_SBD")) and not circuits
     sqd = (external == "SQD")
 
     # --- solver selection from the answers ---------------------------------
     plain_solver = "SCI"                       # non-SBD default (FCI / SCI)
     if sbd:
-        external_solver = "SCI_SBD"
+        external_solver = external          # SCI_SBD or FCI_SBD
     elif sqd:
         external_solver = "SQD"
     else:
         external_solver = plain_solver
     if multi:
         high_solver = "FCI"
-        approx_solver = external_solver        # SCI / SCI_SBD / SQD
+        approx_solver = external_solver        # SCI / SCI_SBD / FCI_SBD / SQD
         single_solver = plain_solver           # ewf.solver (ignored in multi)
     else:
         single_solver = external_solver
