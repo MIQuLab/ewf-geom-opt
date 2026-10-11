@@ -66,6 +66,7 @@ import numpy
 from pyscf import ao2mo, tools
 from pyscf.fci import selected_ci
 from pyscf.fci import direct_spin1
+from pyscf.fci import cistring
 
 import sbd_wrapper
 
@@ -249,7 +250,7 @@ def _auto_comm_sizes(cfg, nranks, n_alpha, n_beta):
 
 
 def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path, rdm=0,
-                       savename=None, loadname=None):
+                       savename=None, loadname=None, dump_wf=True):
     '''Assemble the SBD ``mpirun`` command, mirroring ``solver.py``.
 
     ``savename`` / ``loadname`` wire up SBD's binary wavefunction restart
@@ -375,7 +376,15 @@ def _build_sbd_command(cfg, fcidump_path, adet_path, bdet_path, rdm=0,
         f"--init {cfg['sbd_init']} --shuffle {cfg['sbd_shuffle']} "
         f"--carryover_ratio {cfg['sbd_carryover_ratio']}"
     )
-    base += f" --rdm {int(rdm)} --dump_matrix_form_wf matrixformwf.txt"
+    base += f" --rdm {int(rdm)}"
+    # The CI vector is dumped as TEXT, so its size grows with the determinant
+    # space: ~0.4 GB at 7e6 determinants, which extrapolates to tens of GB for
+    # a full-CI space.  The selected-CI path needs it (PySCF owns the next
+    # growth cycle and must see the coefficients); the FCI-SBD path does not
+    # when only the energy and the RDMs are wanted, so it is made optional
+    # rather than always paid for.
+    if dump_wf:
+        base += " --dump_matrix_form_wf matrixformwf.txt"
     if savename:
         base += f" --savename {savename}"
     if loadname:
@@ -820,6 +829,127 @@ def sbd_eigensolver(op, x0, precond, nroots=1, ndim=None, myci=None,
                      myci._sbd_iter, na, nb, ndim, e_elec, ndav, wall)
 
     return [e_elec], [numpy.ascontiguousarray(c)]
+
+
+def fci_sbd_solve(h1e, eri, norb, nelec, cfg, workdir, ecore=0.0,
+                  need_rdm=True, need_civec=False, verbose=None):
+    '''Exact diagonalization of a cluster Hamiltonian by the external SBD
+    binary, in the COMPLETE determinant space.
+
+    FCI-SBD stands to FCI as SCI-SBD stands to SCI: the determinant space and
+    the Hamiltonian are PySCF's, the eigensolver is SBD.  Here the space is
+    simply every string of the right electron count, so there is no selection
+    and no growth loop -- a single SBD job does the whole job.
+
+    Why it exists.  PySCF's own Davidson holds the full subspace on one node:
+    a 17-orbital, 9+9-electron cluster is 5.9e8 determinants, 4.4 GB per
+    vector, and a ``max_space=12`` Davidson therefore needs of order 100 GB on
+    a single machine.  SBD distributes the vectors over MPI ranks and a GPU,
+    which is what makes the same diagonalization routine.  Because the space
+    is complete, the result carries no determinant-selection error and --
+    unlike SCI and SQD -- it is a smooth function of the geometry, which is
+    what a finite-difference gradient check requires.
+
+    Parameters
+    ----------
+    h1e, eri : ndarray
+        Cluster one- and two-electron integrals (``eri`` in any PySCF
+        symmetry; restored to 8-fold before the FCIDUMP is written).
+    norb : int
+    nelec : int or (int, int)
+    cfg : dict
+        The ``sbd:`` block of ``config.yaml``.
+    workdir : str
+        Scratch directory for this fragment's FCIDUMP, determinant lists and
+        SBD output.
+    ecore : float
+        Core energy written into the FCIDUMP.  SBD reports ``E_elec + ecore``;
+        the electronic part alone is returned, matching ``solve_cluster_fci``.
+    need_rdm : bool
+        Request ``--rdm 1`` so SBD emits the spin-summed 1-/2-RDMs.
+    need_civec : bool
+        Also dump and parse the CI vector.  Off by default: SBD writes it as
+        text, which is tens of GB at full-CI dimensions, and only the
+        CI-amplitude assembly routes ever read it.
+
+    Returns
+    -------
+    (e_elec, dm1, dm2, civec)
+        ``dm1``/``dm2`` are ``None`` unless ``need_rdm``; ``civec`` is ``None``
+        unless ``need_civec``, and otherwise a dense ``(na, nb)`` array
+        carrying ``._strs``.
+    '''
+    if cfg is None:
+        raise ValueError(
+            "cluster solver 'FCI_SBD' was requested but no 'sbd:' config "
+            "block was supplied (SBD executable paths, proc_type, and the "
+            "'sbd.slurm' resources).")
+    if isinstance(nelec, (int, numpy.integer)):
+        nelecb = nelec // 2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    os.makedirs(workdir, exist_ok=True)
+
+    # The complete space: every string of the right electron count.  These are
+    # the same strings PySCF's direct_spin1 would enumerate, in the same order,
+    # so the RDMs come back in PySCF's convention.
+    strsa = cistring.make_strings(range(norb), neleca)
+    strsb = (strsa if neleca == nelecb
+             else cistring.make_strings(range(norb), nelecb))
+    na, nb = len(strsa), len(strsb)
+    ndet = na * nb
+
+    fcidump_path = os.path.join(workdir, 'fci_dump.txt')
+    tools.fcidump.from_integrals(
+        fcidump_path, h1e, ao2mo.restore(8, numpy.asarray(eri), norb),
+        norb, (neleca, nelecb), nuc=ecore, ms=abs(neleca - nelecb))
+
+    sbd_wrapper.write_into_dets(workdir, sbd_wrapper.gen_dets(strsa, norb),
+                                'Alpha')
+    sbd_wrapper.write_into_dets(workdir, sbd_wrapper.gen_dets(strsb, norb),
+                                'Beta')
+
+    cmd = _build_sbd_command(
+        cfg, fcidump_path,
+        os.path.join(workdir, 'AlphaDets.txt'),
+        os.path.join(workdir, 'BetaDets.txt'),
+        rdm=1 if need_rdm else 0, dump_wf=bool(need_civec))
+
+    t0 = time.time()
+    log_path = _submit_sbd_and_wait(
+        workdir, cmd, cfg, verbose=verbose,
+        label='SBD full-CI (dim %d x %d = %d)' % (na, nb, ndet))
+    wall = time.time() - t0
+
+    e_tot = sbd_wrapper.extract_energy(log_path)
+    if e_tot is None:
+        raise RuntimeError("SBD did not report an energy; see %s" % log_path)
+    e_elec = e_tot - ecore
+
+    dm1 = dm2 = None
+    if need_rdm:
+        dm1, dm2 = sbd_wrapper.get_rdm1_and_rdm2(workdir)
+        dm1 = numpy.asarray(dm1)
+        dm2 = numpy.asarray(dm2)
+
+    civec = None
+    if need_civec:
+        C = _matrixform_to_dense(workdir, strsa, strsb)
+        nrm = numpy.linalg.norm(C)
+        if nrm > 0:
+            C = C / nrm
+        civec = selected_ci._as_SCIvector(numpy.ascontiguousarray(C),
+                                          (strsa, strsb))
+
+    if verbose:
+        verbose.info('  FCI-SBD: dim %d x %d = %d  E(elec) = %.12g  '
+                     'wall = %.1f s', na, nb, ndet, e_elec, wall)
+    else:
+        print('[FCI_SBD] dim %d x %d = %d  E(elec) = %.12f  wall = %.1f s'
+              % (na, nb, ndet, e_elec, wall), flush=True)
+    return e_elec, dm1, dm2, civec
 
 
 class ExternalEigSelectedCI(selected_ci.SelectedCI):
