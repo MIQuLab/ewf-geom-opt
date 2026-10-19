@@ -60,7 +60,11 @@ import glob
 import os
 import shlex
 
-import resource_probe
+try:
+    import resource_probe
+except ImportError:                     # optional: a run folder assembled
+    resource_probe = None               # before this module existed still runs,
+                                        # it just records no resource metrics
 import subprocess
 import sys
 import time
@@ -565,7 +569,7 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
     # directory instead of the job's own.  The block takes an absolute path and
     # installs no EXIT trap; see Source/resource_probe.py.
     probe_block = ""
-    if resource_probe.enabled(cfg):
+    if resource_probe is not None and resource_probe.enabled(cfg):
         probe_block = resource_probe.probe_block(
             os.path.join(workdir, "resource_probe.jsonl"),
             gpu=(int(cfg.get("proc_type", 1)) == 1),
@@ -740,7 +744,8 @@ def _submit_sbd_and_wait(workdir, cmd, cfg, verbose=None, label='SBD'):
             # beside the log, so the measurement is available without having
             # to parse the raw sample stream later.  Never fatal.
             try:
-                rec = resource_probe.summarize(workdir, label=label)
+                rec = (resource_probe.summarize(workdir, label=label)
+                       if resource_probe is not None else None)
                 if rec and verbose:
                     line = resource_probe.format_peak(rec)
                     if line:

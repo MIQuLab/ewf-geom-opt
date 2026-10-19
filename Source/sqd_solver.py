@@ -53,7 +53,11 @@ import os
 import random
 import shlex
 
-import resource_probe
+try:
+    import resource_probe
+except ImportError:                     # optional: a run folder assembled
+    resource_probe = None               # before this module existed still runs,
+                                        # it just records no resource metrics
 import shutil
 import subprocess
 import sys
@@ -375,7 +379,7 @@ def _write_sqd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
     # Source/resource_probe.py for why that matters and why this installs no
     # EXIT trap of its own.
     probe_block = ""
-    if resource_probe.enabled(cfg):
+    if resource_probe is not None and resource_probe.enabled(cfg):
         probe_block = resource_probe.probe_block(
             os.path.join(workdir, "resource_probe.jsonl"),
             gpu=(int(cfg.get("proc_type", 1)) == 1),
@@ -532,7 +536,8 @@ def _submit_one_sbd_job(cfg, workdir, strsa, strsb, norb, with_rdm,
         if status.startswith("DONE"):
             # Peaks from this job's resource samples, beside the log.
             try:
-                _rp = resource_probe.summarize(workdir, label=job_label)
+                _rp = (resource_probe.summarize(workdir, label=job_label)
+                           if resource_probe is not None else None)
                 if _rp and verbose:
                     _l = resource_probe.format_peak(_rp)
                     if _l:
