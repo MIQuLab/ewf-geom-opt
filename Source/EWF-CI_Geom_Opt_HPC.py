@@ -78,6 +78,8 @@ import json
 import os
 import random
 import shlex
+
+import resource_probe
 import subprocess
 import sys
 import time
@@ -1455,6 +1457,17 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
     # The job manages its own status file so the driver never has to
     # call squeue/sacct.  An EXIT trap captures both successful and
     # failed exits (including SIGTERM from `scancel`).
+    # Peak host memory for this fragment job.  These run PySCF (FCI / SCI) on
+    # CPU, so no device sampling -- but they are where the large-cluster memory
+    # questions arise, and the measurement costs nothing.  Output is named per
+    # fragment, since this script cd's to the run directory and several
+    # fragments run concurrently.
+    probe_block = ""
+    if resource_probe.enabled(cfg.get("slurm", {})):
+        probe_block = resource_probe.probe_block(
+            os.path.join(stage_dir, "frag_%s.resource.jsonl" % tag),
+            gpu=False, **resource_probe.schedule(cfg.get("slurm", {})))
+
     body = (
         f'set -u\n'
         f'STATUS_FILE={shlex.quote(status)}\n'
@@ -1470,6 +1483,7 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
         f'echo "RUNNING ${{SLURM_JOB_ID:-?}} $(date -u +%FT%TZ)" > "$STATUS_FILE"\n'
         f'cd "{os.path.abspath(os.getcwd())}"\n'
         f'{preamble_block}'
+        f'{probe_block}'
         f'export OMP_NUM_THREADS=${{SLURM_NTASKS:-1}}\n'
         f'export MKL_NUM_THREADS=${{SLURM_NTASKS:-1}}\n'
         f'{solver_comment}'

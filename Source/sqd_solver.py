@@ -52,6 +52,8 @@ import json
 import os
 import random
 import shlex
+
+import resource_probe
 import shutil
 import subprocess
 import sys
@@ -368,6 +370,18 @@ def _write_sqd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
         f"fi\n"
     )
 
+    # Peak device/host memory for this job.  Injected after the `cd` rather
+    # than through sqd.slurm.preamble, which is emitted before it; see
+    # Source/resource_probe.py for why that matters and why this installs no
+    # EXIT trap of its own.
+    probe_block = ""
+    if resource_probe.enabled(cfg):
+        probe_block = resource_probe.probe_block(
+            os.path.join(workdir, "resource_probe.jsonl"),
+            gpu=(int(cfg.get("proc_type", 1)) == 1),
+            gpu_processes=resource_probe.gpu_processes(cfg),
+            **resource_probe.schedule(cfg))
+
     body = (
         "set -u\n"
         f"STATUS_FILE={shlex.quote(status_path)}\n"
@@ -384,6 +398,7 @@ def _write_sqd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
         f"{preamble_block}"
         f"{launcher_guard}"
         f"cd {shlex.quote(workdir)}\n"
+        f"{probe_block}"
         f"{run_cmd} > {shlex.quote(log_path)} 2>&1\n"
     )
 
@@ -515,6 +530,15 @@ def _submit_one_sbd_job(cfg, workdir, strsa, strsb, norb, with_rdm,
         # parallel by calling this in a thread; here we just block).
         (_, status), = _wait_for_slurm_jobs([status_path], poll_interval=poll)
         if status.startswith("DONE"):
+            # Peaks from this job's resource samples, beside the log.
+            try:
+                _rp = resource_probe.summarize(workdir, label=job_label)
+                if _rp and verbose:
+                    _l = resource_probe.format_peak(_rp)
+                    if _l:
+                        print('  %s: %s' % (job_label, _l), flush=True)
+            except Exception:
+                pass
             return log_path
 
         bad_node = ""
