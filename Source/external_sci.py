@@ -59,6 +59,8 @@ Real SBD run on HPC::
 import glob
 import os
 import shlex
+
+import resource_probe
 import subprocess
 import sys
 import time
@@ -557,6 +559,19 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
         f"fi\n"
     )
 
+    # Peak device/host memory for this job.  Injected here rather than through
+    # sbd.slurm.preamble because the preamble is emitted BEFORE the `cd` above,
+    # so a sampler there would write every job's samples into the submission
+    # directory instead of the job's own.  The block takes an absolute path and
+    # installs no EXIT trap; see Source/resource_probe.py.
+    probe_block = ""
+    if resource_probe.enabled(cfg):
+        probe_block = resource_probe.probe_block(
+            os.path.join(workdir, "resource_probe.jsonl"),
+            gpu=(int(cfg.get("proc_type", 1)) == 1),
+            gpu_processes=resource_probe.gpu_processes(cfg),
+            **resource_probe.schedule(cfg))
+
     # The job manages its own status file (DONE / FAILED <rc>) via an EXIT trap
     # so the driver never has to query the Slurm controller.
     body = (
@@ -575,6 +590,7 @@ def _write_sbd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
         f"{preamble_block}"
         f"{launcher_guard}"
         f"cd {shlex.quote(workdir)}\n"
+        f"{probe_block}"
         f"{run_cmd} > {shlex.quote(log_path)} 2>&1\n"
     )
 
@@ -720,6 +736,17 @@ def _submit_sbd_and_wait(workdir, cmd, cfg, verbose=None, label='SBD'):
         status = _wait_for_slurm_job(status_path, poll_interval=poll,
                                      log_path=log_path)
         if status.startswith('DONE'):
+            # Reduce this job's resource samples to peaks and record them
+            # beside the log, so the measurement is available without having
+            # to parse the raw sample stream later.  Never fatal.
+            try:
+                rec = resource_probe.summarize(workdir, label=label)
+                if rec and verbose:
+                    line = resource_probe.format_peak(rec)
+                    if line:
+                        print('  %s: %s' % (label, line), flush=True)
+            except Exception:
+                pass
             return log_path
 
         # FAILED: was it the mpirun-missing (bad node) case?  Resubmit elsewhere.
