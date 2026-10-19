@@ -79,7 +79,11 @@ import os
 import random
 import shlex
 
-import resource_probe
+try:
+    import resource_probe
+except ImportError:                     # optional: a run folder assembled
+    resource_probe = None               # before this module existed still runs,
+                                        # it just records no resource metrics
 import subprocess
 import sys
 import time
@@ -1463,7 +1467,7 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
     # fragment, since this script cd's to the run directory and several
     # fragments run concurrently.
     probe_block = ""
-    if resource_probe.enabled(cfg.get("slurm", {})):
+    if resource_probe is not None and resource_probe.enabled(cfg.get("slurm", {})):
         probe_block = resource_probe.probe_block(
             os.path.join(stage_dir, "frag_%s.resource.jsonl" % tag),
             gpu=False, **resource_probe.schedule(cfg.get("slurm", {})))
