@@ -93,7 +93,10 @@ def sqd_parallel_layout(cfg: dict) -> dict:
         ngpu = int(cfg["gpus_per_batch"])
         if ngpu < 1:
             raise ValueError("sqd.gpus_per_batch must be >= 1 for proc_type=1")
-        cpus_per_gpu = int(cfg.get("cpus_per_gpu", 16))
+        # 8, matching external_sci: these two defaults disagreed (8 vs 16),
+        # so a config omitting the key got a different rank count depending
+        # on which solver read it.
+        cpus_per_gpu = int(cfg.get("cpus_per_gpu", 8))
         if cpus_per_gpu < 1:
             raise ValueError(
                 "sqd.cpus_per_gpu must be >= 1 (SBD GPU build needs support "
