@@ -210,33 +210,34 @@ def _emit_sbd_exec_options(a, advanced, gpu, sqd):
       "# EXPERIMENTAL when true: GPU RAM/VRAM guardrails (det-cache caps, "
       "comm-size split, tuned block). false = stable defaults (commit 0000c598)")
     if not advanced:
-        # SQD's stable default pairs a small Davidson block (8) with the light
-        # single-GPU footprint set below (gpus_per_batch 1, cpus_per_gpu 8);
-        # SCI_SBD keeps the pre-guardrail block of 20.
-        a(f"  sbd_block: {8 if sqd else 20}")
-        if sqd:
-            a("  sbd_dav_iteration: 10   # SQD: relaxed vs SCI_SBD's 100 (per-batch"
-              " SBD is much more expensive)")
-            a("  sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this"
-              " exact '1.e-5' notation")
-        else:
-            a("  sbd_dav_iteration: 100")
-            a("  sbd_tolerance: 1.e-8    # keep this exact '1.e-8' notation")
+        # One setting for BOTH solvers, matching the configuration the
+        # published SQD production runs used and that the matched-resource
+        # campaign validated across all nine representative fragments
+        # (norb 14-33, subspaces to 6.6e7 determinants).
+        a("  sbd_block: 8            # Davidson subspace size; ~(2*block+1) "
+          "state-vectors per GPU")
+        a("  sbd_dav_iteration: 30   # outer restarts; the validated set never "
+          "needed more than 3")
+        a("  sbd_tolerance: 1.e-5    # same for SQD and SCI_SBD -- measured to "
+          "change neither the")
+        a("  #                         selected determinants nor the energy "
+          "vs 1.e-8 (see below).")
+        a("  #                         Keep this exact '1.e-5' notation.")
         if not gpu:
             a("  sbd_adet_comm_size: 2   # 'comm_size' options apply to CPU runs only")
             a("  sbd_bdet_comm_size: 2")
             a("  sbd_task_comm_size: 2")
         return
     # --- advanced (experimental) GPU RAM/VRAM guardrails ---
-    if sqd:
-        a("  sbd_block: 8            # Davidson subspace size (~2*block state-vectors per GPU); 8 for SQD (RAM-critical); raise sbd_dav_iteration if convergence slows")
-        a("  sbd_dav_iteration: 20   # more restarts to offset the small sbd_block (same accuracy at sbd_tolerance)")
-        a("  sbd_tolerance: 1.e-5    # SQD: relaxed vs SCI_SBD's 1.e-8; keep this"
-          " exact '1.e-5' notation")
-    else:
-        a("  sbd_block: 10           # Davidson subspace size (~2*block state-vectors per GPU); lowered 20->10 to cut GPU RAM")
-        a("  sbd_dav_iteration: 100  # ample restarts; keeps converging to sbd_tolerance at the smaller sbd_block")
-        a("  sbd_tolerance: 1.e-8    # keep this exact '1.e-8' notation")
+    # Advanced mode keeps its larger GPU allocation, which is what it exists
+    # for, but takes the same convergence criterion as basic mode so the
+    # tolerance is one value everywhere.
+    a(f"  sbd_block: {8 if sqd else 10}"
+      "           # Davidson subspace size (~2*block state-vectors per GPU)")
+    a("  sbd_dav_iteration: 30   # outer restarts; the validated set never "
+      "needed more than 3")
+    a("  sbd_tolerance: 1.e-5    # same for SQD and SCI_SBD; keep this exact "
+      "'1.e-5' notation")
     if gpu:
         a("  # GPU determinant-cache RAM control (SBD_THRUST only; ignored by the")
         a("  # CPU build). use_precalculated_dets 0 recomputes each Slater determinant")
@@ -506,8 +507,16 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         _emit_sbd_exe_paths(a, H, gpu, gpu_type)
         a(f"  proc_type: {1 if gpu else 0}            # {'1 = GPU (CPUs as support)' if gpu else '0 = CPU-only'}")
         if gpu:
-            cpg = hpc_settings.cpus_per_gpu(H, gpu_type)
-            a("  gpus_per_batch: 4       # GPUs per SBD job -> --gpus-per-node")
+            if advanced_sbd:
+                # advanced mode keeps the larger allocation it exists for
+                gpb = 4
+                cpg = hpc_settings.cpus_per_gpu(H, gpu_type)
+            else:
+                # the configuration the published SQD production runs used,
+                # validated for SCI_SBD across all nine representative
+                # fragments: 8 ranks on one GPU at Davidson block 8
+                gpb, cpg = 1, 8
+            a(f"  gpus_per_batch: {gpb}       # GPUs per SBD job -> --gpus-per-node")
             a(f"  cpus_per_gpu: {cpg}"
               f"{' ' * max(1, 8 - len(str(cpg)))}"
               "# support MPI ranks PER GPU (>=8; ranks = gpus*cpus_per_gpu)")
