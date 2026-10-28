@@ -1525,8 +1525,14 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
                 sqd_cfg=sqd_cfg, frag_idx=frag_idx, verbose=verbose,
                 restart=restart)
         else:
+            # A pre-collected count_dict (sqd.count_dict_path /
+            # per_fragment_samples), or a restart that will reuse the
+            # count_dict already in sqd_workdir.  Either way no circuit is
+            # built, so there is nothing to synthesise a cluster.h5 for: the
+            # FCIDUMP written just above is the cluster Hamiltonian, and
+            # cluster_h5_path=None tells the sampler to use it as-is.
             sqd_quantum_sampling.provision_quantum_sample(
-                cluster_h5_path=fcidump_path,  # not actually read in this branch
+                cluster_h5_path=None,
                 workdir=sqd_workdir, sqd_cfg=sqd_cfg, frag_idx=frag_idx,
                 verbose=verbose, restart=restart)
 

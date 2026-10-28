@@ -62,7 +62,23 @@ Rather than permute your orbitals behind your back (which would also scramble th
 
 `ORBSYM` / `ISYM` are parsed but **ignored**: the solvers here do not use point-group symmetry, so the result is the lowest state of the full space regardless of the dump's `ISYM`.
 
-The reader, its refusals and the diagnostic live in `Source/fcidump_input.py`; that file must be present in the run folder alongside the driver. `SQD` from a FCIDUMP is accepted but **untested** — it builds its LUCJ ansatz from a synthetic cluster dump written out of the file's integrals, which needs no molecule, but the combination has not been validated. Cross-check it against `FCI` or `FCI_SBD` on a small dump first.
+The reader, its refusals and the diagnostic live in `Source/fcidump_input.py`; that file must be present in the run folder alongside the driver.
+
+#### SQD from a FCIDUMP, and reusing an existing `count_dict.txt`
+
+`SQD` works from a FCIDUMP, including both ways of supplying quantum samples without sampling again:
+
+```yaml
+sqd:
+  sample_on_the_fly: false
+  count_dict_path: /path/to/count_dict.txt   # a sample you already have
+```
+
+and, to resume a run whose sampling already finished, `calculation.restart: true` (or `--restart`), which reuses the `count_dict.txt` already sitting in `<workdir>/sqd_scratch_000/` rather than drawing a fresh sample. In that case no `count_dict_path` is needed at all.
+
+Both paths previously failed for *any* cluster without a Vayesta HDF5 dump — the unfragmented modes as well as `fcidump` — because the sampler always tried to convert a cluster dump that does not exist in those modes. It now accepts the FCIDUMP the solver has already written from the cluster integrals, and refuses with a clear message if neither a dump nor a FCIDUMP is available.
+
+What is **not** yet validated from a FCIDUMP is the rest of the SQD pipeline: the configuration-recovery loop, its per-batch SBD sub-jobs, and the final ext-SQD step. The sampling front end is exercised; the solve is not. Cross-check against `FCI` or `FCI_SBD` on a small dump before trusting an SQD number from this input.
 
 ---
 

@@ -432,10 +432,11 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         if not sqd:
             a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI)")
         if from_fcidump and sqd:
-            a("  # NOTE: SQD from a FCIDUMP is UNTESTED.  It builds its LUCJ ansatz")
-            a("  # from a synthetic cluster dump written out of the file's integrals,")
-            a("  # which needs no molecule, but the combination has not been")
-            a("  # validated -- cross-check against FCI or FCI_SBD on a small dump.")
+            a("  # NOTE: SQD from a FCIDUMP is only PARTLY validated.  The sampling")
+            a("  # front end works -- a pre-collected sqd.count_dict_path, and reuse")
+            a("  # of an existing count_dict.txt under calculation.restart -- but the")
+            a("  # recovery loop and the ext-SQD SBD jobs have not been run from this")
+            a("  # input.  Cross-check against FCI or FCI_SBD on a small dump.")
     a("")
 
     # --- calculation block --------------------------------------------------

@@ -3382,11 +3382,16 @@ def _run_fcidump_cycle(cfg, tag="driver", compute_gradient=False):
     print(f"[{tag}] FCIDUMP calculation -- no geometry, no SCF")
     cluster, meta = fcidump_input.build_cluster(calc["fcidump_file"])
     if solver == "SQD":
-        print(f"[{tag}] NOTE: SQD from a FCIDUMP is UNTESTED.  The solver "
-              f"builds its LUCJ ansatz from a synthetic cluster dump written "
-              f"from heff/eris, which needs no molecule, but this combination "
-              f"has not been validated -- cross-check against FCI or FCI_SBD "
-              f"on a small dump first.")
+        # Honest about the split: the sampling front end is exercised (a
+        # pre-collected count_dict and the restart reuse both work from a
+        # FCIDUMP), but the recovery loop, its SBD sub-jobs and the ext-SQD
+        # step have not been run from this input.
+        print(f"[{tag}] NOTE: SQD from a FCIDUMP is only PARTLY validated.  "
+              f"The sampling front end works (a pre-collected "
+              f"sqd.count_dict_path, and reuse of an existing count_dict.txt "
+              f"under calculation.restart), but the recovery loop and the "
+              f"ext-SQD SBD jobs have not been run from this input -- "
+              f"cross-check against FCI or FCI_SBD on a small dump first.")
     print(f"[{tag}] Solving with {solver} "
           f"(ewf.multi_solver is ignored: one system, not a per-fragment "
           f"choice)")
