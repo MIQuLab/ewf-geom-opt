@@ -608,7 +608,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             H, 6, "gpu" if gpu else "parent", "sbd", ntasks=None, mem=sbd_mem))
         if gpu:
             a("      extra:")
-            a("        exclude: m002   # skip nodes that fail mpirun")
+            a("        exclude: m003   # skip nodes that fail mpirun")
         else:
             a("      # extra:")
             a("      #   exclude: node01,node02   # skip nodes that fail mpirun")
@@ -674,6 +674,18 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  symmetrize_spin: true    # symmetrise alpha/beta when n_alpha == n_beta")
         a("  add_hf_string: true      # always include the Hartree-Fock determinant in each batch")
         a("  ext_sqd_dprime_cutoff: 1.0e-5  # |c| cutoff for the ext-SQD PyCI determinant set")
+        # Per-batch detail.  Defaulted ON by the driver for run_mode: fcidump
+        # (one Hamiltonian, examined closely) and OFF for the fragmented modes,
+        # where n_fragments * iterations * n_batches blocks would bury the log.
+        # Emitted explicitly only where it is on, so the fragmented templates
+        # stay as short as they were.
+        if from_fcidump:
+            a("  # Print every batch's energy and subspace dimension for each SQD")
+            a("  # iteration, then the lowest batch and its index -- plus a consolidated")
+            a("  # across-iteration table (with the batch energy SPREAD) at the end.")
+            a("  # Defaults to true for run_mode: fcidump, which exists for exactly this")
+            a("  # kind of analysis; set it false to silence the per-iteration blocks.")
+            a("  report_batches: true")
         a("  # Disk-storage optimisation for the per-iteration SBD scratch.  Each")
         a("  # iteration always writes a durable iter_<NNN>/iteration_summary.json")
         a("  # (per-batch energies, lowest-energy batch, its occupancies) that")
@@ -719,7 +731,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             H, 6, "gpu" if gpu else "parent", "sbd", ntasks=None, mem=sqd_mem))
         if gpu:
             a("      extra:")
-            a("        exclude: m002   # skip nodes that fail mpirun")
+            a("        exclude: m003   # skip nodes that fail mpirun")
         else:
             a("      # extra:")
             a("      #   exclude: node01,node02   # skip nodes that fail mpirun")

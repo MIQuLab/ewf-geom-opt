@@ -80,6 +80,40 @@ Both paths previously failed for *any* cluster without a Vayesta HDF5 dump — t
 
 What is **not** yet validated from a FCIDUMP is the rest of the SQD pipeline: the configuration-recovery loop, its per-batch SBD sub-jobs, and the final ext-SQD step. The sampling front end is exercised; the solve is not. Cross-check against `FCI` or `FCI_SBD` on a small dump before trusting an SQD number from this input.
 
+#### Per-batch SQD reporting (`sqd.report_batches`)
+
+`run_mode: fcidump` solves exactly one Hamiltonian, which makes it the natural tool for examining *how* SQD behaves rather than just what it returns. It therefore prints the full batch detail by default — every batch's energy and subspace dimension for every iteration, then the lowest batch and its index:
+
+```
+[SQD] iteration 3/5: 4 batch(es)
+        Subsample 0
+                Energy: -234.2308848443849
+                Subspace dimension: 15944049
+        Subsample 1
+                Energy: -234.2308848443849
+                Subspace dimension: 15936064
+        ...
+Lowest energy batch index: 0
+Lowest total energy value: -234.2308848443849
+```
+
+`Subsample` is labelled by batch index, 0-based, matching both the `batch_<NNN>/` directories and the "Lowest energy batch index" line. Energies print at full float precision deliberately: batch-to-batch differences often live in the last digits, and rounding them away would hide what the report is for.
+
+At the end of the run a consolidated across-iteration table is printed, read back from the durable `iter_*/iteration_summary.json` records, so it reads the same whether the run went straight through or resumed from a restart:
+
+```
+[fcidump] SQD batch history (jobs_FCIDUMP/sqd_scratch_000)
+  iter  batches          lowest E (Ha)   best batch      dim(best)  spread (mHa)
+  ------------------------------------------------------------------------------
+     1        4       -78.454300000000            3        1006009      0.300000
+     2        4       -78.455200000000            3        1006009      0.300000
+  lowest over all iterations: -78.455200000000 Ha (iteration 2, batch 3)
+```
+
+**`spread` is the column to watch.** It is the energy range across one iteration's batches — how much the answer depends on *which* sample was drawn. A spread that stays large while the lowest energy stops moving means the result is still sampling-limited rather than converged, which the lowest energy alone does not reveal.
+
+This is **off** for every other run mode, and deliberately so: a fragmented protein single point would emit `n_fragments × iterations × n_batches` of these blocks and bury the log. Set `sqd.report_batches` explicitly to override the default in either direction — `true` to get the detail from a fragmented run, `false` to silence it here.
+
 ---
 
 ## Run tasks

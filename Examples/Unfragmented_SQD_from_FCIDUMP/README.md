@@ -111,7 +111,7 @@ into the workdir name, so an FCIDUMP run can never overwrite a `jobs_EWF/` or
 |---|---|
 | `sqd.sbd_exe_path_gpu`, `mpi_launcher`, `sqd.slurm.preamble` | Rendered from the CCF site definition; they are paths on *that* cluster |
 | `sqd.slurm.sbatch.partition` | `merzk-a100` here |
-| `sqd.slurm.sbatch.extra.exclude` | Ships as `m002` from the generator's default. **Set this to whichever node actually fails `mpirun` at your site** |
+| `sqd.slurm.sbatch.extra.exclude` | Ships as `m003` (the CCF node that fails `mpirun`). Set this to whichever node is faulty at your site |
 | The quantum-sampling source | See the next section — the shipped config samples live, which needs IBM credentials on the compute node |
 
 ---
@@ -157,6 +157,59 @@ dump — both unfragmented run modes as well as `fcidump` — because the sample
 always tried to convert a cluster dump that does not exist in those modes. It
 now uses the FCIDUMP the solver has already written from the cluster integrals,
 and refuses with a clear message when neither is available.
+
+---
+
+## What the run prints
+
+`run_mode: fcidump` solves one Hamiltonian, which makes it the tool for
+examining *how* SQD behaves rather than only what it returns. So unlike the
+fragmented runs it reports the full batch detail — `sqd.report_batches: true`
+in the config, which is the default for this mode.
+
+Per iteration, every batch's energy and subspace dimension, then the lowest:
+
+```
+[SQD] iteration 3/5: 4 batch(es)
+        Subsample 0
+                Energy: -78.45533856406823
+                Subspace dimension: 15944049
+        Subsample 1
+                Energy: -78.45521133442100
+                Subspace dimension: 15936064
+        ...
+Lowest energy batch index: 0
+Lowest total energy value: -78.45533856406823
+```
+
+`Subsample` is the batch index, 0-based, matching the `batch_<NNN>/`
+directories and the "Lowest energy batch index" line. Energies print at full
+float precision on purpose: batch-to-batch differences often live in the last
+digits.
+
+Then one consolidated table at the end, read back from the
+`iter_*/iteration_summary.json` records — so it reads the same whether the run
+went straight through or resumed from a restart:
+
+```
+[fcidump] SQD batch history (jobs_FCIDUMP/sqd_scratch_000)
+  iter  batches          lowest E (Ha)   best batch      dim(best)  spread (mHa)
+  ------------------------------------------------------------------------------
+     1        4       -78.454300000000            3        1006009      0.300000
+     2        4       -78.455200000000            3        1006009      0.300000
+  lowest over all iterations: -78.455200000000 Ha (iteration 2, batch 3)
+```
+
+**`spread` is the column to watch** — the energy range across one iteration's
+batches, i.e. how much the answer depends on which sample was drawn. If it
+stays large while the lowest energy stops moving, the result is still
+sampling-limited rather than converged, which the lowest energy alone does not
+tell you. Against the exact `-78.4553385641` above, both the gap to FCI and the
+spread are directly readable.
+
+This reporting is off in every other run mode: a fragmented protein single
+point would emit `n_fragments × iterations × n_batches` of these blocks and bury
+the log. `sqd.report_batches` overrides the default either way.
 
 ---
 

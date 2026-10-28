@@ -3411,6 +3411,20 @@ def _run_fcidump_cycle(cfg, tag="driver", compute_gradient=False):
               f"(expected: nelec = {meta['nelec']})")
     print(f"[{tag}] correlation energy vs the reference determinant: "
           f"{e_cls - meta['e_reference']:.10f} Ha")
+
+    if solver == "SQD":
+        # The across-iteration batch history.  Per-iteration detail is printed
+        # as the loop runs (sqd_solver._print_iteration_batches, on by default
+        # in this run mode); this is the consolidated view, read back from the
+        # durable iteration_summary.json records so it is the same whether the
+        # run went straight through or resumed from a restart.
+        import sqd_solver
+        sqd_workdir = os.path.join(workdir, "sqd_scratch_000")
+        try:
+            sqd_solver.report_batch_history(sqd_workdir, tag=tag)
+        except Exception as err:                 # a report must never fail a run
+            print(f"[{tag}] could not summarise the SQD batch history in "
+                  f"{sqd_workdir}: {type(err).__name__}: {err}")
     return None, None, float(e_total), None
 
 

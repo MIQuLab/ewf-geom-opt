@@ -48,6 +48,7 @@ is unavailable, and the bad-node auto-retry resubmits elsewhere up to
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import random
@@ -831,6 +832,105 @@ def _read_iteration_summary(iter_dir):
         return None
 
 
+def _batch_dim(out):
+    """Subspace dimension of one SQD batch: ``n_alpha_strings * n_beta_strings``.
+
+    A restart-reparsed non-best batch carries only its energy and dimension
+    from ``iteration_summary.json`` (Tier-2 pruning removed its wavefunction),
+    so fall back to the recorded value rather than recomputing from strings
+    that are no longer on disk.
+    """
+    if "ci_strs_a_unique" in out:
+        return int(out["ci_strs_a_unique"].size * out["ci_strs_b_unique"].size)
+    return out.get("dim")
+
+
+def _print_iteration_batches(it, iterations, batch_outputs, best_in_iter,
+                             converged):
+    """Print every batch's energy and subspace dimension for one iteration.
+
+    Written to stdout (the driver's log), not through the Vayesta logger, so
+    the block keeps its shape instead of being prefixed line by line.
+
+    This is deliberately OFF for the fragmented run modes: a protein single
+    point has hundreds of fragments times ``n_batches`` times ``iterations``
+    batches, and printing all of them buries the run.  ``run_mode: fcidump``
+    solves exactly one Hamiltonian and exists for studying SQD's behaviour on
+    it, so there the detail is the point -- see ``__report_batches`` in
+    :func:`solve_with_sqd`.
+
+    ``Subsample`` is labelled by the batch index, 0-based, matching both the
+    ``batch_<NNN>/`` directory names and the "Lowest energy batch index" line
+    below it.  Energies print at full float precision because this is an
+    analysis tool: batch-to-batch differences are often in the last digits,
+    and rounding them away would hide exactly what the report is for.
+    """
+    print(f"[SQD] iteration {it}/{iterations}: {len(batch_outputs)} batch(es)")
+    for out in sorted(batch_outputs, key=lambda o: o["batch_idx"]):
+        print(f"        Subsample {out['batch_idx']}")
+        print(f"                Energy: {float(out['energy'])!r}")
+        print(f"                Subspace dimension: {_batch_dim(out)}")
+    print(f"Lowest energy batch index: {int(best_in_iter['batch_idx'])}")
+    print(f"Lowest total energy value: {float(best_in_iter['energy'])!r}")
+    if converged:
+        print(f"[SQD] converged at iteration {it}")
+
+
+def report_batch_history(sqd_workdir, tag="fcidump"):
+    """Print the whole SQD batch history, read back from the per-iteration
+    ``iteration_summary.json`` records.
+
+    Complements :func:`_print_iteration_batches`, which reports each iteration
+    as it completes: this is the across-iteration view, printed once at the
+    end, and it works from the durable on-disk records so it is identical
+    whether the run went straight through or resumed from a restart.
+
+    The ``spread`` column is the energy range across the batches of one
+    iteration.  It is the number to watch when judging SQD on a given
+    Hamiltonian: it measures how much the answer depends on *which* sample was
+    drawn, so a spread that stays large while the lowest energy stops moving
+    means the subspace is still sampling-limited rather than converged.
+
+    Returns the parsed per-iteration records (empty list when none are on
+    disk, e.g. a run that failed before its first iteration finished).
+    """
+    rows = []
+    for d in sorted(glob.glob(os.path.join(sqd_workdir, "iter_*"))):
+        rec = _read_iteration_summary(d)
+        if rec:
+            rows.append(rec)
+    if not rows:
+        print(f"[{tag}] no SQD iteration summaries found under {sqd_workdir}")
+        return rows
+
+    print(f"\n[{tag}] SQD batch history ({sqd_workdir})")
+    print("  %4s %8s %22s %12s %14s %13s"
+          % ("iter", "batches", "lowest E (Ha)", "best batch", "dim(best)",
+             "spread (mHa)"))
+    print("  " + "-" * 78)
+    best_overall = None
+    for r in rows:
+        energies = [float(e) for e in r.get("energies") or []]
+        dims = r.get("dims") or []
+        bb = int(r.get("best_batch", -1))
+        spread = (max(energies) - min(energies)) * 1000.0 if energies else 0.0
+        dim_best = dims[bb] if 0 <= bb < len(dims) else None
+        print("  %4d %8d %22.12f %12d %14s %13.6f"
+              % (int(r["iteration"]), int(r.get("n_batches", len(energies))),
+                 float(r["best_energy"]), bb, dim_best, spread))
+        if best_overall is None or float(r["best_energy"]) < best_overall[0]:
+            best_overall = (float(r["best_energy"]), int(r["iteration"]), bb)
+    if best_overall is not None:
+        print("  lowest over all iterations: %.12f Ha "
+              "(iteration %d, batch %d)" % best_overall)
+    if rows and rows[-1].get("converged"):
+        print("  the loop reported convergence on its last iteration")
+    else:
+        print("  the loop did NOT report convergence -- it stopped at the "
+              "iteration cap (sqd.iterations)")
+    return rows
+
+
 def _write_iteration_summary(iter_dir, it, batch_outputs, best_in_iter,
                              converged):
     """Persist a small, durable per-iteration record: every batch's energy and
@@ -842,10 +942,7 @@ def _write_iteration_summary(iter_dir, it, batch_outputs, best_in_iter,
     restart overwrites).  It also lets the restart re-parse rebuild loop state
     after Tier-2 pruning has removed the non-best batches' wavefunctions.
     """
-    def _dim(o):
-        if "ci_strs_a_unique" in o:
-            return int(o["ci_strs_a_unique"].size * o["ci_strs_b_unique"].size)
-        return o.get("dim")
+    _dim = _batch_dim
 
     occ = best_in_iter.get("occupancies")
     summary = {
@@ -1136,6 +1233,11 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
     prune_level = str(sqd_cfg.get("prune_scratch", "none")).lower()
     if prune_level not in ("none", "safe", "aggressive"):
         prune_level = "none"
+    # Per-batch detail to stdout.  Set by solve_with_sqd: on for
+    # run_mode: fcidump (one Hamiltonian, studied closely), off for the
+    # fragmented modes (hundreds of fragments would bury the log), and
+    # overridable with sqd.report_batches either way.
+    report_batches = bool(sqd_cfg.get("__report_batches", False))
     occupancies_tol = float(sqd_cfg.get("occupancies_tol", 1.0e-5))
     carryover_threshold = float(sqd_cfg.get("carryover_threshold", 1.0e-4))
     symmetrize_spin = bool(sqd_cfg.get("symmetrize_spin", True))
@@ -1231,6 +1333,12 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
                     "best_energy": best_in_iter["energy"],
                     "energies": [o["energy"] for o in batch_outputs],
                 })
+                # Report re-parsed iterations too, so a restarted run's log
+                # still carries the whole batch history rather than only the
+                # iterations that happened to run after the restart.
+                if report_batches:
+                    _print_iteration_batches(it, iterations, batch_outputs,
+                                             best_in_iter, converged)
                 if converged:
                     break
             resume_from = it_done + 1
@@ -1308,6 +1416,9 @@ def _run_sqd_iterations(sqd_cfg: dict, sqd_workdir: str, norb: int,
         # touches files the summary + best-batch wavefunction make redundant.
         _write_iteration_summary(iter_dir, it, batch_outputs,
                                  state["best_in_iter"], converged)
+        if report_batches:
+            _print_iteration_batches(it, iterations, batch_outputs,
+                                     state["best_in_iter"], converged)
         _prune_iteration_scratch(iter_dir, n_batches,
                                  state["best_in_iter"]["batch_idx"],
                                  prune_level, verbose=verbose)
@@ -1489,6 +1600,17 @@ def solve_with_sqd(cluster, cfg: dict, sqd_workdir: str, *,
     os.makedirs(sqd_workdir, exist_ok=True)
     fcidump_path = os.path.abspath(os.path.join(sqd_workdir, "fci_dump.txt"))
     sqd_cfg["__fcidump_path"] = fcidump_path
+
+    # Per-batch detail (energy + subspace dimension for every batch of every
+    # iteration, then the lowest batch and its index).  Default ON for
+    # run_mode: fcidump and OFF elsewhere: that mode solves a single
+    # Hamiltonian and exists for examining how SQD behaves on it, whereas a
+    # fragmented protein single point would emit
+    # n_fragments * iterations * n_batches of these blocks and drown the log.
+    # sqd.report_batches overrides the default in either direction.
+    run_mode = str((cfg.get("calculation") or {}).get("run_mode", "ewf"))
+    sqd_cfg["__report_batches"] = bool(
+        sqd_cfg_user.get("report_batches", run_mode == "fcidump"))
 
     nelec = (cluster.nocc, cluster.nocc)
     norb = int(cluster.norb)

@@ -73,6 +73,12 @@ sqd:
   symmetrize_spin: true    # symmetrise alpha/beta when n_alpha == n_beta
   add_hf_string: true      # always include the Hartree-Fock determinant in each batch
   ext_sqd_dprime_cutoff: 1.0e-5  # |c| cutoff for the ext-SQD PyCI determinant set
+  # Print every batch's energy and subspace dimension for each SQD
+  # iteration, then the lowest batch and its index -- plus a consolidated
+  # across-iteration table (with the batch energy SPREAD) at the end.
+  # Defaults to true for run_mode: fcidump, which exists for exactly this
+  # kind of analysis; set it false to silence the per-iteration blocks.
+  report_batches: true
   # Disk-storage optimisation for the per-iteration SBD scratch.  Each
   # iteration always writes a durable iter_<NNN>/iteration_summary.json
   # (per-batch energies, lowest-energy batch, its occupancies) that
@@ -120,7 +126,7 @@ sqd:
       partition: merzk-a100
       mem: 500G
       extra:
-        exclude: m002   # skip nodes that fail mpirun
+        exclude: m003   # skip nodes that fail mpirun
 
 geomopt:
   enabled: false                 # driven by calculation.run_task (true only for run_task: geomopt)
