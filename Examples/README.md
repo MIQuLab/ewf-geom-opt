@@ -3,15 +3,17 @@
 Worked examples for the EWF-based geometry-optimization workflow: HPC site
 configurations you can adapt to your own cluster, geometry optimizations on a
 small molecule with three different solver strategies, the resulting optimized
-geometries for every molecule in the geometry-optimization paper, and a
-large-scale single-point study on the Trp-cage protein that reproduces and
-extends published results.
+geometries for every molecule in the geometry-optimization paper, a single point
+that starts from a FCIDUMP instead of a geometry, and a large-scale
+single-point study on the Trp-cage protein that reproduces and extends
+published results.
 
 | Path | Contents |
 |---|---|
 | [`HPC_Settings/`](HPC_Settings/) | Site definitions for two real clusters + Slurm submission templates |
 | [`Geometry_Optimization_Runs/`](Geometry_Optimization_Runs/) | Acetone geometry optimization, worked end to end: EWF-(FCI,SCI), EWF-(FCI,SQD), unfragmented SCI |
 | [`Geometry_Optimization_Results/`](Geometry_Optimization_Results/) | Optimized geometries for all 12 molecules of the geometry-optimization paper, under the same three methods |
+| [`Unfragmented_SQD_from_FCIDUMP/`](Unfragmented_SQD_from_FCIDUMP/) | Unfragmented SQD single point on ethane whose Hamiltonian comes from a **FCIDUMP** rather than a geometry (`run_mode: fcidump`) |
 | [`Trp-cage_Single_Point/`](Trp-cage_Single_Point/) | Large-scale single-point energies on folded / unfolded Trp-cage, with reference data from [*JCTC* **2026**, *22* (12), 6041–6056](https://pubs.acs.org/jctcce/article/22/12/6041/5166449/Molecular-Quantum-Computations-on-a-Protein) |
 
 ---
@@ -124,7 +126,37 @@ expensive.
 
 ---
 
-## 4. Large-scale single point: Trp-cage
+## 4. Starting from a FCIDUMP instead of a geometry
+
+[`Unfragmented_SQD_from_FCIDUMP/`](Unfragmented_SQD_from_FCIDUMP/) is the worked
+example for `calculation.run_mode: fcidump`. Everything above begins with
+coordinates: read the geometry, build the molecule, run RHF, derive the cluster
+Hamiltonian from the resulting MOs. That chain is not always available —
+sometimes a collaborator or a third-party code supplies a **FCIDUMP** and
+nothing else. This mode takes that file as the whole input: no geometry, no AO
+basis, no SCF.
+
+The example is an unfragmented **SQD** single point on **ethane / STO-3G** (16
+orbitals, 18 electrons, 32 LUCJ qubits) at the geometry produced by the
+unfragmented SCI-SBD optimization in `Geometry_Optimization_Results/ethane/`. It
+ships the FCIDUMP itself, the script that generated it (so an otherwise opaque
+input is auditable), and RHF / MP2 / CCSD / CCSD(T) / exact-FCI reference
+energies — FCI being the value SQD converges toward as its sampled subspace
+grows.
+
+Because a FCIDUMP has no nuclei, this mode is **energy-only**: no gradient
+exists to compute, and `geomopt` / `gradient` are refused by name. Its output
+goes to `jobs_FCIDUMP/`.
+
+Unlike the three runs in `Geometry_Optimization_Runs/`, this directory currently
+holds **inputs and references but no solver output** — an SQD run needs the
+compiled SBD binary, Slurm and real measured samples from quantum hardware, and
+measured bitstring counts are the one thing in these examples that cannot be
+recomputed. Its README lists exactly what to copy back to complete it.
+
+---
+
+## 5. Large-scale single point: Trp-cage
 
 [`Trp-cage_Single_Point/`](Trp-cage_Single_Point/) demonstrates the workflow at
 production scale — a full protein, fragmented into hundreds of clusters, with

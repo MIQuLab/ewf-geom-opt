@@ -1,0 +1,17 @@
+{
+ "system": "ethane",
+ "basis": "sto-3g",
+ "geometry": "ethane.txt",
+ "geometry_source": "Geometry_Optimization_Results/ethane/ewf_geomopt_optim_SCI-SBD_unfragmented.xyz (final frame)",
+ "norb": 16,
+ "nelec": 18,
+ "nocc": 9,
+ "e_nuc": 41.4504486310267,
+ "e_rhf": -78.30279262712016,
+ "e_mp2": -78.41397352796548,
+ "e_ccsd": -78.45449493459479,
+ "e_ccsd_t": -78.45505118517622,
+ "e_fci": -78.45533856406823,
+ "fci_ndet": 130873600.0,
+ "fci_wall_s": 415.35698413848877
+}
