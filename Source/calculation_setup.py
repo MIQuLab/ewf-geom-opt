@@ -285,7 +285,7 @@ def _emit_sbd_exec_options(a, advanced, gpu, sqd):
 def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
                  optimizer="sella", advanced_sbd=False,
                  run_task="geomopt", hf_gpu=False, hf_density_fit=False,
-                 gpu_type=None):
+                 gpu_type=None, fcidump=None):
     """Assemble the focused config.yaml text for the chosen options.
 
     ``hpc`` is a loaded HPC-settings dict (see :mod:`hpc_settings`) describing
@@ -300,6 +300,13 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     size analysis for the SQD fragments -- no solve).  For ``'circuits'`` a
     minimal ``sqd:`` block with just the LUCJ / IBM-backend knobs is emitted
     and no ``sbd:`` block / processor choice is needed.
+
+    ``fcidump`` names an existing FCIDUMP file and selects ``run_mode:
+    fcidump``: the whole Hamiltonian is read from it, so the emitted config
+    carries ``calculation.fcidump_file`` and NO geometry / basis / charge /
+    spin / symmetry keys and no ``hf:`` block -- none of them have a meaning
+    when no molecule is built and no SCF runs.  That mode is energy-only (a
+    FCIDUMP has no nuclei, so no gradient exists), which the driver enforces.
 
     ``external`` is one of ``'NONE'`` (no external eigensolver -- pure
     FCI/SCI), ``'SCI_SBD'`` (PySCF SCI growth + external SBD eigensolver),
@@ -322,6 +329,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     H = hpc                                    # loaded HPC-settings dict
     circuits = (run_task == "circuits")
     is_ewf = (run_mode == "ewf")
+    from_fcidump = (run_mode == "fcidump")
     gpu = (proc == "GPU")
     # Circuit-size analysis never runs SBD, so suppress the sbd:/proc machinery
     # even though 'circuits' rides on the SQD (LUCJ) sampling code.
@@ -352,8 +360,11 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a(f"#   HPC settings       : {H.get('name', '')}")
     a(f"#   run_task           : {run_task}")
     a(f"#   run_mode           : {run_mode}")
-    a(f"#   HF acceleration    : gpu={'yes' if hf_gpu else 'no'}, "
-      f"density_fit={'yes' if hf_density_fit else 'no'}")
+    if from_fcidump:
+        a(f"#   Hamiltonian        : read from {fcidump} (no geometry, no SCF)")
+    else:
+        a(f"#   HF acceleration    : gpu={'yes' if hf_gpu else 'no'}, "
+          f"density_fit={'yes' if hf_density_fit else 'no'}")
     if is_ewf:
         a(f"#   multi-solver       : {'yes' if multi else 'no'}")
     if circuits:
@@ -367,7 +378,10 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     a("#")
     a("# FOCUSED template -- only the options relevant to this run type are shown;")
     a("# everything else uses the driver defaults.  Review and UPDATE every line")
-    a("# marked '<-- UPDATE' (geometry, basis, paths, account/partition, resources)")
+    if from_fcidump:
+        a("# marked '<-- UPDATE' (the FCIDUMP path, account/partition, resources)")
+    else:
+        a("# marked '<-- UPDATE' (geometry, basis, paths, account/partition, resources)")
     a("# before submitting.")
     a("# ===========================================================================")
     a("")
@@ -413,49 +427,89 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             a("  # lambda_max_cycle: 200")
     else:
         a(f"  solver: {single_solver}"
-          f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / SQD")
+          f"{' ' * max(1, 16 - len(single_solver))}# full-system solver: FCI / SCI / SCI_SBD / FCI_SBD / SQD")
         # Omit for SQD (uses quantum samples, not a determinant cutoff).
         if not sqd:
             a("  sci_select_cutoff: 1.0e-3   # used by SCI / SCI_SBD (ignored by FCI)")
+        if from_fcidump and sqd:
+            a("  # NOTE: SQD from a FCIDUMP is UNTESTED.  It builds its LUCJ ansatz")
+            a("  # from a synthetic cluster dump written out of the file's integrals,")
+            a("  # which needs no molecule, but the combination has not been")
+            a("  # validated -- cross-check against FCI or FCI_SBD on a small dump.")
     a("")
 
     # --- calculation block --------------------------------------------------
     a("calculation:")
-    a(f"  run_task: {run_task}"
-      f"{' ' * max(1, 16 - len(run_task))}"
-      "# geomopt | gradient (single-point E+grad) | energy (E only) | "
-      "circuits (LUCJ circuit-size analysis, no solve)")
+    if from_fcidump:
+        a(f"  run_task: {run_task}"
+          f"{' ' * max(1, 16 - len(run_task))}"
+          "# energy only -- a FCIDUMP has no nuclei, so no gradient exists "
+          "and geomopt/gradient are refused")
+    else:
+        a(f"  run_task: {run_task}"
+          f"{' ' * max(1, 16 - len(run_task))}"
+          "# geomopt | gradient (single-point E+grad) | energy (E only) | "
+          "circuits (LUCJ circuit-size analysis, no solve)")
     a(f"  run_mode: {run_mode}")
-    a(f"  geometry_file: {geometry}"
-      f"{' ' * max(1, 18 - len(str(geometry)))}# geometry file (Element x y z, one atom per line)")
-    a("  basis: sto-3g                  # <-- UPDATE: basis set")
-    a("  charge: 0                      # <-- UPDATE if non-neutral")
-    a("  spin: 0                        # closed-shell required (esp. true_unfragmented)")
-    a("  symmetry: false")
+    if from_fcidump:
+        # No geometry_file / basis / charge / spin / symmetry: the FCIDUMP IS
+        # the Hamiltonian, so there is no molecule to build and nothing for
+        # those keys to describe.  The electron count and orbital count come
+        # from the file's NELEC / NORB.
+        a(f"  fcidump_file: {fcidump}"
+          f"{' ' * max(1, 19 - len(str(fcidump)))}"
+          "# <-- UPDATE: the FCIDUMP to solve (its NORB / NELEC / ECORE are used)")
+        a("  # No geometry_file / basis / charge / spin / symmetry here: this mode")
+        a("  # builds no molecule and runs no SCF, so none of them would be read.")
+        a("  # The dump must be spin-restricted and closed-shell (MS2 = 0, even")
+        a("  # NELEC); an open-shell or IUHF dump is refused with an explanation.")
+        a("  # NOTE: the dump's ORBITAL ORDER is the reference determinant -- SCI /")
+        a("  # SCI_SBD / SQD start selecting from the first NELEC/2 orbitals AS")
+        a("  # LISTED.  The driver reports whether that order is the aufbau order")
+        a("  # for this Hamiltonian and warns if it is not (FCI / FCI_SBD span the")
+        a("  # complete space and are unaffected).")
+    else:
+        a(f"  geometry_file: {geometry}"
+          f"{' ' * max(1, 18 - len(str(geometry)))}# geometry file (Element x y z, one atom per line)")
+        a("  basis: sto-3g                  # <-- UPDATE: basis set")
+        a("  charge: 0                      # <-- UPDATE if non-neutral")
+        a("  spin: 0                        # closed-shell required (esp. true_unfragmented)")
+        a("  symmetry: false")
     a("  workdir: jobs")
     a("  fci_conv_tol: 1.0e-12")
-    a("  # Workflow-level restart: when true (or when the driver is invoked with")
-    a("  # --restart) the driver scans the workdir and reuses every artefact that")
-    a("  # is already complete -- step_<NNN>/result.json (cached E + gradient),")
-    a("  # step_<NNN>/hf.chk (cached converged RHF), per-fragment cluster_<i>.h5")
-    a("  # / rdm_<i>.h5, and completed SCI_SBD / SQD sub-jobs (iter_*/[batch_*/]")
-    a("  # sbd_job.status == DONE, plus any existing sqd_scratch_*/count_dict.txt).")
-    a("  # Default off: wipe stale files and rerun.")
+    if from_fcidump:
+        # There is no SCF to cache and no geometry steps to skip, so restart
+        # here only picks up completed SCI_SBD / SQD sub-jobs.
+        a("  # Workflow-level restart.  In this mode there is no SCF to cache and")
+        a("  # no geometry steps to skip, so it only reuses completed SCI_SBD / SQD")
+        a("  # sub-jobs (iter_*/[batch_*/]sbd_job.status == DONE and any existing")
+        a("  # sqd_scratch_*/count_dict.txt).  Default off: wipe stale files and rerun.")
+    else:
+        a("  # Workflow-level restart: when true (or when the driver is invoked with")
+        a("  # --restart) the driver scans the workdir and reuses every artefact that")
+        a("  # is already complete -- step_<NNN>/result.json (cached E + gradient),")
+        a("  # step_<NNN>/hf.chk (cached converged RHF), per-fragment cluster_<i>.h5")
+        a("  # / rdm_<i>.h5, and completed SCI_SBD / SQD sub-jobs (iter_*/[batch_*/]")
+        a("  # sbd_job.status == DONE, plus any existing sqd_scratch_*/count_dict.txt).")
+        a("  # Default off: wipe stale files and rerun.")
     a("  restart: false                 # true | false  (or use --restart on CLI)")
     a("")
 
     # --- hf block (Hartree-Fock acceleration) -------------------------------
-    a("# Hartree-Fock acceleration (both optional; both default off = classic")
-    a("# CPU, 4-index-ERI SCF).  gpu: run the initial SCF on GPU via gpu4pyscf")
-    a("# (needs gpu4pyscf on the compute node).  density_fit: build")
-    a("# RHF(mol).density_fit(); the density-fitted mean field propagates into")
-    a("# Vayesta's MP2 bath automatically (CDERI-based BNO bath).  Independent")
-    a("# of these, every driver SCF also caches the converged AO integrals as")
-    a("# .npy next to hf.chk (hf_npy/) to accelerate restart on large systems.")
-    a("hf:")
-    a(f"  gpu: {str(hf_gpu).lower():<20}# run the initial SCF on GPU (gpu4pyscf)")
-    a(f"  density_fit: {str(hf_density_fit).lower():<12}# RHF(mol).density_fit(); DF flows into the Vayesta MP2 bath")
-    a("")
+    # Omitted entirely for run_mode: fcidump -- that mode runs no SCF, so an
+    # 'hf:' block would be read by nothing and would only mislead.
+    if not from_fcidump:
+        a("# Hartree-Fock acceleration (both optional; both default off = classic")
+        a("# CPU, 4-index-ERI SCF).  gpu: run the initial SCF on GPU via gpu4pyscf")
+        a("# (needs gpu4pyscf on the compute node).  density_fit: build")
+        a("# RHF(mol).density_fit(); the density-fitted mean field propagates into")
+        a("# Vayesta's MP2 bath automatically (CDERI-based BNO bath).  Independent")
+        a("# of these, every driver SCF also caches the converged AO integrals as")
+        a("# .npy next to hf.chk (hf_npy/) to accelerate restart on large systems.")
+        a("hf:")
+        a(f"  gpu: {str(hf_gpu).lower():<20}# run the initial SCF on GPU (gpu4pyscf)")
+        a(f"  density_fit: {str(hf_density_fit).lower():<12}# RHF(mol).density_fit(); DF flows into the Vayesta MP2 bath")
+        a("")
 
     # --- slurm block (EWF only: DUMP + per-solver solve waves) --------------
     if is_ewf:
@@ -748,6 +802,7 @@ def main():
     hf_gpu = ask_yesno("3) Use GPU-accelerated HF?")
     hf_density_fit = ask_yesno("4) Use density fitting?")
 
+    fcidump = None                  # set only by the FCIDUMP branch below
     if circuits:
         # Quantum-circuit size analysis: fragmented EWF, circuits built for the
         # SQD fragments.  No optimizer, no external-eigensolver / CPU-GPU / SBD
@@ -781,7 +836,44 @@ def main():
             ["EWF", "unfragmented_EWF_limit", "true_unfragmented"])
         run_mode = "ewf" if run_mode == "EWF" else run_mode  # config token
 
-        geometry = ask_text("7) Geometry file name?", "geometry.txt")
+        # Only a single-point, unfragmented run can be started from a FCIDUMP:
+        # the file carries no geometry (so no gradient / optimisation) and no
+        # atoms or AO shells (so no IAO/DMET fragmentation).  Offer it only
+        # where it is actually possible.
+        if (run_task == "energy"
+                and run_mode in ("unfragmented_EWF_limit", "true_unfragmented")
+                and ask_yesno(
+                    "7) Start from an existing FCIDUMP file instead of a "
+                    "geometry?  (yes -> the whole Hamiltonian is read from the "
+                    "file; no molecule is built and no SCF runs.  Useful when a "
+                    "FCIDUMP is all that a third party supplied.)")):
+            if run_mode == "unfragmented_EWF_limit":
+                # The EWF functional needs the AO core Hamiltonian and an SCF
+                # Fock matrix; a FCIDUMP's orbitals need not come from an SCF at
+                # all, so the functional is undefined rather than unimplemented.
+                print("\n   NOTE: the EWF-limit *functional* needs an SCF "
+                      "reference (AO core Hamiltonian\n"
+                      "   and Fock matrix), which a FCIDUMP does not carry, so "
+                      "it is not available\n"
+                      "   from a dump.  The run will report the exact "
+                      "eigenvalue + the file's ECORE\n"
+                      "   instead -- the same estimator as "
+                      "'true_unfragmented'.")
+            run_mode = "fcidump"
+            fcidump = ask_text("8) FCIDUMP file name?", "system.fcidump")
+            geometry = None
+            print("\n   The dump must be spin-restricted and closed-shell "
+                  "(MS2 = 0, even NELEC);\n"
+                  "   an open-shell or IUHF dump is refused with an "
+                  "explanation.  Note also that\n"
+                  "   its ORBITAL ORDER sets the reference determinant that "
+                  "SCI / SCI_SBD / SQD\n"
+                  "   start selecting from; the driver reports whether that "
+                  "order is the aufbau\n"
+                  "   order for the dump's Hamiltonian and warns when it is "
+                  "not.")
+        else:
+            geometry = ask_text("7) Geometry file name?", "geometry.txt")
 
         multi = False
         if run_mode == "ewf":
@@ -821,7 +913,8 @@ def main():
     text = build_config(H, run_mode, multi, external, proc, geometry,
                         gpu_type=gpu_type, optimizer=optimizer,
                         advanced_sbd=advanced_sbd, run_task=run_task,
-                        hf_gpu=hf_gpu, hf_density_fit=hf_density_fit)
+                        hf_gpu=hf_gpu, hf_density_fit=hf_density_fit,
+                        fcidump=fcidump)
 
     # Optional sanity check: the produced text must be valid YAML.
     try:
@@ -849,7 +942,17 @@ def main():
     print("This is a TEMPLATE: it contains only the options relevant to your run,")
     print("with defaults elsewhere.  You STILL need to update the run-specific")
     print("values inside it before submitting -- in particular:")
-    print("   * calculation.basis (and charge/spin); confirm the geometry file exists")
+    if run_mode == "fcidump":
+        print("   * calculation.fcidump_file -- confirm the file exists and is")
+        print("     spin-restricted and closed-shell (MS2 = 0, even NELEC)")
+        print("   * nothing else describes the system: NORB, NELEC and ECORE all")
+        print("     come from the dump, and no basis / charge / spin applies")
+        if hf_gpu or hf_density_fit:
+            print("   * NOTE: your HF answers (GPU / density fitting) were "
+                  "DISCARDED -- this mode")
+            print("     runs no SCF, so no 'hf:' block was written")
+    else:
+        print("   * calculation.basis (and charge/spin); confirm the geometry file exists")
     if hpc_settings.uses_account(H):
         print("   * the Slurm 'account'"
               + (" and 'time'" if hpc_settings.uses_time(H) else "")

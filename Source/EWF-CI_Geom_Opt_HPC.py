@@ -52,6 +52,12 @@ Single-point usage (no geometry update) is still supported: set
 ``geomopt.enabled: false`` (or pass ``--single-point``) to compute one
 EWF-CI gradient at the input geometry and exit.
 
+A single point can also start from an existing **FCIDUMP** instead of a
+geometry (``calculation.run_mode: fcidump`` + ``calculation.fcidump_file``),
+for the case where a third party supplies only the Hamiltonian.  No molecule
+is built and no SCF runs, so that mode is energy-only -- a FCIDUMP has no
+nuclei and therefore no gradient.  See :mod:`fcidump_input`.
+
 Usage
 -----
 Driver (geometry optimisation by default)::
@@ -357,12 +363,22 @@ def load_config(path):
     #                              with the ANALYTIC CASCI gradient (build_grad,
     #                              ncore=0/ncas=nmo).  A genuine full-system
     #                              FCI/SCI/SCI_SBD/SQD geometry optimisation.
+    #   "fcidump"               -- take the whole Hamiltonian from an existing
+    #                              FCIDUMP file (calculation.fcidump_file) and
+    #                              solve it once with ewf.solver.  No geometry,
+    #                              no AO basis and no SCF: the energy is the
+    #                              exact eigenvalue + the file's ECORE, same
+    #                              estimator as 'true_unfragmented'.  Single
+    #                              point only -- a FCIDUMP has no nuclei, so no
+    #                              gradient exists (see fcidump_input.py).
     # The unfragmented modes ignore ewf.multi_solver (one system, not a
     # per-fragment choice) and use ewf.solver directly.
-    _RUN_MODES = ("ewf", "unfragmented_EWF_limit", "true_unfragmented")
+    _RUN_MODES = ("ewf", "unfragmented_EWF_limit", "true_unfragmented",
+                  "fcidump")
     _MODE_MARKER = {"ewf": "EWF",
                     "unfragmented_EWF_limit": "EWFLIM",
-                    "true_unfragmented": "TRUEUNFRAG"}
+                    "true_unfragmented": "TRUEUNFRAG",
+                    "fcidump": "FCIDUMP"}
     run_mode = str(calc.setdefault("run_mode", "ewf"))
     if run_mode not in _RUN_MODES:
         raise ValueError(
@@ -385,6 +401,30 @@ def load_config(path):
                 f"Unsupported calculation.run_task={run_task!r}; expected one "
                 f"of {', '.join(_RUN_TASKS)}.")
         calc["run_task"] = run_task
+    # ------------------------------------------------------------------
+    # run_mode 'fcidump': the Hamiltonian comes from a file, so require the
+    # file and refuse the tasks that a file cannot support.  Checking here
+    # (rather than letting the run fail inside the gradient assembly) keeps the
+    # explanation next to the reason.
+    if run_mode == "fcidump":
+        if not calc.get("fcidump_file"):
+            raise ValueError(
+                "calculation.run_mode: fcidump requires "
+                "calculation.fcidump_file -- the FCIDUMP that this run reads "
+                "its entire Hamiltonian from.  There is no geometry to fall "
+                "back on in this mode.")
+        if run_task is not None and run_task != "energy":
+            raise ValueError(
+                f"calculation.run_mode: fcidump supports only "
+                f"calculation.run_task: energy (got {run_task!r}).\n"
+                "  A FCIDUMP contains no nuclear coordinates, so no nuclear "
+                "gradient exists to compute and no geometry can be optimised. "
+                "For a gradient or an optimisation, supply a geometry and use "
+                "run_mode: true_unfragmented instead.")
+        hf_opts = cfg.get("hf") or {}
+        if hf_opts.get("gpu") or hf_opts.get("density_fit"):
+            print("[config] run_mode: fcidump runs no SCF, so the 'hf:' "
+                  "options (gpu / density_fit) are ignored.")
     calc.setdefault("geometry_file", "ch4_dimer.txt")
     calc.setdefault("basis", "sto-3g")
     calc.setdefault("charge", 0)
@@ -429,7 +469,7 @@ def load_config(path):
     # run resolves to SCI_SBD or SQD.  In the unfragmented modes that is simply
     # ewf.solver; in 'ewf' mode it is the multi_solver roles (when enabled) or
     # ewf.solver.
-    if run_mode in ("unfragmented_EWF_limit", "true_unfragmented"):
+    if run_mode in ("unfragmented_EWF_limit", "true_unfragmented", "fcidump"):
         used_solvers = {solver}
     else:
         used_solvers = ({ms["high_accuracy_solver"], ms["approximate_solver"]}
@@ -1198,13 +1238,16 @@ def choose_solver_for_cluster(norb, cfg):
 
 def method_label_for_cfg(cfg):
     """Human-readable method label, e.g. ``EWF-FCI``, ``EWF-FCI/SCI`` (multi-
-    solver), ``UnfragEWFlim-SCI`` or ``TrueUnfrag-FCI`` (unfragmented modes)."""
+    solver), ``UnfragEWFlim-SCI`` or ``TrueUnfrag-FCI`` (unfragmented modes),
+    ``FCIDUMP-SCI_SBD`` (Hamiltonian read from a FCIDUMP)."""
     ewf = cfg["ewf"]
     run_mode = cfg.get("calculation", {}).get("run_mode", "ewf")
     if run_mode == "unfragmented_EWF_limit":
         return f"UnfragEWFlim-{ewf['solver']}"
     if run_mode == "true_unfragmented":
         return f"TrueUnfrag-{ewf['solver']}"
+    if run_mode == "fcidump":
+        return f"FCIDUMP-{ewf['solver']}"
     ms = ewf.get("multi_solver", {})
     if ms.get("enabled", False):
         return f"EWF-{ms['high_accuracy_solver']}/{ms['approximate_solver']}"
@@ -3291,19 +3334,100 @@ def _run_true_unfragmented_cycle(cfg, tag="driver", compute_gradient=True):
     return mol, mf, float(e_total), np.asarray(de)
 
 
+def _run_fcidump_cycle(cfg, tag="driver", compute_gradient=False):
+    """run_mode ``fcidump``: solve a Hamiltonian read from a FCIDUMP file.
+
+    The same estimator as :func:`_run_true_unfragmented_cycle` -- the exact
+    eigenvalue of the supplied Hamiltonian plus the file's scalar constant --
+    but with the geometry/SCF front end removed, because a FCIDUMP has no
+    geometry, AO basis, overlap matrix or mean field:
+
+        E_total = eigenvalue(H1, H2) + ECORE
+
+    This is useful when a FCIDUMP is all that is available: it is a complete
+    second-quantized Hamiltonian, and the cluster solvers in this workflow read
+    only ``norb``/``nocc``/``heff``/``eris``, so they run on it unchanged.  What
+    a FCIDUMP cannot support is anything differentiated with respect to nuclear
+    positions, hence ``compute_gradient`` must be False (``load_config``
+    already refuses the gradient-bearing tasks for this mode, so the check here
+    only guards direct callers).
+
+    The reader, its refusals (open-shell / unrestricted dumps) and the orbital-
+    ordering diagnostic live in :mod:`fcidump_input`.  The ordering matters:
+    SCI / SCI_SBD / SQD begin their determinant selection from the determinant
+    occupying the first ``nocc`` orbitals *as listed in the file*, so a dump
+    that is not ordered occupied-first starts them from a poor reference.  That
+    is measured and reported, not silently corrected.
+
+    Returns ``(None, None, E, None)``: the ``(mol, mf, E, grad)`` contract of
+    :func:`_run_cycle` with no molecule and no gradient to return.
+    """
+    if compute_gradient:
+        raise ValueError(
+            "calculation.run_mode: fcidump cannot produce a nuclear gradient "
+            "-- a FCIDUMP contains no nuclear coordinates.  Use "
+            "calculation.run_task: energy.")
+    # fcidump_input sits next to this driver; import lazily so that runs which
+    # never read a FCIDUMP do not need it on the path.
+    _here = os.path.dirname(os.path.abspath(__file__))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    import fcidump_input
+
+    calc = cfg["calculation"]
+    workdir = calc["workdir"]
+    os.makedirs(workdir, exist_ok=True)
+    solver = cfg["ewf"]["solver"]
+
+    print(f"[{tag}] FCIDUMP calculation -- no geometry, no SCF")
+    cluster, meta = fcidump_input.build_cluster(calc["fcidump_file"])
+    if solver == "SQD":
+        print(f"[{tag}] NOTE: SQD from a FCIDUMP is UNTESTED.  The solver "
+              f"builds its LUCJ ansatz from a synthetic cluster dump written "
+              f"from heff/eris, which needs no molecule, but this combination "
+              f"has not been validated -- cross-check against FCI or FCI_SBD "
+              f"on a small dump first.")
+    print(f"[{tag}] Solving with {solver} "
+          f"(ewf.multi_solver is ignored: one system, not a per-fragment "
+          f"choice)")
+    e_cls, dm1, dm2, civec = solve_cluster(
+        cluster, cfg, solver=solver, workdir=workdir, frag_idx=0,
+        cluster_h5_path=None)
+    e_total = e_cls + meta["ecore"]
+    print(f"[{tag}] eigenvalue(H1,H2) = {e_cls:.10f} Ha   "
+          f"+ ECORE {meta['ecore']:.10f} Ha")
+    print(f"[{tag}] FCIDUMP-{solver} total energy "
+          f"(eigenvalue + ECORE): {e_total:.10f} Ha")
+    if dm1 is not None:
+        # Tr(dm1) is the one check available without a molecule: it must be the
+        # file's electron count, and a mismatch means the solver converged on
+        # the wrong particle-number sector.
+        print(f"[{tag}] Tr(dm1) = {np.trace(np.asarray(dm1)):.6f} "
+              f"(expected: nelec = {meta['nelec']})")
+    print(f"[{tag}] correlation energy vs the reference determinant: "
+          f"{e_cls - meta['e_reference']:.10f} Ha")
+    return None, None, float(e_total), None
+
+
 def _run_cycle(cfg, config_path, script_path, no_slurm=False, tag="driver",
                compute_gradient=True):
     """Per-geometry energy (+ gradient), dispatched on ``calculation.run_mode``:
     ``'ewf'`` (default; fragmented Slurm workflow), ``'unfragmented_EWF_limit'``
-    (full-system EWF functional), or ``'true_unfragmented'`` (full-system exact
-    energy + analytic CASCI gradient).  Returns ``(mol, mf, E, grad)`` -- with
-    ``grad is None`` when ``compute_gradient`` is False (the energy-only task)."""
+    (full-system EWF functional), ``'true_unfragmented'`` (full-system exact
+    energy + analytic CASCI gradient), or ``'fcidump'`` (exact energy of a
+    Hamiltonian read from file; no geometry, so energy only).  Returns
+    ``(mol, mf, E, grad)`` -- with ``grad is None`` when ``compute_gradient``
+    is False (the energy-only task), and ``mol``/``mf`` also None in the
+    ``fcidump`` mode, which never builds either."""
     mode = cfg["calculation"].get("run_mode", "ewf")
     if mode == "unfragmented_EWF_limit":
         return _run_unfragmented_ewf_limit_cycle(
             cfg, tag=tag, compute_gradient=compute_gradient)
     if mode == "true_unfragmented":
         return _run_true_unfragmented_cycle(
+            cfg, tag=tag, compute_gradient=compute_gradient)
+    if mode == "fcidump":
+        return _run_fcidump_cycle(
             cfg, tag=tag, compute_gradient=compute_gradient)
     return _run_ewf_cycle(cfg, config_path, script_path,
                           no_slurm=no_slurm, tag=tag,
@@ -3980,14 +4104,28 @@ def main(argv=None):
     # Resolve the run task.  Explicit calculation.run_task wins; absent, fall
     # back to the legacy geomopt.enabled flag.  CLI --task / --single-point
     # override the config for this invocation.
+    run_mode = cfg["calculation"].get("run_mode", "ewf")
     run_task = cfg["calculation"].get("run_task")
     if run_task is None:
-        run_task = ("geomopt" if bool(cfg["geomopt"].get("enabled", True))
+        # 'fcidump' has no geometry, so the geomopt.enabled fallback does not
+        # apply to it: the only task it can perform is the energy.
+        run_task = ("energy" if run_mode == "fcidump" else
+                    "geomopt" if bool(cfg["geomopt"].get("enabled", True))
                     else "gradient")
     if args.single_point and run_task == "geomopt":
         run_task = "gradient"
     if args.task:
         run_task = args.task
+    # Re-check after the CLI overrides: --task can ask for a gradient that this
+    # run mode has no nuclei to compute.
+    if run_mode == "fcidump" and run_task != "energy":
+        raise SystemExit(
+            f"calculation.run_mode: fcidump supports only run_task 'energy' "
+            f"(got {run_task!r}).\n"
+            "  A FCIDUMP contains no nuclear coordinates, so no nuclear "
+            "gradient exists to compute and no geometry can be optimised.  "
+            "For a gradient or an optimisation, supply a geometry and use "
+            "run_mode: true_unfragmented instead.")
 
     # run_task is final here: pick the task-aware assembly default and reject
     # the energy-only 'cluster_energy' route for gradient-bearing tasks.
