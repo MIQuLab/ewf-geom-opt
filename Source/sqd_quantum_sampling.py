@@ -78,15 +78,22 @@ def _resolve_count_dict_for_fragment(sqd_cfg: dict, frag_idx: int) -> Optional[s
     return str(path) if path else None
 
 
-def provision_quantum_sample(cluster_h5_path: str, workdir: str,
+def provision_quantum_sample(cluster_h5_path: Optional[str], workdir: str,
                              sqd_cfg: dict, frag_idx: int = 0,
                              verbose=None, restart: bool = False) -> str:
     """Ensure ``workdir/count_dict.txt`` exists for this cluster.
 
     Either copies a pre-collected sample (when ``sqd.count_dict_path`` /
     ``sqd.per_fragment_samples`` is configured) or runs the on-the-fly
-    Qiskit sampler.  Always writes ``fci_dump.txt`` from the cluster
-    integrals.  Returns the absolute path to the count_dict.txt file.
+    Qiskit sampler.  Returns the absolute path to the count_dict.txt file.
+
+    ``cluster_h5_path`` is the Vayesta cluster dump the ``fci_dump.txt``
+    beside the count_dict is written from.  Pass ``None`` when the caller has
+    already written that FCIDUMP itself -- which is the case for every cluster
+    that has no Vayesta dump to begin with: the unfragmented run modes build
+    their cluster in memory, and ``run_mode: fcidump`` reads its Hamiltonian
+    straight from a file.  There is then nothing to convert, and an existing
+    ``fci_dump.txt`` is used as-is.
 
     When ``restart`` is true and ``workdir/count_dict.txt`` already
     exists on disk, it is reused as-is (no config-driven copy, no fresh
@@ -100,10 +107,25 @@ def provision_quantum_sample(cluster_h5_path: str, workdir: str,
     fcidump_path = os.path.abspath(os.path.join(workdir, "fci_dump.txt"))
     count_path = os.path.abspath(os.path.join(workdir, "count_dict.txt"))
 
-    norb, nocc = write_fcidump_from_cluster_h5(cluster_h5_path, fcidump_path)
-    if verbose:
-        verbose.info("  SQD: wrote FCIDUMP %s (norb=%d, nocc=%d)",
-                     fcidump_path, norb, nocc)
+    if cluster_h5_path is not None:
+        norb, nocc = write_fcidump_from_cluster_h5(cluster_h5_path,
+                                                   fcidump_path)
+        if verbose:
+            verbose.info("  SQD: wrote FCIDUMP %s (norb=%d, nocc=%d)",
+                         fcidump_path, norb, nocc)
+    elif os.path.isfile(fcidump_path):
+        if verbose:
+            verbose.info("  SQD: using the FCIDUMP the caller wrote at %s",
+                         fcidump_path)
+    else:
+        # Neither a cluster dump to convert nor a FCIDUMP already in place.
+        # Say so here: the SQD post-processing and every SBD sub-job read that
+        # file, so without it the failure would otherwise surface much later.
+        raise FileNotFoundError(
+            f"SQD: no cluster dump was given and no FCIDUMP exists at "
+            f"{fcidump_path}.  One of the two must supply the cluster "
+            f"Hamiltonian that the SQD post-processing and the SBD sub-jobs "
+            f"read.")
 
     # Workflow-level restart: an on-disk count_dict.txt in the step's own
     # scratch directory is *this geometry's* sample from a previous run.

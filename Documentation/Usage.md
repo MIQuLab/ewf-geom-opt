@@ -45,9 +45,13 @@ ewf:
 
 calculation:
   run_task: geomopt           # geomopt | gradient | energy | circuits (see Run tasks)
-  run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented (see Run modes)
+  run_mode: ewf               # ewf | unfragmented_EWF_limit | true_unfragmented | fcidump (see Run modes)
   geometry_file: geometry.txt
   basis: sto-3g
+  # fcidump_file: system.fcidump   # run_mode: fcidump ONLY -- the whole Hamiltonian is
+  #                                # read from this file, so geometry_file / basis /
+  #                                # charge / spin / symmetry and the hf: block below
+  #                                # are all omitted (nothing reads them).  Energy only.
   ...
 
 hf:                           # Hartree–Fock acceleration (both optional; default false)

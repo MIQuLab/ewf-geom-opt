@@ -49,6 +49,7 @@ place.
 | File | Role |
 |---|---|
 | `EWF-CI_Geom_Opt_HPC.py` | Main driver: run-mode dispatch, fragment construction, Slurm orchestration, RDM assembly dispatch, optimizer backends (geomeTRIC / PyBerny / Sella) |
+| `fcidump_input.py` | `run_mode: fcidump`: reads an existing FCIDUMP as the whole Hamiltonian (no geometry, no AO basis, no SCF), refuses open-shell / unrestricted dumps, and reports whether the dump's orbital order is the aufbau order that `SCI` / `SCI_SBD` / `SQD` start selecting from |
 | `embedding_lagrangian.py` | `rdm_t_lambda` assembly: global effective amplitudes + Λ (Z-vector) relaxed density |
 | `isolated_casci_gradient.py` | Analytic gradients: the EWF gradient `build_ewf_grad` (integral derivatives + CPHF orbital response) and the full-system CASCI gradient `build_grad` |
 | `external_sci.py` | `SCI_SBD` solver: PySCF Selected-CI growth with the external SBD eigensolver (CPU or GPU), driven through files and per-cycle Slurm sub-jobs |
