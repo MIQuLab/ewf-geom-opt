@@ -80,6 +80,7 @@ runs is decided per fragment.)
 
 import argparse
 import copy
+import glob
 import json
 import os
 import random
@@ -150,7 +151,14 @@ BOHR = _lib_param.BOHR  # Angstrom per Bohr
 #              SCI_SBD; needs the 'sqd:' config block + Slurm + the compiled
 #              SBD binary (plus optional Qiskit IBM Runtime credentials for
 #              on-the-fly sampling).
-_VALID_SOLVERS = ("FCI", "SCI", "SCI_SBD", "FCI_SBD", "SQD")
+#   CCSD    -- coupled cluster singles and doubles on the cluster
+#              Hamiltonian (cluster_ccsd.solve).  Orders of magnitude cheaper
+#              than the CI solvers at these cluster sizes, so a whole-system
+#              EWF-CCSD single point is practical as a REFERENCE for the
+#              SCI/SQD production numbers.  It is also the only solver whose
+#              T1 amplitudes are the quantity the T1 diagnostic is defined on
+#              rather than an estimate of it (see run_task: t1_diagnostic).
+_VALID_SOLVERS = ("FCI", "SCI", "SCI_SBD", "FCI_SBD", "SQD", "CCSD")
 
 # Supported geometry-optimisation backends (``geomopt.optimizer``).
 _VALID_OPTIMIZERS = frozenset({"geometric", "berny", "sella"})
@@ -392,7 +400,7 @@ def load_config(path):
     #   circuits  -- quantum-circuit size analysis for the SQD fragments
     #                (build/transpile the LUCJ ansatz per fragment, no solve)
     # Absent -> resolved in main() from geomopt.enabled for back-compat.
-    _RUN_TASKS = ("geomopt", "gradient", "energy", "circuits")
+    _RUN_TASKS = ("geomopt", "gradient", "energy", "circuits", "t1_diagnostic")
     run_task = calc.get("run_task")
     if run_task is not None:
         run_task = str(run_task)
@@ -1316,6 +1324,22 @@ def solve_cluster(cluster, cfg, solver=None, workdir=None, frag_idx=None,
             need_rdm=need_rdm,
             need_civec=(not need_rdm) if need_civec is None else need_civec,
         )
+    elif solver == "CCSD":
+        _here = os.path.dirname(os.path.abspath(__file__))
+        if _here not in sys.path:
+            sys.path.insert(0, _here)
+        import cluster_ccsd
+        e_cls, dm1, dm2, info = cluster_ccsd.solve(
+            cluster,
+            conv_tol=float(cfg["calculation"].get("ccsd_conv_tol", 1.0e-8)),
+            max_cycle=int(cfg["calculation"].get("ccsd_max_cycle", 100)),
+            need_rdm=need_rdm,
+            retry_on_failure=bool(
+                cfg["calculation"].get("ccsd_retry_on_failure", False)),
+            verbose_tag=("" if frag_idx is None else " frag=%d" % frag_idx))
+        # The CCSD t1 travels in place of a CI vector: it is what the T1
+        # diagnostic reads, and no assembly route consumes a CCSD civec.
+        return e_cls, dm1, dm2, info
     elif solver == "SQD":
         if workdir is None:
             workdir = cfg["calculation"]["workdir"]
@@ -2005,6 +2029,9 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
         print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
               f"with FCI_SBD (complete determinant space, external SBD "
               f"eigensolver; no determinant selection; one Slurm job)")
+    elif solver == "CCSD":
+        print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
+              f"with CCSD (in-process, semicanonical cluster orbitals)")
     else:  # SQD
         sqd_cfg = cfg.get("sqd", {}) or {}
         print(f"[solve frag={frag_idx}] Solving cluster (norb={cluster.norb}) "
@@ -2115,6 +2142,54 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
             h5.create_dataset("c1", data=c1)
             h5.create_dataset("c2", data=c2)
     print(f"[solve frag={frag_idx}] Wrote RDM file {rdm_h5}")
+
+    # --- T1 diagnostic ------------------------------------------------------
+    # Written whenever the run_task asks for it.  The amplitudes come from
+    # CCSD directly when that is the solver, and from the CI->CISD->CCSD
+    # conversion otherwise -- in which case |c0| is also recorded, because a
+    # small reference weight is exactly when t1 = c1/c0 stops meaning anything.
+    if bool(cfg["calculation"].get("_want_t1_diagnostic", False)):
+        _here = os.path.dirname(os.path.abspath(__file__))
+        if _here not in sys.path:
+            sys.path.insert(0, _here)
+        import cluster_ccsd
+
+        t1_src, c0_val, conv = None, None, None
+        if solver == "CCSD":
+            t1_src = civec.get("t1")          # solve_cluster returns the info dict
+            conv = civec.get("converged")
+        else:
+            try:
+                if solver == "FCI":
+                    cisdvec = _ci_cisd.from_fcivec(
+                        np.asarray(civec), cluster.norb, nelec_t)
+                    c0d, c1d, _ = _ci_cisd.cisdvec_to_amplitudes(
+                        cisdvec, cluster.norb, cluster.nocc)
+                else:
+                    c0d, c1d, _ = cisd_amplitudes_from_sci(
+                        civec, cluster.norb, nelec_t)
+                c0_val = float(c0d)
+                t1_src = c1d / c0d
+            except Exception as err:          # a diagnostic must not kill a run
+                print(f"[solve frag={frag_idx}] T1 diagnostic: could not "
+                      f"extract amplitudes ({type(err).__name__}: {err})")
+
+        if t1_src is not None:
+            rec = cluster_ccsd.diagnostics(t1_src, nocc=cluster.nocc,
+                                           c0=c0_val, dm1=dm1x)
+            rec.update(frag_idx=int(frag_idx), name=str(cluster.name),
+                       norb=int(cluster.norb), solver=solver,
+                       e_cluster=float(e_cls), converged=conv)
+            if solver == "CCSD":
+                rec["e_corr"] = float(civec.get("e_corr", float("nan")))
+                rec["e_ref"] = float(civec.get("e_ref", float("nan")))
+            out = os.path.join(workdir, "t1diag_%03d.json" % frag_idx)
+            with open(out, "w") as fh:
+                json.dump(rec, fh, indent=1, default=float)
+            print("[solve frag=%d] T1 = %.5f  D1 = %.5f  %s-> %s"
+                  % (frag_idx, rec["t1_diag"], rec["d1_diag"],
+                     "FLAGGED " if rec["t1_flag"] or rec["d1_flag"] else "",
+                     os.path.basename(out)))
 
 
 # ---------------------------------------------------------------------------
@@ -2703,7 +2778,8 @@ def resolve_assembly_for_task(cfg, run_task):
             "ewf.assembly='cluster_energy' sums per-FRAGMENT contributions and "
             f"only applies to calculation.run_mode: ewf (got {run_mode!r}).")
 
-    if not explicit and run_task == "energy" and run_mode == "ewf":
+    if (not explicit and run_task in ("energy", "t1_diagnostic")
+            and run_mode == "ewf"):
         asm = "cluster_energy"
         print("[driver] run_task=energy: defaulting to ewf.assembly="
               "'cluster_energy' -- it sums the per-fragment energy directly "
@@ -3245,6 +3321,9 @@ def _solve_full_system(cfg, tag):
     elif solver == "FCI_SBD":
         print(f"[{tag}] Solving full system with FCI_SBD (complete determinant "
               f"space, external SBD eigensolver; no determinant selection)")
+    elif solver == "CCSD":
+        print(f"[{tag}] Solving full system with CCSD (in-process, "
+              f"semicanonical orbitals)")
     else:  # SQD
         sqd_cfg = cfg.get("sqd", {}) or {}
         print(f"[{tag}] Solving full system with SQD (quantum sampling + SBD "
@@ -3475,6 +3554,102 @@ def run_driver_singlepoint(cfg, config_path, script_path, no_slurm=False,
               "calculation.run_mode to 'true_unfragmented' (exact energy + "
               "analytic CASCI gradient) or 'unfragmented_EWF_limit' (EWF "
               "functional, debug) in the config.")
+
+
+def collect_t1_diagnostics(workdir, cfg, tag="driver"):
+    """Gather every ``t1diag_<i>.json`` the solve wave wrote, rank them, print
+    a summary and persist ``t1_diagnostic.json``.
+
+    The split is deliberate: the JSON carries the full per-cluster record for
+    later analysis, while the log gets a ranked table short enough to read on a
+    300-fragment run.  Aggregates are reported across fragments rather than as
+    a single global T1 -- this route never forms a whole-system CCSD
+    wavefunction, and quoting one number as if it did would overclaim.
+    """
+    _here = os.path.dirname(os.path.abspath(__file__))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    import cluster_ccsd
+
+    rows = []
+    for q in sorted(glob.glob(os.path.join(workdir, "t1diag_*.json"))):
+        try:
+            rows.append(json.load(open(q)))
+        except (OSError, ValueError) as err:
+            print(f"[{tag}] could not read {q}: {err}")
+    if not rows:
+        print(f"[{tag}] no t1diag_*.json found in {workdir} -- nothing to "
+              f"summarise.  Did the solve wave run with run_task: "
+              f"t1_diagnostic?")
+        return None
+
+    rows.sort(key=lambda r: -r.get("t1_diag", 0.0))
+    t1 = np.array([r["t1_diag"] for r in rows])
+    d1 = np.array([r["d1_diag"] for r in rows])
+    nflag = int(sum(1 for r in rows if r.get("t1_flag") or r.get("d1_flag")))
+    nbad = int(sum(1 for r in rows if r.get("converged") is False))
+
+    print(f"\n[{tag}] T1 DIAGNOSTIC over {len(rows)} cluster(s)")
+    print(f"[{tag}] thresholds: T1 >= {cluster_ccsd.T1_WARN}, "
+          f"D1 >= {cluster_ccsd.D1_WARN}")
+    print("%6s %-14s %5s %6s %9s %9s %9s %8s %s"
+          % ("frag", "name", "norb", "nocc", "T1", "D1", "max|t1|", "|c0|",
+             "flag"))
+    print("-" * 86)
+    show = rows if len(rows) <= 40 else rows[:40]
+    for r in show:
+        c0 = r.get("c0")
+        print("%6d %-14s %5d %6d %9.5f %9.5f %9.5f %8s %s"
+              % (r["frag_idx"], str(r.get("name", ""))[:14], r["norb"],
+                 r["n_occ"], r["t1_diag"], r["d1_diag"], r["max_t1"],
+                 ("%.4f" % abs(c0)) if c0 is not None else "   --",
+                 ("T1" if r.get("t1_flag") else "")
+                 + ("D1" if r.get("d1_flag") else "")
+                 + (" NOCONV" if r.get("converged") is False else "")))
+    if len(rows) > 40:
+        print("   ... %d more, ranked by T1, in t1_diagnostic.json"
+              % (len(rows) - 40))
+    print("-" * 86)
+    print("  T1: max %.5f  mean %.5f  median %.5f" % (t1.max(), t1.mean(),
+                                                      float(np.median(t1))))
+    print("  D1: max %.5f  mean %.5f" % (d1.max(), d1.mean()))
+    print("  %d of %d cluster(s) flagged (%.0f%%)%s"
+          % (nflag, len(rows), 100.0 * nflag / len(rows),
+             ";  %d did not converge" % nbad if nbad else ""))
+    if nbad:
+        print("  NOTE: a non-converged CCSD is itself evidence of "
+              "multireference character, not merely a failed job.")
+
+    out = os.path.join(workdir, "t1_diagnostic.json")
+    with open(out, "w") as fh:
+        json.dump(dict(n_clusters=len(rows), n_flagged=nflag,
+                       n_not_converged=nbad,
+                       t1_warn=cluster_ccsd.T1_WARN,
+                       d1_warn=cluster_ccsd.D1_WARN,
+                       t1_max=float(t1.max()), t1_mean=float(t1.mean()),
+                       t1_median=float(np.median(t1)),
+                       d1_max=float(d1.max()), d1_mean=float(d1.mean()),
+                       solver=cfg["ewf"].get("solver"),
+                       clusters=rows), fh, indent=1, default=float)
+    print(f"  -> {out}")
+    return out
+
+
+def run_t1_diagnostic(cfg, config_path, script_path, no_slurm=False):
+    """run_task ``t1_diagnostic``: one EWF single point, plus the per-cluster
+    multireference metrics.
+
+    It runs the same DUMP + solve waves as ``run_task: energy`` -- so the
+    energy it reports is a genuine EWF single point, which with
+    ``ewf.solver: CCSD`` is the cheap EWF-CCSD reference -- and then collects
+    what the workers wrote.  Nothing is solved twice.
+    """
+    cfg["calculation"]["_want_t1_diagnostic"] = True
+    mol, mf, e_ewf, _ = _run_cycle(cfg, config_path, script_path,
+                                   no_slurm=no_slurm, tag="driver",
+                                   compute_gradient=False)
+    print(f"\n{method_label_for_cfg(cfg)} energy: {e_ewf:.10f} Ha")
+    collect_t1_diagnostics(cfg["calculation"]["workdir"], cfg)
 
 
 def run_circuit_analysis(cfg, config_path, script_path, no_slurm=False):
@@ -4068,7 +4243,8 @@ def parse_args(argv=None):
                         "skip geometry optimisation, regardless of the "
                         "geomopt.enabled flag in the config.")
     p.add_argument("--task",
-                   choices=["geomopt", "gradient", "energy", "circuits"],
+                   choices=["geomopt", "gradient", "energy", "circuits",
+                            "t1_diagnostic"],
                    default=None,
                    help="(driver mode) What to compute at the input geometry, "
                         "overriding calculation.run_task: 'geomopt' "
@@ -4155,6 +4331,8 @@ def main(argv=None):
         run_geomopt(cfg, cfgp, script_path, no_slurm=args.no_slurm)
     elif run_task == "circuits":
         run_circuit_analysis(cfg, cfgp, script_path, no_slurm=args.no_slurm)
+    elif run_task == "t1_diagnostic":
+        run_t1_diagnostic(cfg, cfgp, script_path, no_slurm=args.no_slurm)
     elif run_task == "energy":
         run_driver_singlepoint(cfg, cfgp, script_path,
                                no_slurm=args.no_slurm, compute_gradient=False)
