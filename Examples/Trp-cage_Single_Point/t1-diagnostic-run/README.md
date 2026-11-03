@@ -101,6 +101,33 @@ production number is wrong. Two things worth checking together:
   the conformer *difference*, so a fragment that is multireference in one
   conformer and not the other matters more than one that is borderline in both.
 
+## What is shipped here
+
+The completed run for both conformers, outputs included:
+
+| | |
+|---|---|
+| `EWF-CI_Geom_Opt_HPC.log` | the driver log: EWF-CCSD energy, the ranked table, the aggregates |
+| `jobs_EWF/t1_diagnostic.json` | consolidated per-cluster records plus run-level aggregates |
+| `jobs_EWF/t1diag_<NNN>.json` | 303 per-cluster records, one written as each cluster finished |
+| `vlog.txt` | Vayesta's fragmentation log |
+
+The bulky intermediates are not here and are excluded by
+[`../../../.gitignore`](../../../.gitignore) on the same grounds as the other
+Trp-cage examples: `cluster_<i>.h5`, `rdm_<i>.h5`, `hf.chk`, the per-fragment
+Slurm scripts and the raw `*.resource.jsonl` sample streams. Everything in them
+is regenerable from the config, the geometry and the driver sources shipped
+alongside.
+
+Two notes on provenance. The `CCSD:` solve block names `partition: merzk`,
+which is what the run actually used. And the shipped data came from a
+**restarted solve wave**: the first attempt computed the energy but wrote no
+diagnostics, because the driver set its "want diagnostics" flag on its own
+in-memory config while each Slurm worker re-read `config.yaml` from disk and
+never saw it. The fix passes `run_task` to the workers explicitly; the solve
+wave was then re-run against the existing cluster dumps, so the SCF and the
+fragmentation are those of the original run.
+
 ## Files
 
 | | |

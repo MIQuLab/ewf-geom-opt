@@ -64,7 +64,7 @@ slurm:
     ntasks: 8
     mem: 1TB
   CCSD:                      # one light CPU job per cluster
-    partition: defq
+    partition: merzk
     ntasks: 2
     mem: 16G
 
