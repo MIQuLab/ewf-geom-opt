@@ -337,7 +337,13 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
     sqd = (external == "SQD")
 
     # --- solver selection from the answers ---------------------------------
-    plain_solver = "SCI"                       # non-SBD default (FCI / SCI)
+    # t1_diagnostic defaults to CCSD: the diagnostic is DEFINED on CCSD t1
+    # amplitudes, and reaching them from a CI vector (T1 = c1/c0) degrades
+    # exactly where the diagnostic matters -- when the reference weight |c0|
+    # is small, i.e. when the cluster is multireference.  CCSD is also cheap
+    # enough at these cluster sizes to run on every fragment.
+    t1diag = (run_task == "t1_diagnostic")
+    plain_solver = "CCSD" if t1diag else "SCI"  # non-SBD default
     if sbd:
         external_solver = external          # SCI_SBD or FCI_SBD
     elif sqd:
@@ -405,7 +411,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
             a("    norb_threshold: 13        # clusters with norb < this -> high_accuracy_solver")
             a(f"    high_accuracy_solver: {high_solver}")
             a(f"    approximate_solver: {approx_solver}")
-        if run_task == "energy":
+        if run_task in ("energy", "t1_diagnostic"):
             a("  # ENERGY-ONLY fast path: sums the per-fragment energy directly")
             a("  # (cluster cumulant x cluster ERIs) instead of assembling the")
             a("  # global density, so the nmo^4 tensors are never formed.  Same")
@@ -450,6 +456,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a(f"  run_task: {run_task}"
           f"{' ' * max(1, 16 - len(run_task))}"
           "# geomopt | gradient (single-point E+grad) | energy (E only) | "
+          "t1_diagnostic (E + per-cluster multireference metrics) | "
           "circuits (LUCJ circuit-size analysis, no solve)")
     a(f"  run_mode: {run_mode}")
     if from_fcidump:
@@ -544,7 +551,7 @@ def build_config(hpc, run_mode, multi, external, proc, geometry="geometry.txt",
         a("  # after the solver that runs in it).  FCI / plain SCI are light; the")
         a("  # SCI_SBD / SQD orchestrator jobs use the 'parent' partition/time.")
         solvers_needed = ({high_solver, approx_solver} if multi else {single_solver})
-        for s in ("FCI", "SCI", "SCI_SBD", "SQD"):
+        for s in ("FCI", "SCI", "CCSD", "SCI_SBD", "SQD"):
             if s in solvers_needed:
                 if s in ("SCI_SBD", "SQD"):
                     pkey, tkey, mem = "parent", "parent", "170G"
@@ -798,11 +805,12 @@ def main():
     runtype_label = ask_choice(
         "1) Choice of runtype?",
         ["geometry optimization", "gradient", "energy only",
-         "quantum circuits analysis"])
+         "T1 diagnostic", "quantum circuits analysis"])
     run_task = {
         "geometry optimization": "geomopt",
         "gradient": "gradient",
         "energy only": "energy",
+        "T1 diagnostic": "t1_diagnostic",
         "quantum circuits analysis": "circuits",
     }[runtype_label]
     circuits = (run_task == "circuits")
@@ -893,8 +901,17 @@ def main():
             multi = ask_yesno("8) Utilize the per-fragment multi-solver?")
 
         # 3-way external-eigensolver choice (SCI-SBD and SQD share the SBD binary).
-        external_label = ask_choice(
-            "9) External eigensolver?", ["none", "SCI-SBD", "SQD"])
+        # t1_diagnostic runs CCSD in-process, so there is nothing for an
+        # external eigensolver to do and no sbd:/sqd: block is emitted.
+        if run_task == "t1_diagnostic":
+            print("\n   NOTE: the T1 diagnostic runs CCSD in-process on every "
+                  "cluster -- no external\n   eigensolver, no SBD binary, no "
+                  "GPU.  Edit ewf.solver in the generated\n   config if you "
+                  "want the diagnostic from a CI solver instead.")
+            external_label = "none"
+        else:
+            external_label = ask_choice(
+                "9) External eigensolver?", ["none", "SCI-SBD", "SQD"])
         if external_label == "SCI-SBD":
             external = "SCI_SBD"
         elif external_label == "SQD":
@@ -987,7 +1004,8 @@ def main():
               " + sqd.qiskit_backend / default_shots / n_reps (live Qiskit sampling)")
         print("   * sqd.iterations / n_batches / samples_per_batch (recovery loop) and")
         print("     sqd.ext_sqd_dprime_cutoff (final ext-SQD subspace)")
-    print("   * the solver choice (FCI / SCI / SCI_SBD / SQD) if the default does not fit")
+    print("   * the solver choice (FCI / SCI / CCSD / SCI_SBD / SQD) if the "
+          "default does not fit")
     print("\nRun it with:")
     print(f"   python EWF-CI_Geom_Opt_HPC.py --config {out}")
     return 0

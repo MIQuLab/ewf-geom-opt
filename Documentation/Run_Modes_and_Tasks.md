@@ -125,6 +125,7 @@ This is **off** for every other run mode, and deliberately so: a fragmented prot
 | **`geomopt`** (default) | A full geometry optimization | Uses the `geomopt.optimizer` backend (geomeTRIC / Sella / PyBerny); sets `geomopt.enabled: true`. |
 | **`gradient`** | One single-point energy **and** analytic nuclear gradient | The classic `--single-point` behavior; `geomopt.enabled: false`. |
 | **`energy`** | One single-point energy **only** (gradient skipped) | Skips the CPHF / Λ-relaxation gradient assembly — cheaper when only the energy is needed. Supported for every run mode, and the **only** task `fcidump` supports. |
+| **`t1_diagnostic`** | One single-point energy **and** per-cluster multireference metrics | Runs the same DUMP + solve waves as `energy`, then reports T1 / D1 / `max\|t1\|` / natural occupations per cluster. Writes `t1_diagnostic.json`; summary table in the log. Defaults to `ewf.solver: CCSD`. See below. |
 | **`circuits`** | LUCJ quantum-circuit **size analysis** for the SQD fragments | Builds and transpiles the LUCJ ansatz per fragment and writes a `circuit_metadata.json` (qubit count, ISA gate histogram, circuit / two-qubit depth) plus the circuits themselves as QPY (`logical_circuit.qpy`, `isa_circuit.qpy`). No cluster solve, no SBD, no energy/gradient, and **no IBM Runtime job is submitted**. |
 
 The task can be overridden per invocation with `--task {geomopt,gradient,energy,circuits}` (and the legacy `--single-point` still forces `gradient`). Configs without `run_task` fall back to the `geomopt.enabled` flag for backward compatibility — except under `run_mode: fcidump`, which has no geometry and so defaults to `energy` and refuses anything else, whether it was asked for in the config or on the command line.
@@ -133,3 +134,57 @@ The task can be overridden per invocation with `--task {geomopt,gradient,energy,
 
 ---
 
+---
+
+### The `t1_diagnostic` task
+
+Answers *which clusters is a single-reference solver not to be trusted on* —
+the prerequisite for interpreting any fragmented result.
+
+```yaml
+calculation:
+  run_task: t1_diagnostic
+ewf:
+  solver: CCSD
+```
+
+It runs exactly the DUMP + solve waves `run_task: energy` runs, so the energy
+it reports is a genuine EWF single point — with `solver: CCSD`, a cheap
+**EWF-CCSD reference** for the SCI/SQD production number. Nothing is solved
+twice. It then collects what the workers wrote.
+
+| metric | definition | flagged above |
+|---|---|---|
+| **T1** | ‖t₁‖_F ⁄ √N, N = 2·n_occ correlated electrons (Lee–Taylor) | 0.02 |
+| **D1** | largest singular value of t₁ (Janssen–Nielsen) | 0.05 |
+| `max\|t1\|` | largest amplitude, with its (occ, vir) indices | — |
+| natural occupations | largest deviation from 0 or 2 | — |
+| `\|c0\|` | reference weight — **CI solvers only** | — |
+
+D1 is reported alongside T1 because the norm averages over the cluster and can
+hide multireference character carried by one or two orbitals.
+
+**Why CCSD is the default.** T1 *is* a CCSD amplitude. The driver can reach it
+from FCI/SCI through `CI → CISD → CCSD`, `T1 = c1/c0`, but that conversion is
+least reliable exactly where the diagnostic matters — the solve worker already
+warns at `|c0| < 1e-2`, and a small reference weight is itself multireference
+character. CCSD gives the quantity rather than an estimate of it that degrades
+in the interesting regime. It is also cheap: seconds per cluster on one core,
+no SBD binary, no GPU. With a CI solver the task still works and additionally
+reports `|c0|`; CCSD is intermediate-normalised so that column is blank there.
+
+**Non-convergence is recorded, not raised.** A cluster CCSD cannot converge on
+is strong evidence of multireference character. It is written with
+`converged: false`, flagged `NOCONV`, counted in the summary, and the run
+continues — one hard cluster must not abort a 300-fragment job, and discarding
+it would throw away the clearest signal in the set.
+`calculation.ccsd_retry_on_failure: true` retries once with three times the
+iterations and heavier DIIS first.
+
+**No global T1 is reported.** Vayesta's `t1_diagnostic` also prints a
+whole-system value from `get_global_t1`. This task reports per-cluster values
+plus aggregates (max / mean / median, counts flagged and non-converged)
+instead: the fragmented route never forms a whole-system CCSD wavefunction, and
+quoting one number as if it did would overclaim.
+
+Worked example: [`Examples/Trp-cage_Single_Point/t1-diagnostic-run/`](../Examples/Trp-cage_Single_Point/t1-diagnostic-run/).

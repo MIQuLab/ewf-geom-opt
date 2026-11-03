@@ -1,0 +1,72 @@
+# ===========================================================================
+# T1 diagnostic on Trp-cage (folded conformer)
+#
+#   run_task : t1_diagnostic  -- one EWF single point PLUS the per-cluster
+#                               multireference metrics
+#   solver   : CCSD           -- the diagnostic is DEFINED on CCSD t1
+#                               amplitudes
+#
+# The fragmentation is IDENTICAL to the production run in
+# ../../Latest_Implementation/Folded_Conformer (same basis, same
+# bath_threshold), so the per-cluster diagnostics map one-to-one onto the
+# clusters whose energies that run reports.  Only the solver differs.
+#
+# Why CCSD and not the production FCI/SQD mix:
+#   * T1 is a CCSD amplitude.  Reaching it from a CI vector means
+#     T1 = c1/c0, which degrades exactly when |c0| is small -- i.e. when the
+#     cluster is multireference, which is the case the diagnostic exists to
+#     find.  CCSD gives the quantity itself.
+#   * It is cheap.  CCSD on a 16-33 orbital cluster is seconds on one core,
+#     so all clusters run uniformly on CPU with no SBD binary and no GPU.
+#   * A uniform solver makes the per-cluster numbers comparable to each
+#     other, which a mixed FCI/SQD assignment would not.
+# The energy it reports is therefore also a genuine EWF-CCSD reference for
+# the SCI/SQD production number.
+# ===========================================================================
+
+ewf:
+  bath_threshold: 1.0e-5      # MUST match the production run for comparability
+  solver: CCSD
+  multi_solver:
+    enabled: false            # uniform CCSD on every cluster, deliberately
+  assembly: cluster_energy    # energy-only; no global nmo^4 cumulant
+
+calculation:
+  run_task: t1_diagnostic
+  run_mode: ewf
+  geometry_file: folded_structure.txt
+  basis: sto-3g
+  charge: 0
+  spin: 0
+  symmetry: false
+  workdir: jobs
+  fci_conv_tol: 1.0e-12
+  # CCSD-specific controls (all optional; these are the defaults)
+  ccsd_conv_tol: 1.0e-8
+  ccsd_max_cycle: 100
+  # false = record non-convergence and carry on, which is what we want: a
+  # cluster CCSD cannot converge on is itself evidence of multireference
+  # character, and one such cluster must not abort a 300-fragment run.
+  # true = retry once with 3x the iterations and heavier DIIS first.
+  ccsd_retry_on_failure: false
+  restart: false
+
+hf:
+  gpu: true                # the SCF is the only expensive step here
+  density_fit: true
+
+slurm:
+  python_executable: python
+  poll_interval: 15
+  max_concurrent_solve: 64   # CCSD jobs are light and spawn no sub-jobs
+  dump:                      # integral / cluster dump wave
+    partition: merzk
+    ntasks: 8
+    mem: 1TB
+  CCSD:                      # one light CPU job per cluster
+    partition: defq
+    ntasks: 2
+    mem: 16G
+
+geomopt:
+  enabled: false
