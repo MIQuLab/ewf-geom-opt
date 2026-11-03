@@ -1,7 +1,6 @@
 # T1 diagnostic on Trp-cage
 
-Which of the 303 clusters are **multireference**, and therefore which ones a
-single-reference solver should not be trusted on.
+This diagnostic analyzes the degree of **multireference** character in 303 EWF clusters of Trp-cage model.
 
 Both conformers, the same fragmentation as the production runs in
 [`../Latest_Implementation/`](../Latest_Implementation/), solved with **CCSD on
@@ -75,9 +74,9 @@ JSON), the aggregates, and the flagged count.
   0 of 303 cluster(s) flagged (0%)
 ```
 
-## Non-convergence is data, not failure
+## Non-convergence monitoring
 
-A cluster CCSD cannot converge on is **strong evidence of multireference
+A cluster CCSD cannot converge on is **strong evidence of potential multireference
 character**. Such a cluster is recorded with `converged: false`, flagged
 `NOCONV` in the table, counted in the summary, and the run continues. One hard
 cluster must not abort a 303-fragment job, and discarding it would throw away
