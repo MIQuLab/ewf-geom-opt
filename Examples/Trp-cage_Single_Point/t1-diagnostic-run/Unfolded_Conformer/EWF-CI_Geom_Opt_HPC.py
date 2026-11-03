@@ -1535,8 +1535,14 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
     # fragments run concurrently.
     probe_block = ""
     if resource_probe is not None and resource_probe.enabled(cfg.get("slurm", {})):
+        # abspath: calculation.workdir is relative in every shipped config
+        # ('jobs'), so stage_dir is relative too -- and probe_block REQUIRES an
+        # absolute path, because the block is written to sit anywhere in the
+        # script, before or after its `cd`.  Without this, any fragmented run
+        # with a relative workdir dies on the first fragment submission.
         probe_block = resource_probe.probe_block(
-            os.path.join(stage_dir, "frag_%s.resource.jsonl" % tag),
+            os.path.abspath(
+                os.path.join(stage_dir, "frag_%s.resource.jsonl" % tag)),
             gpu=False, **resource_probe.schedule(cfg.get("slurm", {})))
 
     body = (
