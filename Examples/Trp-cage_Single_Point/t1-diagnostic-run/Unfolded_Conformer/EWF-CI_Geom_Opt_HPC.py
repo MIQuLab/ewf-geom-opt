@@ -160,6 +160,10 @@ BOHR = _lib_param.BOHR  # Angstrom per Bohr
 #              rather than an estimate of it (see run_task: t1_diagnostic).
 _VALID_SOLVERS = ("FCI", "SCI", "SCI_SBD", "FCI_SBD", "SQD", "CCSD")
 
+# Tasks that may be forwarded to a per-fragment worker on its command line.
+_RUN_TASKS_CLI = ("geomopt", "gradient", "energy", "t1_diagnostic",
+                  "circuits")
+
 # Supported geometry-optimisation backends (``geomopt.optimizer``).
 _VALID_OPTIMIZERS = frozenset({"geometric", "berny", "sella"})
 
@@ -1533,6 +1537,13 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
     # questions arise, and the measurement costs nothing.  Output is named per
     # fragment, since this script cd's to the run directory and several
     # fragments run concurrently.
+    # run_task travels to the worker explicitly: it decides whether the solve
+    # writes its T1 diagnostic, and a worker cannot see the driver's in-memory
+    # cfg.  Passing it also covers `--task t1_diagnostic` given on the CLI
+    # against a config.yaml that still says `energy`.
+    _rt = str(cfg.get("calculation", {}).get("run_task") or "")
+    task_arg = f" --task {_rt}" if _rt in _RUN_TASKS_CLI else ""
+
     probe_block = ""
     if resource_probe is not None and resource_probe.enabled(cfg.get("slurm", {})):
         # abspath: calculation.workdir is relative in every shipped config
@@ -1566,7 +1577,7 @@ def write_slurm_script(stage, frag_idx, cfg, workdir, config_path,
         f'{solver_comment}'
         f'{shlex.quote(py)} {shlex.quote(os.path.abspath(script_path))} '
         f'--config {shlex.quote(os.path.abspath(config_path))} '
-        f'--mode {worker_mode} --frag-idx {frag_idx}{solver_arg}\n'
+        f'--mode {worker_mode} --frag-idx {frag_idx}{solver_arg}{task_arg}\n'
     )
 
     sh_path = os.path.join(stage_dir, f"frag_{tag}.sh")
@@ -2154,7 +2165,15 @@ def run_fci_worker(frag_idx, cfg, solver_override=None):
     # CCSD directly when that is the solver, and from the CI->CISD->CCSD
     # conversion otherwise -- in which case |c0| is also recorded, because a
     # small reference weight is exactly when t1 = c1/c0 stops meaning anything.
-    if bool(cfg["calculation"].get("_want_t1_diagnostic", False)):
+    # The driver sets ``_want_t1_diagnostic`` on its own cfg dict, which only
+    # reaches a worker running INLINE (--no-slurm).  A Slurm worker is a fresh
+    # process that re-reads config.yaml, so it must derive the intent from
+    # something that is actually on disk -- ``run_task`` -- or from the --task
+    # the driver propagates onto its command line.
+    _calc = cfg["calculation"]
+    _want_t1 = (bool(_calc.get("_want_t1_diagnostic", False))
+                or str(_calc.get("run_task", "")) == "t1_diagnostic")
+    if _want_t1:
         _here = os.path.dirname(os.path.abspath(__file__))
         if _here not in sys.path:
             sys.path.insert(0, _here)
