@@ -63,15 +63,24 @@ a partial run is still readable.
 of clusters ranked by T1 (the top 40 when there are more, with the rest in the
 JSON), the aggregates, and the flagged count.
 
+The folded conformer, as shipped in `Folded_Conformer/`:
+
 ```
+[driver] EWF-CCSD energy: -7354.0516869753 Ha
+
 [driver] T1 DIAGNOSTIC over 303 cluster(s)
 [driver] thresholds: T1 >= 0.02, D1 >= 0.05
   frag name            norb   nocc        T1        D1   max|t1|     |c0| flag
 --------------------------------------------------------------------------------------
-    17 TRP               31     18   0.03112   0.07410   0.05882       -- T1D1
+   246 H                  8      4   0.01907   0.05360   0.05359       -- D1
+   164 O                 15     10   0.01877   0.07270   0.07253       -- D1
+   165 O                 15     10   0.01873   0.07357   0.07258       -- D1
+   239 H                  8      4   0.01870   0.05241   0.05239       -- D1
+   301 O                 16     10   0.01832   0.07106   0.06727       -- D1
    ...
-  T1: max 0.03112  mean 0.00841  median 0.00702
-  0 of 303 cluster(s) flagged (0%)
+  T1: max 0.01907  mean 0.00613  median 0.00381
+  D1: max 0.07469  mean 0.02364
+  61 of 303 cluster(s) flagged (20%)
 ```
 
 ## Non-convergence monitoring
@@ -87,18 +96,53 @@ the iterations and heavier DIIS damping before recording failure — that
 distinguishes a cluster that merely needed longer from one that genuinely
 cannot be described by a single reference.
 
+## What this run found
+
+The fragments here are **atoms**, not residues — 149 H, 98 C, 29 O, 27 N,
+clusters of 6 to 33 orbitals. Both conformers, all 303 clusters, CCSD
+converged everywhere.
+
+| | folded | unfolded |
+|---|---|---|
+| EWF-CCSD energy (Ha) | −7354.0516869753 | −7353.9737347172 |
+| T1 max / mean / median | 0.01907 / 0.00613 / 0.00381 | 0.02016 / 0.00610 / 0.00380 |
+| D1 max / mean | 0.07469 / 0.02364 | 0.08106 / 0.02338 |
+| clusters over T1 ≥ 0.02 | **0** of 303 | **1** of 303 |
+| clusters over D1 ≥ 0.05 | **61** of 303 (20%) | **52** of 303 (17%) |
+| CCSD non-convergence | 0 | 0 |
+
+**The headline is the gap between the two columns of flags.** On T1 this system
+looks uniformly single-reference — one cluster out of 606 reaches the
+threshold, and that one only just. On D1 roughly a fifth of all clusters are
+flagged. That is precisely the failure mode D1 is reported for: T1 is a norm
+over the whole cluster, so character carried by one or two orbitals is divided
+away, while D1 is the largest singular value and keeps it. Had this run
+reported T1 alone it would have concluded there is nothing to look at.
+
+Every flag in both conformers is a D1 flag.
+
+By fragment element, folded: C 31, O 14, N 11, H 5. The flagged clusters are
+not exotic — the largest single amplitude in the worst cluster sits on a
+hydrogen with `norb 8`.
+
+**Across conformers:** 36 clusters are flagged in both, 25 in the folded only,
+16 in the unfolded only. Since the physical quantity is the conformer
+*difference*, those 41 one-sided clusters are where a single-reference
+treatment could bias the difference rather than cancelling out of it, and they
+are the set worth re-examining with a CI solver.
+
+The EWF-CCSD difference is −0.0779522581 Ha = **−48.9 kcal/mol**, folded
+lower. Treat that as a reference energy for the two geometries as given, on
+one method and one fragmentation — not a folding free energy: it carries no
+solvation, no thermal or entropic contribution, and no basis-set or
+bath-threshold extrapolation.
+
 ## Reading the result
 
 The diagnostic is a **screening tool**, not a verdict. A flagged cluster says
 the single-reference description is suspect there and that the production
 SCI/SQD treatment of that fragment deserves scrutiny; it does not say the
-production number is wrong. Two things worth checking together:
-
-- **Which fragments are flagged, and are they chemically plausible?** Aromatic
-  and conjugated residues are the expected candidates.
-- **Do folded and unfolded flag the same fragments?** The physical quantity is
-  the conformer *difference*, so a fragment that is multireference in one
-  conformer and not the other matters more than one that is borderline in both.
+production number is wrong.
 
 ## What is shipped here
 

@@ -118,7 +118,7 @@ This is **off** for every other run mode, and deliberately so: a fragmented prot
 
 ## Run tasks
 
-`calculation.run_task` selects **what the driver produces** at the input geometry — an axis orthogonal to `run_mode` (which selects *what system* is solved). It is the first question the interactive generator asks. Four tasks are available:
+`calculation.run_task` selects **what the driver produces** at the input geometry — an axis orthogonal to `run_mode` (which selects *what system* is solved). It is the first question the interactive generator asks. Five tasks are available:
 
 | `run_task` | Produces | Notes |
 |---|---|---|
@@ -128,11 +128,9 @@ This is **off** for every other run mode, and deliberately so: a fragmented prot
 | **`t1_diagnostic`** | One single-point energy **and** per-cluster multireference metrics | Runs the same DUMP + solve waves as `energy`, then reports T1 / D1 / `max\|t1\|` / natural occupations per cluster. Writes `t1_diagnostic.json`; summary table in the log. Defaults to `ewf.solver: CCSD`. See below. |
 | **`circuits`** | LUCJ quantum-circuit **size analysis** for the SQD fragments | Builds and transpiles the LUCJ ansatz per fragment and writes a `circuit_metadata.json` (qubit count, ISA gate histogram, circuit / two-qubit depth) plus the circuits themselves as QPY (`logical_circuit.qpy`, `isa_circuit.qpy`). No cluster solve, no SBD, no energy/gradient, and **no IBM Runtime job is submitted**. |
 
-The task can be overridden per invocation with `--task {geomopt,gradient,energy,circuits}` (and the legacy `--single-point` still forces `gradient`). Configs without `run_task` fall back to the `geomopt.enabled` flag for backward compatibility — except under `run_mode: fcidump`, which has no geometry and so defaults to `energy` and refuses anything else, whether it was asked for in the config or on the command line.
+The task can be overridden per invocation with `--task {geomopt,gradient,energy,t1_diagnostic,circuits}` (and the legacy `--single-point` still forces `gradient`). Configs without `run_task` fall back to the `geomopt.enabled` flag for backward compatibility — except under `run_mode: fcidump`, which has no geometry and so defaults to `energy` and refuses anything else, whether it was asked for in the config or on the command line.
 
 **The `circuits` task** exists purely to collect circuit sizes for the fragments that would be solved with SQD. Fragment selection mirrors the multi-solver split: with `multi_solver` **disabled** it builds a circuit for *every* fragment; with it **enabled** it builds circuits only for fragments whose `norb ≥ multi_solver.norb_threshold` (the SQD-eligible clusters). Each fragment's DUMP wave still runs (the LUCJ circuit is built from the cluster FCIDUMP), but only the circuit is transpiled — for the real `sqd.qiskit_backend` target, so device-accurate depths and gate counts are recorded — and nothing is executed on the QPU. Fetching the backend target is a read-only metadata call (IBM credentials/network required), not a job submission. The config generated for this task carries a minimal `sqd:` block (only the LUCJ / IBM-backend knobs) and no `sbd:` block or CPU/GPU choice.
-
----
 
 ---
 
