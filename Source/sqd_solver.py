@@ -385,7 +385,9 @@ def _write_sqd_slurm_script(workdir, run_cmd, log_path, status_path, cfg,
     probe_block = ""
     if resource_probe is not None and resource_probe.enabled(cfg):
         probe_block = resource_probe.probe_block(
-            os.path.join(workdir, "resource_probe.jsonl"),
+            # absolute: probe_block requires it, and a relative workdir here
+            # would fail the same way the driver's per-fragment site did
+            os.path.abspath(os.path.join(workdir, "resource_probe.jsonl")),
             gpu=(int(cfg.get("proc_type", 1)) == 1),
             gpu_processes=resource_probe.gpu_processes(cfg),
             **resource_probe.schedule(cfg))

@@ -188,19 +188,26 @@ reproduced here for completeness.
 
 ### Scope: which solvers this project targets
 
-This project focuses specifically on EWF simulations with **SCI**, **FCI**, and
-**SQD** solvers — classical configuration-interaction methods and
-quantum-centric sample-based diagonalization. CCSD is deliberately outside that
-scope.
+The research focus of this project is EWF simulations with **SCI**, **FCI**,
+and **SQD** solvers — classical configuration-interaction methods and
+quantum-centric sample-based diagonalization.
 
-Single-point **CCSD** calculations do not need this code: they can be performed
-with standard [Vayesta](https://github.com/BoothGroup/Vayesta), which provides a
-CCSD cluster solver directly. The `Reference_EWF-CCSD_Data/` here was produced
-that way.
+**CCSD is now also available** (`ewf.solver: CCSD`), in a supporting role
+rather than as a research target. It serves two purposes the CI solvers cannot:
+a cheap whole-system **reference energy** computed through the same code path
+and the same fragmentation, and the **T1/D1 amplitude diagnostics**
+(`run_task: t1_diagnostic`) that identify which clusters are multireference.
+The diagnostic is defined on CCSD t₁ amplitudes; reaching them from a CI vector
+means `T1 = c1/c0`, which degrades exactly when the reference weight is small —
+that is, in precisely the multireference case the diagnostic exists to detect.
 
-A CCSD solver may be integrated in the future, but it is not a priority — the
-focus of this work remains configuration-interaction calculations and
-quantum-centric SQD simulations.
+The `Reference_EWF-CCSD_Data/` here predates that solver and was produced with
+standard [Vayesta](https://github.com/BoothGroup/Vayesta), which provides a CCSD
+cluster solver directly; it remains a useful independent check.
+
+The focus of this work remains configuration-interaction calculations and
+quantum-centric SQD simulations; CCSD supports them rather than competing with
+them.
 
 ---
 

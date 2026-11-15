@@ -7,11 +7,20 @@ implementation change can be measured rather than asserted.
 |---|---|---|
 | [`JCTC_2026/`](JCTC_2026/) | Published | EWF-(FCI,SQD) data as it appears in [*JCTC* **2026**, *22* (12), 6041–6056](https://pubs.acs.org/jctcce/article/22/12/6041/5166449/Molecular-Quantum-Computations-on-a-Protein), plus EWF-CCSD reference data |
 | [`Latest_Implementation/`](Latest_Implementation/) | Current | Re-run of both conformers with the GPU-accelerated SBD eigensolver |
+| [`t1-diagnostic-run/`](t1-diagnostic-run/) | Current | **Which clusters are multireference** — CCSD on all 303 clusters of both conformers, giving per-cluster T1/D1 diagnostics and an EWF-CCSD reference energy |
 
-Both cover the **folded** and **unfolded** Trp-cage conformers, fragmented into
-303 clusters, with the largest clusters solved by ext-SQD and the rest
-classically. The chemistry is identical; only the eigensolver and its
+The first two cover the **folded** and **unfolded** Trp-cage conformers,
+fragmented into 303 clusters, with the largest clusters solved by ext-SQD and
+the rest classically. The chemistry is identical; only the eigensolver and its
 convergence settings differ.
+
+[`t1-diagnostic-run/`](t1-diagnostic-run/) uses the **same fragmentation
+again** — same basis, same `bath_threshold` — but solves every cluster with
+CCSD. It answers a different question: not what the energy is, but **which
+clusters a single-reference solver should not be trusted on**, which is the
+prerequisite for interpreting the SCI/SQD numbers the other two directories
+report. It also yields an EWF-CCSD reference energy as a by-product. See its
+[README](t1-diagnostic-run/README.md).
 
 ---
 
