@@ -325,7 +325,7 @@ def diagonalize_fermionic_hamiltonian(
     spin_sq = 0
 
     # Run configuration recovery loop
-    for _ in range(max_iterations):
+    for sqd_iteration_number in range(max_iterations):
         if current_occupancies is None:
             # If we don't have average orbital occupancy information, simply postselect
             # bitstrings with the correct numbers of spin-up and spin-down electrons
@@ -511,8 +511,8 @@ def diagonalize_fermionic_hamiltonian(
         # DSK save "best_result" SCI coefficients and CI strings
         # Here we are currently saving only Alpha CI strings because we are working only with closed shell.
         # Later this syntax will need to be revisited to account for saving of Beta strings.
-        np.savetxt(workflow_path+'address_for_lowest_energy_batch.txt', best_result.sci_state.ci_strs_a)
-        np.savetxt(workflow_path+'sci_vector_for_lowest_energy_batch.txt', best_result.sci_state.amplitudes)
+        np.savetxt(workflow_path+'address_for_lowest_energy_batch-'+str(sqd_iteration_number)+'.txt', best_result.sci_state.ci_strs_a)
+        np.savetxt(workflow_path+'sci_vector_for_lowest_energy_batch-'+str(sqd_iteration_number)+'.txt', best_result.sci_state.amplitudes)
 
         # Check convergence
         if (

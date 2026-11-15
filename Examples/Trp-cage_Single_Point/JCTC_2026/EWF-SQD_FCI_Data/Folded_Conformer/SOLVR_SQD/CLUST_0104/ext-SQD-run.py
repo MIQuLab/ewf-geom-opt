@@ -2,7 +2,7 @@ import pyci
 import numpy as np
 import time
 from pyscf import fci, tools, ao2mo
-import os, yaml, subprocess
+import os, yaml
 
 # Exact path for the Workflow folder
 current_folder = os.getcwd()
@@ -115,25 +115,49 @@ j = 0
 
 # Save ext-SQD determinants into the file
 np.savetxt(workflow_path+'batchExtSQD-' + str(j) + '.dat', addresses_alpha_aug)
-# Assign batch patch as variable
-batch_path = workflow_path+'batchExtSQD-' + str(j) + '.dat'
 
-print("Started solver for diagonalization of ext-SQD subspace")
+from submission_utilities import submit_slurm_job, format_job_id, monitor_loop
+print("SLURM initiated new job for diagonalization of ext-SQD subspace")
 print("####################")
 
-# Inititate ext-SQD solver
-solver_path = workflow_path+'solver_extSQD.py'
-command = ["python", solver_path, batch_path]
-try:
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
-except subprocess.CalledProcessError as e:
-    print("❌ solver_extSQD.py failed with the following error:")
-    print("STDOUT:\n", e.stdout)
-    print("STDERR:\n", e.stderr)
-    raise
+# Create an empty array to store job IDs
+job_id_array = np.zeros(n_batches, dtype=int) # Array with single entry
+# job_id_array is simply kept to allow for consistent code structure between SQD and ext-SQD parts of the workflow
+
+# Create individual submission scripts 
+os.system(f"cp {workflow_path}/submit_batch_template_extSQD.sh {workflow_path}/batchExtSQD-{j}.sh")
+os.system(f"sed -i 's/BATCH_INDEX/{j}/g' {workflow_path}/batchExtSQD-{j}.sh")
+
+# Define the SLURM variables.
+# Job name can be changed, but batchExtSQD-{j}.sh is the naming anticipated
+# by other portions of the code.
+slurm_script_path = workflow_path + f"batchExtSQD-{j}.sh"
+job_name = f"sciExtSQD-{j}"
+
+# Memory and partition from config.yaml
+memory_mb = config_params['memory_mb']
+partition = config_params['partition']
+
+# Number of CPUs used in SBD-solver from config.yaml
+ntasks = config_params['cpus_per_batch']
+
+# Submit slurm job
+slurm_job_id = submit_slurm_job(slurm_script_path, job_name, memory_mb, ntasks, partition)
+
+# Format slurm job id to be the integer
+formatted_job_id = format_job_id(slurm_job_id)
+
+# Save the job id in job_id_array
+job_id_array[0] = formatted_job_id
+
+# Only needed for DICE-solver. Can be 0 or 1 second for SBD.
+time.sleep(config_params['submission_delay']) # delay defined in config.yaml
+
+# Check job status and release if ext-SQD diagonalization is done
+monitor_loop(job_id_array,n_batches,config_params['monitor_delay']) # need to delay each check for Slurm completion to avoid crashes.
 
 print("####################")
-print("Completed solver step")
+print("Completed SLURM step")
 print("####################")
 
 # Load the data from the batch

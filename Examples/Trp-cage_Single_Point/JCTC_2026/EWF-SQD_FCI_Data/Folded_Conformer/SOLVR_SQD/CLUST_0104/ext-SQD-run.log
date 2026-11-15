@@ -1,9 +1,10 @@
-d-prime is: 82 weight is: 0.9993452903950176
-Augmented subspace size: 39623
-Started solver for diagonalization of ext-SQD subspace
+d-prime is: 1777 weight is: 0.9703705761814844
+Augmented subspace size: 772603
+SLURM initiated new job for diagonalization of ext-SQD subspace
 ####################
+Job submitted successfully! Job ID: Submitted batch job 3602222
 ####################
-Completed solver step
+Completed SLURM step
 ####################
-Total energy based on augmented subspace: -200.9153130792488
-Time of ext-SQD step: 9371.135140419006 seconds
+Total energy based on augmented subspace: -201.1254012782066
+Time of ext-SQD step: 123319.94157791138 seconds
