@@ -111,38 +111,10 @@ converged everywhere.
 | clusters over D1 ≥ 0.05 | **61** of 303 (20%) | **52** of 303 (17%) |
 | CCSD non-convergence | 0 | 0 |
 
-**The headline is the gap between the two columns of flags.** On T1 this system
-looks uniformly single-reference — one cluster out of 606 reaches the
-threshold, and that one only just. On D1 roughly a fifth of all clusters are
-flagged. That is precisely the failure mode D1 is reported for: T1 is a norm
-over the whole cluster, so character carried by one or two orbitals is divided
-away, while D1 is the largest singular value and keeps it. Had this run
-reported T1 alone it would have concluded there is nothing to look at.
-
-Every flag in both conformers is a D1 flag.
-
-By fragment element, folded: C 31, O 14, N 11, H 5. The flagged clusters are
-not exotic — the largest single amplitude in the worst cluster sits on a
-hydrogen with `norb 8`.
-
 **Across conformers:** 36 clusters are flagged in both, 25 in the folded only,
 16 in the unfolded only. Since the physical quantity is the conformer
 *difference*, those 41 one-sided clusters are where a single-reference
-treatment could bias the difference rather than cancelling out of it, and they
-are the set worth re-examining with a CI solver.
-
-The EWF-CCSD difference is −0.0779522581 Ha = **−48.9 kcal/mol**, folded
-lower. Treat that as a reference energy for the two geometries as given, on
-one method and one fragmentation — not a folding free energy: it carries no
-solvation, no thermal or entropic contribution, and no basis-set or
-bath-threshold extrapolation.
-
-## Reading the result
-
-The diagnostic is a **screening tool**, not a verdict. A flagged cluster says
-the single-reference description is suspect there and that the production
-SCI/SQD treatment of that fragment deserves scrutiny; it does not say the
-production number is wrong.
+treatment could bias the difference rather than cancelling out of it.
 
 ## What is shipped here
 
@@ -162,15 +134,6 @@ Slurm scripts and the raw `*.resource.jsonl` sample streams. Everything in them
 is regenerable from the config, the geometry and the driver sources shipped
 alongside.
 
-Two notes on provenance. The `CCSD:` solve block names `partition: merzk`,
-which is what the run actually used. And the shipped data came from a
-**restarted solve wave**: the first attempt computed the energy but wrote no
-diagnostics, because the driver set its "want diagnostics" flag on its own
-in-memory config while each Slurm worker re-read `config.yaml` from disk and
-never saw it. The fix passes `run_task` to the workers explicitly; the solve
-wave was then re-run against the existing cluster dumps, so the SCF and the
-fragmentation are those of the original run.
-
 ## Files
 
 | | |
@@ -181,5 +144,3 @@ fragmentation are those of the original run.
 | `CCF_HPC_settings.yaml` | site definition |
 | `cluster_ccsd.py` | the CCSD cluster solver and the diagnostic metrics |
 | `*.py` | the driver sources used for the run |
-
-`cluster_ccsd.py` is new and **must** be present in the run folder.
