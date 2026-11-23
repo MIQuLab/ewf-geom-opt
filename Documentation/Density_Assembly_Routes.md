@@ -30,7 +30,7 @@ Write $P_x$ for the occupied-index fragment projector $P_x = \big(C_x^{\mathrm{o
 
 **In the idealized limit the two routes are identical.** If every fragment's amplitudes are restrictions of one common global $(T_1, T_2)$ and the projectors resolve the identity, $\sum_x P_x = 1$, then because the projection is *linear*
 
-$$\sum_x P_x\big[C_2 - C_1 \otimes C_1\big] \;=\; C_2 - C_1 \otimes C_1,$$
+$$\sum_x P_x\big[C_2 - C_1 \otimes C_1\big] \=\ C_2 - C_1 \otimes C_1,$$
 
 so converting before projecting and summing reproduces the single global conversion exactly. Verified numerically to $4\times10^{-17}$. The non-linearity only ever mattered because the pre-fix ordering subtracted the *projected* $T_1$; with the conversion moved ahead of the projection, that source of disagreement is gone.
 
