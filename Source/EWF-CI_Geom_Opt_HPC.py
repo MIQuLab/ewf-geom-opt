@@ -243,20 +243,26 @@ def load_config(path):
     #                   symmetrisation are applied before rotation to the global
     #                   MO basis.  Global 1-/2-RDMs via CCSD rdm with l = t.
     #
-    #   "ci_vayesta"  : CI-coefficient route, faithful to Vayesta.  Each
-    #   "ci_revised"    fragment's intermediate-normalised CI coefficients
+    #   "ci_vayesta"  : CI-coefficient routes.  Each fragment's
+    #   "ci_revised"    intermediate-normalised CI coefficients
     #                   (C1 = c1/c0, C2 = c2/c0) are projected on the first
-    #                   occupied index and symmetrised; then rotated to the
+    #                   occupied index and symmetrised, then rotated to the
     #                   global MO basis and accumulated.  The two differ in
     #                   ONE place -- where the disconnected T1⊗T1 is
-    #                   subtracted -- and are otherwise the same code path
+    #                   subtracted, which also fixes whether the projection
+    #                   acts on CI coefficients or on T-amplitudes --
+    #                   and are otherwise the same code path
     #                   (see assemble_global_rdms_from_civec's ``ordering``):
     #
-    #                     "ci_vayesta"  converts PER FRAGMENT, before
-    #                       rotation:  t1x = C1_x,  t2x = C2_x − t1x⊗t1x,
-    #                       then tiles the T-amplitudes.  This reproduces
-    #                       Vayesta's get_global_t{1,2}_rhf, which call
-    #                       pwf.restore().as_ccsd() on each fragment.
+    #                     "ci_vayesta"  converts PER FRAGMENT on the
+    #                       UNPROJECTED cluster wave function, before the
+    #                       fragment projection and rotation:
+    #                         t1x = C1_x,  t2x = C2_x − C1_x⊗C1_x,
+    #                       then projects, symmetrises and tiles the
+    #                       T-amplitudes.  This follows Vayesta after the fix
+    #                       to issue #222, which moved the conversion ahead of
+    #                       the projection because C → T does not commute with
+    #                       it (vayesta/ewf/fragment.py).
     #
     #                     "ci_revised"  accumulates the (LINEAR) C1/C2 into
     #                       one global pair and converts ONCE, globally:
@@ -2312,26 +2318,39 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global,
           (Vayesta: ``RCISD_WaveFunction.as_cisd(c0=1.0)``.)
        2. Build the occupied-only fragment projector
           P^x_oo = (c_oo_x.T S c_frag)(c_frag.T S c_oo_x).
-       3. Project C1 and C2 on the first occupied index via P^x_oo.
-          (Vayesta: ``project_c1`` / ``project_c2`` in
+       3. Project the two-index quantity on the first occupied index via
+          P^x_oo.  (Vayesta: ``project_c1`` / ``project_c2`` in
           ``vayesta/core/types/wf/project.py``.)
-       4. Symmetrise projected C2: C2_sym = (P·C2 + (P·C2)^T)/2.
+       4. Symmetrise it: (P·X + (P·X)^T)/2.
           (Vayesta: ``symmetrize_c2``, applied inside ``restore()``.)
        5. Rotate cluster → global MO basis and accumulate.
 
     ``ordering='per_fragment'`` — the ``ci_vayesta`` route
     -----------------------------------------------------
-    Converts CISD→CCSD inside the loop, before rotation::
+    Converts CISD→CCSD inside the loop on the **unprojected** cluster wave
+    function, i.e. BEFORE step 3::
 
         t1x = C1_x
-        t2x = C2_x − t1x⊗t1x
+        t2x = C2_x − C1_x⊗C1_x          # full cluster T1, not the projected one
 
-    and accumulates the T-amplitudes.  This reproduces unmodified Vayesta,
-    whose ``get_global_t1_rhf`` / ``get_global_t2_rhf`` call
-    ``pwf.restore().as_ccsd()`` on each fragment and then tile the resulting
-    amplitudes (``vayesta/ewf/amplitudes.py``, with the conversion itself in
-    ``RCISD_WaveFunction.as_ccsd`` in ``vayesta/core/types/wf/cisd.py``).
+    and then projects, symmetrises and accumulates the T-amplitudes.
+
+    This follows Vayesta **after** the fix to BoothGroup/Vayesta issue #222.
+    ``vayesta/ewf/fragment.py`` now stores ``pwf = wf.as_ccsd()`` built from
+    the unprojected wave function and projects that, because the C → T
+    conversion is non-linear and does not commute with the fragment
+    projection; ``RCISD_WaveFunction.as_ccsd`` raises if handed an
+    already-projected wave function.  ``get_global_t{1,2}_rhf`` then applies
+    ``restore()`` (P^T plus ``symmetrize_c2``) and tiles the amplitudes; with
+    P symmetric and idempotent that chain reduces to convert → project →
+    symmetrise, which is what this route does.
     See https://github.com/BoothGroup/Vayesta.
+
+    Before that fix Vayesta projected first and converted afterwards, so the
+    disconnected term was built from the projected fragment T1.  The two
+    orderings differ by ``P[C1⊗C1] − P[C1]⊗P[C1] = P[C1]⊗(1−P)[C1]``, which is
+    not a small residue for an atom-centred fragment inside a larger cluster,
+    so results from the two orderings are not directly comparable.
 
     Use this route as the reference point when comparing against Vayesta.
 
@@ -2429,26 +2448,41 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global,
         s_cf_occ = c_oo_x.T @ ovlp @ c_frag         # (nocc_x, nfrag)
         px_oo    = s_cf_occ @ s_cf_occ.T             # (nocc_x, nocc_x)
 
-        # Step 3: project C1 and C2 at the CISD level — mirrors Vayesta's
+        # ci_vayesta only: convert CISD → CCSD HERE, on the UNPROJECTED
+        # cluster wave function, BEFORE the fragment projection below.
+        #
+        # The C → T conversion is non-linear (T2 = C2/C0 - T1 T1) and does not
+        # commute with the fragment projection, so the order matters.  Vayesta
+        # used to project first and convert afterwards; that was fixed in
+        # BoothGroup/Vayesta issue #222, which moved the conversion ahead of
+        # the projection (vayesta/ewf/fragment.py: `pwf = wf.as_ccsd()` on the
+        # unprojected wave function, then `pwf.project(proj)`), and made
+        # RCISD_WaveFunction.as_ccsd raise on an already-projected wave
+        # function rather than silently mis-converting it.  This route follows
+        # the fixed ordering.
+        #
+        # Concretely, with P the occupied-index fragment projector, the two
+        # orderings differ by
+        #     P[C1 (x) C1] - P[C1] (x) P[C1]  =  P[C1] (x) (1-P)[C1],
+        # i.e. the disconnected term is built from the FULL cluster T1 here,
+        # where it used to be built from the projected fragment T1.  For an
+        # atom-centred fragment inside a much larger cluster (1-P)[C1] carries
+        # most of C1, so this is not a small residue: numbers produced by the
+        # two orderings are not directly comparable.
+        if per_fragment:
+            c2n = c2n - np.einsum("ia,jb->ijab", c1n, c1n)
+
+        # Step 3: project C1 and C2 — mirrors Vayesta's
         # RCISD_WaveFunction.project(proj) which calls project_c1/project_c2.
+        # Under 'per_fragment' the quantities projected here are already
+        # T-amplitudes; under 'global' they are still CI coefficients.
         c1_p = np.dot(px_oo, c1n)                            # (nocc_x, nvir_x)
         c2_p = np.einsum("xi,ijab->xjab", px_oo, c2n)       # (nocc_x, nocc_x, nvir_x, nvir_x)
 
-        # Step 4: symmetrise the projected C2 — mirrors Vayesta's
-        # RCISD_WaveFunction.restore(proj.T) which applies proj.T then
-        # calls symmetrize_c2 = (c2 + c2.transpose(1,0,3,2))/2.
+        # Step 4: symmetrise the projected two-index quantity — mirrors
+        # Vayesta's RCISD_WaveFunction.restore(proj.T), which applies proj.T
+        # then calls symmetrize_c2 = (c2 + c2.transpose(1,0,3,2))/2.
         c2_p = 0.5 * (c2_p + c2_p.transpose(1, 0, 3, 2))
-
-        # ci_vayesta only: convert CISD → CCSD HERE, per fragment, on the
-        # projected+symmetrised cluster quantities and before any rotation.
-        # This is Vayesta's ordering: get_global_t{1,2}_rhf call
-        # pwf.restore().as_ccsd() per fragment, and as_ccsd does
-        #     t1 = c1/c0 ; t2 = c2/c0 - einsum('ia,jb->ijab', t1, t1)
-        # so the disconnected term is built from the FRAGMENT's own T1.
-        # (vayesta/ewf/amplitudes.py, vayesta/core/types/wf/cisd.py --
-        #  https://github.com/BoothGroup/Vayesta)
-        if per_fragment:
-            c2_p = c2_p - np.einsum("ia,jb->ijab", c1_p, c1_p)
 
         # Step 5: rotate cluster → global MO basis and accumulate.  Under
         # 'global' these are still (linear) CI coefficients; under
@@ -3201,8 +3235,9 @@ def _run_ewf_cycle(cfg, config_path, script_path, no_slurm=False,
                 rdm_files, mol, mf, ovlp, nocc_global))
     elif assembly == "ci_vayesta":
         print(f"[{tag}] Assembly route: CI-coefficient global wave function, "
-              f"Vayesta ordering (per-fragment CISD→CCSD conversion before "
-              f"rotation; mirrors Vayesta get_global_t*_rhf + as_ccsd)")
+              f"Vayesta ordering (per-fragment CISD→CCSD conversion on the "
+              f"unprojected cluster, before projection and rotation; follows "
+              f"Vayesta after the issue #222 fix)")
         dm1, dm2_cumulant, cluster_energies, cluster_names = (
             assemble_global_rdms_from_civec(
                 rdm_files, mol, mf, ovlp, nocc_global,
