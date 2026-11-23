@@ -2349,10 +2349,8 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global,
     Before that fix Vayesta projected first and converted afterwards, so the
     disconnected term was built from the projected fragment T1.  The two
     orderings differ by ``P[C1⊗C1] − P[C1]⊗P[C1] = P[C1]⊗(1−P)[C1]``, which is
-    not a small residue for an atom-centred fragment inside a larger cluster.
-    The EWF-(FCI,SCI) assembly-mode figures in the JCTC submission were
-    produced with the pre-fix ordering and are therefore not reproducible by
-    re-running this route; see the note in the loop body.
+    not a small residue for an atom-centred fragment inside a larger cluster,
+    so results from the two orderings are not directly comparable.
 
     Use this route as the reference point when comparing against Vayesta.
 
@@ -2469,16 +2467,8 @@ def assemble_global_rdms_from_civec(rdm_files, mol, mf, ovlp, nocc_global,
         # i.e. the disconnected term is built from the FULL cluster T1 here,
         # where it used to be built from the projected fragment T1.  For an
         # atom-centred fragment inside a much larger cluster (1-P)[C1] carries
-        # most of C1, so this is not a small residue.
-        #
-        # NOTE on provenance: the EWF-(FCI,SCI) assembly-mode figures in the
-        # JCTC submission were produced with the PRE-FIX ordering, so that
-        # published `ci_vayesta` curve is not reproducible by re-running this
-        # route.  Neither ordering converges for allene -- the failure tracks
-        # the selected-CI solver, not the conversion order (`ci_revised`,
-        # which fixes the same non-commutation globally, stalls in the same
-        # band) -- so this change was made for consistency with upstream
-        # Vayesta, not to alter any reported result.
+        # most of C1, so this is not a small residue: numbers produced by the
+        # two orderings are not directly comparable.
         if per_fragment:
             c2n = c2n - np.einsum("ia,jb->ijab", c1n, c1n)
 
