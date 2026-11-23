@@ -5,7 +5,7 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 | `ewf.assembly` | Construction | Origin |
 |---|---|---|
 | `democratic` | Cluster RDMs, democratically partitioned (4-index split) | mirrors Vayesta `make_rdm{1,2}_demo_rhf` |
-| `ci_vayesta` | CI vector → CISD `(c1, c2)` → projected, converted to amplitudes **per fragment**, then tiled → global RDM | mirrors Vayesta `make_rdm{1,2}_ccsd_global_wf` (`get_global_t*_rhf` + `as_ccsd`) |
+| `ci_vayesta` | CI vector → CISD `(c1, c2)` → converted to amplitudes **per fragment on the unprojected cluster**, then projected and tiled → global RDM | mirrors Vayesta `make_rdm{1,2}_ccsd_global_wf` after the [issue #222](https://github.com/BoothGroup/Vayesta/issues/222) conversion-ordering fix |
 | `ci_revised` | CI vector → CISD `(c1, c2)` → projected **global C1/C2** → one global CISD→cluster amplitudes conversion → global RDM | Vayesta `make_rdm{1,2}_ccsd_global_wf` + revised conversion ordering (**this project**) |
 | `projected_lambda` | Sum of single-cluster projected cumulants rotated by `mo\|cluster` | mirrors Vayesta's default 2-RDM route |
 | **`rdm_t`** | Cluster RDM cumulant → effective `(T1, T2)` → global RDM | **this project** |
@@ -14,26 +14,31 @@ The driver dispatches on `ewf.assembly` in `config.yaml`:
 
 ### `ci_vayesta` / `ci_revised`: the CI-coefficient assembly
 
-These two routes are the **same pipeline differing in one step**, provided as a matched pair so the effect of that step can be measured rather than argued. Both read the per-fragment CI vector, convert it to CISD coefficients (`RFCI_WaveFunction.as_cisd`), apply the occupied-fragment projector at the CISD level, symmetrize, rotate to the global MO basis, accumulate, and feed a single `ccsd_rdm` call. They differ **only in where the disconnected `T1⊗T1` is subtracted**.
+These two routes are the **same pipeline differing in one step**, provided as a matched pair so the effect of that step can be measured rather than argued. Both read the per-fragment CI vector, convert it to CISD coefficients (`RFCI_WaveFunction.as_cisd`), intermediate-normalize (`C1 = c1/c0`, `C2 = c2/c0`), apply the occupied-fragment projector, symmetrize, rotate to the global MO basis, accumulate, and feed a single `ccsd_rdm` call. They differ **only in where the disconnected `T1⊗T1` is subtracted** — which also fixes whether the projector acts on CI coefficients or on T-amplitudes.
 
-**`ci_vayesta` — the faithful reference.** Converts CISD→CCSD **per fragment**, before rotation (`t1x = C1_x`, `t2x = C2_x − t1x⊗t1x`), then tiles the resulting amplitudes. This reproduces unmodified Vayesta, whose [`get_global_t1_rhf` / `get_global_t2_rhf`](https://github.com/BoothGroup/Vayesta/blob/master/vayesta/ewf/amplitudes.py) call `pwf.restore().as_ccsd()` on each fragment, with the conversion itself in [`RCISD_WaveFunction.as_ccsd`](https://github.com/BoothGroup/Vayesta/blob/master/vayesta/core/types/wf/cisd.py). Use this route when comparing against Vayesta.
+**`ci_vayesta` — the faithful reference.** Converts CISD→CCSD **per fragment on the unprojected cluster wavefunction** (`t1x = C1_x`, `t2x = C2_x − C1_x⊗C1_x`, using the *full cluster* `C1_x`), then projects, symmetrizes and tiles the resulting amplitudes.
+
+This follows Vayesta **after** the fix to [issue #222](https://github.com/BoothGroup/Vayesta/issues/222). The C→T conversion is non-linear and does not commute with the fragment projection, so [`vayesta/ewf/fragment.py`](https://github.com/BoothGroup/Vayesta/blob/master/vayesta/ewf/fragment.py) now stores `pwf = wf.as_ccsd()` built from the unprojected wavefunction and projects *that*, while [`RCISD_WaveFunction.as_ccsd`](https://github.com/BoothGroup/Vayesta/blob/master/vayesta/core/types/wf/cisd.py) raises if handed an already-projected wavefunction. [`get_global_t1_rhf` / `get_global_t2_rhf`](https://github.com/BoothGroup/Vayesta/blob/master/vayesta/ewf/amplitudes.py) then apply `restore()` (`Pᵀ` plus `symmetrize_c2`) and tile; with `P` symmetric and idempotent that chain reduces to convert → project → symmetrize, which is what this route does. Use this route when comparing against Vayesta.
+
+Before that fix Vayesta projected first and converted afterwards, so the disconnected term was built from the *projected* fragment `T1`. The two orderings differ per fragment by `P[C1⊗C1] − P[C1]⊗P[C1] = P[C1]⊗(1−P)[C1]`, which is not a small residue for an atom-centred fragment inside a much larger cluster: numbers produced by the two are not directly comparable.
 
 **`ci_revised` — the reordered variant.** Projects, rotates and tiles the intermediate-normalized CI coefficients (`C1 = c1/c0`, `C2 = c2/c0`) into one **global C1/C2 first**, and performs the `T2 = C2 − T1⊗T1` conversion **once, globally**, afterward. Tiling the CI coefficients is linear in the projected quantities, so the single-occupied-index fragment projection avoids double counting exactly — the same mechanism as Vayesta's projected amplitude-energy estimator, example [`62-external-solver-amplitude-energy.py`](https://github.com/BoothGroup/Vayesta/blob/master/examples/ewf/molecules/62-external-solver-amplitude-energy.py). Subtracting once, after assembling the global `T1`, retains the full `(Σ_x P_x·T1)⊗(Σ_y P_y·T1)` product including cross-fragment terms, which suits the global-wavefunction density this route builds.
 
-**The exact difference.** The two are identical for a single fragment, and for many fragments differ by precisely
+**How far apart are they?** Much closer than they used to be. Both are implemented by one function under an `ordering` switch, so no step other than the conversion point can differ between them.
 
-$$\sum_{x \neq y} (P_x \cdot T_1) \otimes (P_y \cdot T_1)$$
+Write $P_x$ for the occupied-index fragment projector $P_x = \big(C_x^{\mathrm{occ}\top} S\, C_x^{\mathrm{frag}}\big)\big(C_x^{\mathrm{frag}\top} S\, C_x^{\mathrm{occ}}\big)$, which selects the part of a cluster quantity belonging to fragment $x$ and is what prevents double counting.
 
-the cross-fragment products that the per-fragment ordering drops. Both are implemented by one function under an `ordering` switch, so no step other than the conversion point can differ between them.
+**In the idealized limit the two routes are identical.** If every fragment's amplitudes are restrictions of one common global $(T_1, T_2)$ and the projectors resolve the identity, $\sum_x P_x = 1$, then because the projection is *linear*
 
-Every symbol in that expression refers to the global $(T_1, T_2)$ being assembled:
+$$\sum_x P_x\big[C_2 - C_1 \otimes C_1\big] \;=\; C_2 - C_1 \otimes C_1,$$
 
-- **$x$ and $y$ both run over fragments**, and $P_x$ and $P_y$ are the *same* operator evaluated on two *different* fragments — the occupied-index fragment projector $P_x = \big(C_x^{\mathrm{occ}\top} S\, C_x^{\mathrm{frag}}\big)\big(C_x^{\mathrm{frag}\top} S\, C_x^{\mathrm{occ}}\big)$, which selects the part of a cluster quantity belonging to fragment $x$ and is what prevents double counting. There is no distinction between $P_x$ and $P_y$ beyond the fragment they belong to.
-- **$P_x \cdot T_1$** is therefore fragment $x$'s own projected singles contribution, rotated into the global MO basis — one term of the sum $T_1 = \sum_x P_x \cdot T_1$.
-- **$\otimes$** is the outer product that builds a doubles-shaped tensor: $\big[(P_x \cdot T_1) \otimes (P_y \cdot T_1)\big]_{ijab} = (P_x \cdot T_1)_{ia}\,(P_y \cdot T_1)_{jb}$.
-- **The restriction $x \neq y$ is the whole point.** The diagonal terms ($x = y$) are the per-fragment products that *both* orderings produce; the off-diagonal terms pair the singles of one fragment with those of another. Only the global conversion — which subtracts $T_1 \otimes T_1$ *after* summing, using the full global $T_1$ — contains them.
+so converting before projecting and summing reproduces the single global conversion exactly. Verified numerically to $4\times10^{-17}$. The non-linearity only ever mattered because the pre-fix ordering subtracted the *projected* $T_1$; with the conversion moved ahead of the projection, that source of disagreement is gone.
 
-With a single fragment no pair $x \neq y$ exists, the sum is empty, and the two routes coincide exactly.
+**What still separates them in practice** is therefore not the conversion point but the embedding itself: each fragment is solved in its *own* cluster space with its *own* cluster wavefunction, so the projectors do not resolve the identity on any common space and $\sum_x P_x\big[C_1^x \otimes C_1^x\big]$ is not the global $T_1 \otimes T_1$. `ci_revised` forms the global $T_1$ first and subtracts $T_1 \otimes T_1$ once, so it pairs the singles of *different clusters*; `ci_vayesta` can only ever pair singles drawn from the same cluster.
+
+The size of that residual has **not** been measured. Doing so on one molecule would establish whether the pair still earns its place as a matched comparison.
+
+> **Historical note.** Before the issue #222 fix the two routes differed by precisely $\sum_{x \neq y} (P_x \cdot T_1) \otimes (P_y \cdot T_1)$ — the cross-fragment singles products that the per-fragment ordering dropped — and coincided exactly for a single fragment. That statement is no longer the distinction between them; results obtained with the pre-fix ordering are not comparable with current ones.
 
 Two approximations remain included:
 
