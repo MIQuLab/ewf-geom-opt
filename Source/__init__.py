@@ -30,6 +30,33 @@ That is a bridge, not an end state.  It is here so that packaging does not
 force a flag-day rewrite of every module's imports while the MBE prototype
 and the published campaigns still depend on flat-file mode.  See
 ``Code_for_SQD_incorporation/MIQuLab_Modernization.md``.
+
+Do not mix the two styles in one process
+----------------------------------------
+Because the same file is reachable under two names, importing it both ways
+creates **two distinct module objects that do not share module-level state**::
+
+    >>> from ewf_geom_opt import external_sci as qualified
+    >>> import external_sci as bare
+    >>> qualified.__file__ == bare.__file__      # same file on disk
+    True
+    >>> qualified is bare                        # different module objects
+    False
+    >>> sorted(k for k in sys.modules if k.endswith('external_sci'))
+    ['ewf_geom_opt.external_sci', 'external_sci']
+
+Anything held at module or class level is then duplicated, and the two copies
+drift apart silently.  That is not hypothetical for this code base: the SBD
+wrapper keeps per-run counters and accumulators as class attributes
+(``n_dense``, ``n_heavy``, ``n_reassigned``, ``margins``, ``terms``), and a
+split import would leave half the terms recorded in a copy nobody reads.
+
+**Rule: pick one style per process.**  The driver and the run folders use bare
+names; library consumers -- notebooks, tests, the regression fixture -- should
+use ``from ewf_geom_opt import ...`` throughout and not fall back to bare
+names.  Removing the hazard entirely means converting every module to relative
+imports, which ends flat-file mode; that trade is the open question in the
+modernization plan.
 """
 
 import os as _os
