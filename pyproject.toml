@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ewf-geom-opt"
+version = "0.1.0"
+description = "Quantum-centric geometry optimization with wave-function-based embedding (EWF)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Danil Kaliakin" },
+    { name = "Akhil Shajan" },
+    { name = "Fangchun Liang" },
+    { name = "Zhen Li" },
+    { name = "Kenneth M. Merz Jr." },
+]
+keywords = ["quantum chemistry", "embedding", "EWF", "SQD", "geometry optimization"]
+
+# Core -- always required.  Mirrors Documentation/Installation.md; keep the
+# two in step, since that file is what users actually read.
+dependencies = [
+    "numpy",
+    "scipy",
+    "pyscf",
+    "vayesta",
+    "h5py",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+# Each extra matches a feature a user may or may not run, exactly as the
+# installation guide splits them.  `pip install -e ".[sqd,sella]"` is the
+# common case for quantum-sampled work.
+sqd = [
+    "qiskit",
+    "qiskit-ibm-runtime",
+    # PINNED DELIBERATELY.  The SQD route is being migrated onto upstream's
+    # `diagonalize_fermionic_hamiltonian` (see
+    # Code_for_SQD_incorporation/MIQuLab_Modernization.md).  Until a
+    # regression fixture built from the published JCTC per-cluster energies
+    # runs automatically, an unpinned upstream can change published numbers
+    # between runs without anyone noticing.  Bump this deliberately.
+    #
+    # Note also that TrimSQD (`qiskit_addon_sqd.trim`) is NOT in any release
+    # as of 2026-11-25 -- it landed on main on 2026-11-19, after 0.14.1 --
+    # so adopting it means depending on unreleased upstream.
+    "qiskit-addon-sqd==0.14.1",
+    "ffsim",
+    "rustworkx",
+    "pyci",
+]
+# Geometry optimizers: you only need the one you intend to run.
+sella = ["sella", "ase"]
+geometric = ["geometric"]
+berny = ["pyberny"]
+# gpu4pyscf is intentionally absent: the correct wheel depends on the local
+# CUDA toolkit (gpu4pyscf-cuda12x and friends), so it cannot be pinned here.
+# See Documentation/Installation.md.
+
+[project.urls]
+Homepage = "https://github.com/MIQuLab/ewf-geom-opt"
+Repository = "https://github.com/MIQuLab/ewf-geom-opt"
+
+[project.scripts]
+# calculation_setup is importable and already exposes main().
+ewf-setup = "ewf_geom_opt.calculation_setup:main"
+# The driver's filename contains a hyphen, so it is not a valid Python module
+# name and cannot be imported.  _cli bridges to it; see Source/_cli.py.
+ewf-geom-opt = "ewf_geom_opt._cli:main"
+
+[tool.setuptools]
+# The package is importable as `ewf_geom_opt` while the directory on disk
+# keeps its name.  Renaming Source/ would rewrite 92 references across 59
+# tracked files for no functional gain, and the archived Examples campaigns
+# reference the current layout.
+package-dir = { "ewf_geom_opt" = "Source" }
+packages = ["ewf_geom_opt"]
+
+[tool.setuptools.package-data]
+ewf_geom_opt = ["*.yaml"]
