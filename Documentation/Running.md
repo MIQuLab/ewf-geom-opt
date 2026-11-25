@@ -1,5 +1,16 @@
 # Running the workflow
 
+### Two ways to invoke the driver
+
+Every command below is written as `python EWF-CI_Geom_Opt_HPC.py ...`, which is how the archived campaigns under [`Examples/`](../Examples/) were run and how the generated Slurm scripts invoke the workers. If you installed the package (`pip install -e .`, see [Installation](Installation.md#installing)), the console script **`ewf-geom-opt`** is an exact substitute, accepting the same arguments from any working directory:
+
+```bash
+ewf-geom-opt --config config.yaml           # == python EWF-CI_Geom_Opt_HPC.py --config config.yaml
+ewf-setup                                   # == python calculation_setup.py
+```
+
+Everything else in this page applies unchanged to either form. Where a command is shown with `python EWF-CI_Geom_Opt_HPC.py`, read it as "the driver", however you invoke it.
+
 ### Running
 
 The driver runs whatever `calculation.run_task` specifies; `--task` overrides it for a single invocation (see [Run tasks](Run_Modes_and_Tasks.md#run-tasks)):
@@ -18,7 +29,7 @@ python EWF-CI_Geom_Opt_HPC.py --config config.yaml --task circuits   # LUCJ circ
 python EWF-CI_Geom_Opt_HPC.py --config config.yaml --no-slurm
 ```
 
-On the cluster, submit through a Slurm submission script (example scripts are provided in [`Source/`](../Source/)):
+On the cluster, submit through a Slurm submission script. [`Utilities/hpc_settings_setup.py`](../Utilities/hpc_settings_setup.py) generates a matching set for your site, and three examples ship with the repo in [`Examples/HPC_Settings/`](../Examples/HPC_Settings/):
 
 ```bash
 sbatch submit_slurm_*.sh

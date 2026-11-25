@@ -8,9 +8,12 @@ The Slurm/environment specifics of a cluster — SBD executable(s) and MPI launc
 
 `config.yaml` spans many options across run tasks, run modes, solvers, the CPU/GPU SBD eigensolver, the SQD quantum-sampling source, and Slurm resources — most of them irrelevant to any single run. [`Source/calculation_setup.py`](../Source/calculation_setup.py) is an interactive generator that asks a handful of questions about the run — first the **run task** (geometry optimization / gradient / energy-only / quantum-circuit size analysis; see [Run tasks](Run_Modes_and_Tasks.md#run-tasks)), then which **HPC settings** to target (discovered from the working directory; see above), whether to use **GPU-accelerated HF** and **density fitting** (see *Hartree–Fock acceleration*), the geometry optimizer (geomeTRIC / Sella / PyBerny), the run mode, the geometry file, whether to use per-fragment multi-solver, and which external eigensolver to use (**none / SCI-SBD / SQD**) on **CPU or GPU** (and, for a GPU run on a site with more than one GPU model, which model) — and writes a **focused** `config.yaml` containing only the blocks relevant to that run, with the cluster-specific Slurm/env lines filled in from the chosen HPC settings. (The `circuits` task takes a shortened path: after the run task, the HPC settings, and the HF-acceleration questions it asks only for the geometry and multi-solver choice.) Lines you still need to fill in (geometry, basis, resources) are flagged with `<-- UPDATE`.
 
+Run it **from the folder the calculation will live in** — it discovers `*_HPC_settings.yaml` in the current directory and writes `config.yaml` there:
+
 ```bash
-cd Source
-python calculation_setup.py
+cd my_run_folder
+ewf-setup                     # installed package (see Installation)
+python calculation_setup.py   # or, with the source copied into the run folder
 ```
 
 The result is a short, readable template rather than the full option set — the recommended starting point for a new calculation. The reference below documents the individual options it produces.

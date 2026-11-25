@@ -5,7 +5,7 @@ See the [project README](../README.md) for an overview.
 
 | Document | Contents |
 |---|---|
-| [Installation](Installation.md) | Core and optional dependencies — optimizer backends, GPU-accelerated HF, the external SBD eigensolver, SQD quantum sampling |
+| [Installation](Installation.md) | Installing the package and its extras, plus core and optional dependencies — optimizer backends, GPU-accelerated HF, the external SBD eigensolver, SQD quantum sampling |
 | [Theory](Theory.md) | The EWF energy, its analytic nuclear gradient, and the density-response term |
 | [Density-assembly routes](Density_Assembly_Routes.md) | The routes that turn per-fragment solutions into one global density, and how they differ |
 | [Run modes and tasks](Run_Modes_and_Tasks.md) | What `run_mode` and `run_task` select |

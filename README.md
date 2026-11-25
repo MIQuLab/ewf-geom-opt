@@ -34,6 +34,22 @@ place.
 
 ---
 
+## Getting started
+
+```bash
+git clone https://github.com/MIQuLab/ewf-geom-opt.git
+cd ewf-geom-opt
+pip install -e ".[sella]"          # core + the default geometry optimizer
+
+mkdir my_run && cd my_run
+ewf-setup                          # interactive: writes a focused config.yaml here
+ewf-geom-opt --config config.yaml
+```
+
+Pick the extras for the features you intend to run (`sqd`, `sella`, `geometric`, `berny`); the external SBD eigensolver is a separate C++/MPI build. Copying `Source/*.py` into the run folder and calling `python EWF-CI_Geom_Opt_HPC.py` remains supported and is how every campaign under [`Examples/`](Examples/) was run. Full details in [Installation](Documentation/Installation.md).
+
+---
+
 ## Repository layout
 
 | Path | Contents |
@@ -60,6 +76,8 @@ place.
 | `sbd_wrapper.py` | Parser for the external SBD solver's output — energies, timings, Davidson iteration counts |
 | `hpc_settings.py` | HPC site definitions: loads and normalizes a `<name>_HPC_settings.yaml`, and renders the chosen settings into the `config.yaml` Slurm blocks and `submit_slurm_*` scripts |
 | `calculation_setup.py` | Interactive generator for a focused `config.yaml` (see [Usage → Generating a config](Documentation/Usage.md#generating-a-config-calculation_setuppy)) |
+| `__init__.py` | Makes `Source/` importable as the `ewf_geom_opt` package while keeping the flat-file, copy-into-the-run-folder mode working — and documents why not to mix the two import styles in one process |
+| `_cli.py` | Console-script bridge: the driver's filename contains a hyphen, so it cannot be an entry point directly |
 
 ---
 
@@ -69,7 +87,7 @@ Full documentation lives in [`Documentation/`](Documentation/):
 
 | Document | Contents |
 |---|---|
-| [Installation](Documentation/Installation.md) | Core and optional dependencies — optimizer backends, GPU-accelerated HF, the external SBD eigensolver, SQD quantum sampling |
+| [Installation](Documentation/Installation.md) | Installing the package and its extras, plus core and optional dependencies — optimizer backends, GPU-accelerated HF, the external SBD eigensolver, SQD quantum sampling |
 | [Theory](Documentation/Theory.md) | The EWF energy, its analytic nuclear gradient, and the density-response term |
 | [Density-assembly routes](Documentation/Density_Assembly_Routes.md) | The routes that turn per-fragment solutions into one global density, and how they differ |
 | [Run modes and tasks](Documentation/Run_Modes_and_Tasks.md) | What `run_mode` and `run_task` select |
