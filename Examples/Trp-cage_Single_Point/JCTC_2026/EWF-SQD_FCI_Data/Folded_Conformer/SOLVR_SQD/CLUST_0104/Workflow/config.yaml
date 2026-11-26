@@ -2,7 +2,7 @@ carryover_threshold: 0.0001
 cpus_per_batch: 48
 dprime_cutoff: 1.0e-05
 energy_tol: 1.0e-08
-iterations: 5
+iterations: 10
 memory_mb: 300000
 monitor_delay: 60
 n_batches: 10
